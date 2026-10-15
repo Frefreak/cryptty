@@ -67,8 +67,37 @@ impl Default for Style {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CellText {
+    base: char,
+    combining: Option<Box<str>>,
+}
+
+impl CellText {
+    fn new(base: char) -> Self {
+        Self {
+            base,
+            combining: None,
+        }
+    }
+
+    pub fn chars(&self) -> impl Iterator<Item = char> + '_ {
+        std::iter::once(self.base)
+            .chain(self.combining.as_deref().unwrap_or("").chars())
+    }
+
+    fn push_combining(&mut self, ch: char) {
+        let suffix = self.combining.as_deref().unwrap_or("");
+        if self.base.len_utf8() + suffix.len() < 64 {
+            let mut suffix = suffix.to_owned();
+            suffix.push(ch);
+            self.combining = Some(suffix.into_boxed_str());
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Content {
-    Text { text: String, wide: bool },
+    Text { text: CellText, wide: bool },
     Continuation,
 }
 
@@ -82,7 +111,7 @@ impl Cell {
     fn blank(style: Style) -> Self {
         Self {
             content: Content::Text {
-                text: " ".into(),
+                text: CellText::new(' '),
                 wide: false,
             },
             style,
@@ -95,7 +124,7 @@ enum Parser {
     #[default]
     Ground,
     Escape,
-    Csi(Vec<u8>),
+    Csi,
     String {
         escape: bool,
     },
@@ -111,6 +140,8 @@ pub struct Terminal {
     style: Style,
     saved: ((usize, usize), Style),
     parser: Parser,
+    csi_bytes: [u8; 128],
+    csi_len: usize,
     utf8: Vec<u8>,
     pending_wrap: bool,
     auto_wrap: bool,
@@ -134,6 +165,8 @@ impl Terminal {
             style: theme.style(),
             saved: ((0, 0), theme.style()),
             parser: Parser::Ground,
+            csi_bytes: [0; 128],
+            csi_len: 0,
             utf8: Vec::with_capacity(4),
             pending_wrap: false,
             auto_wrap: true,
@@ -182,7 +215,10 @@ impl Terminal {
             match state {
                 Parser::Ground => self.ground(byte),
                 Parser::Escape => match byte {
-                    b'[' => self.parser = Parser::Csi(Vec::new()),
+                    b'[' => {
+                        self.csi_len = 0;
+                        self.parser = Parser::Csi;
+                    }
                     b']' | b'P' | b'_' | b'^' | b'X' => {
                         self.parser = Parser::String { escape: false };
                     }
@@ -205,22 +241,24 @@ impl Terminal {
                     0x1b => self.parser = Parser::Escape,
                     _ => (),
                 },
-                Parser::Csi(mut params) => {
+                Parser::Csi => {
                     if (0x40..=0x7e).contains(&byte) {
-                        self.csi(&params, byte, &mut replies);
+                        let raw = self.csi_bytes;
+                        self.csi(&raw[..self.csi_len], byte, &mut replies);
                     } else if byte == 0x1b {
                         self.parser = Parser::Escape;
                     } else if byte == 0x18 || byte == 0x1a {
                         self.parser = Parser::Ground;
                     } else if byte < 0x20 {
                         self.control(byte);
-                        self.parser = Parser::Csi(params);
+                        self.parser = Parser::Csi;
                     } else {
                         // Retain the state until the final byte, even on overflow.
-                        if params.len() < 128 {
-                            params.push(byte);
+                        if self.csi_len < self.csi_bytes.len() {
+                            self.csi_bytes[self.csi_len] = byte;
+                            self.csi_len += 1;
                         }
-                        self.parser = Parser::Csi(params);
+                        self.parser = Parser::Csi;
                     }
                 }
                 Parser::String { escape } => {
@@ -304,10 +342,8 @@ impl Terminal {
             if matches!(self.rows[y][x].content, Content::Continuation) {
                 x = x.saturating_sub(1);
             }
-            if let Content::Text { text, .. } = &mut self.rows[y][x].content
-                && text.len() < 64
-            {
-                text.push(ch);
+            if let Content::Text { text, .. } = &mut self.rows[y][x].content {
+                text.push_combining(ch);
             }
             return;
         }
@@ -323,13 +359,17 @@ impl Terminal {
             return;
         }
         let (x, y) = self.cursor;
-        self.clear_cell(x, y);
-        if width == 2 {
-            self.clear_cell(x + 1, y);
+        for col in x..x + width {
+            if !matches!(
+                self.rows[y][col].content,
+                Content::Text { wide: false, .. }
+            ) {
+                self.clear_cell(col, y);
+            }
         }
         self.rows[y][x] = Cell {
             content: Content::Text {
-                text: ch.to_string(),
+                text: CellText::new(ch),
                 wide: width == 2,
             },
             style: self.style,
@@ -402,21 +442,21 @@ impl Terminal {
     }
 
     fn scroll_up(&mut self, top: usize, count: usize) {
-        let cols = self.cols();
-        for _ in 0..count.min(self.scroll_bottom + 1 - top) {
-            self.rows.remove(top);
-            self.rows.insert(
-                self.scroll_bottom,
-                vec![Cell::blank(self.style); cols],
-            );
+        let region = &mut self.rows[top..=self.scroll_bottom];
+        let count = count.min(region.len());
+        region.rotate_left(count);
+        let start = region.len() - count;
+        for row in &mut region[start..] {
+            row.fill(Cell::blank(self.style));
         }
     }
 
     fn scroll_down(&mut self, top: usize, count: usize) {
-        let cols = self.cols();
-        for _ in 0..count.min(self.scroll_bottom + 1 - top) {
-            self.rows.remove(self.scroll_bottom);
-            self.rows.insert(top, vec![Cell::blank(self.style); cols]);
+        let region = &mut self.rows[top..=self.scroll_bottom];
+        let count = count.min(region.len());
+        region.rotate_right(count);
+        for row in &mut region[..count] {
+            row.fill(Cell::blank(self.style));
         }
     }
 
@@ -435,18 +475,20 @@ impl Terminal {
         if raw.iter().any(|b| !b.is_ascii_digit() && *b != b';') {
             return;
         }
-        let params: Vec<usize> = raw
-            .split(|b| *b == b';')
-            .map(|p| {
-                p.iter().fold(0usize, |n, b| {
-                    n.saturating_mul(10).saturating_add((b - b'0') as usize)
-                })
-            })
-            .collect();
+        // A 128-byte sequence has at most 129 semicolon-separated parameters.
+        let mut values = [0usize; 129];
+        let mut count = 0;
+        for part in raw.split(|b| *b == b';') {
+            values[count] = part.iter().fold(0usize, |n, b| {
+                n.saturating_mul(10).saturating_add((b - b'0') as usize)
+            });
+            count += 1;
+        }
+        let params = &values[..count];
         let first = params[0];
         let n = first.clamp(1, 65535);
         if private {
-            for param in params {
+            for &param in params {
                 match (param, end) {
                     (1, b'h' | b'l') => self.application_cursor = end == b'h',
                     (7, b'h' | b'l') => {
@@ -517,7 +559,7 @@ impl Terminal {
             }
             b'S' => self.scroll_up(self.scroll_top, n),
             b'T' => self.scroll_down(self.scroll_top, n),
-            b'm' => self.sgr(&params),
+            b'm' => self.sgr(params),
             b'r' => {
                 let bottom = params.get(1).copied().unwrap_or(0);
                 let bottom = if bottom == 0 { self.rows.len() } else { bottom };

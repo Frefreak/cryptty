@@ -5,10 +5,11 @@ use cryptty::terminal::{
 fn row(t: &Terminal, y: usize) -> String {
     t.rows[y]
         .iter()
-        .map(|c| match &c.content {
-            Content::Text { text, .. } => text.as_str(),
-            Content::Continuation => "",
+        .filter_map(|c| match &c.content {
+            Content::Text { text, .. } => Some(text.chars()),
+            Content::Continuation => None,
         })
+        .flatten()
         .collect()
 }
 
@@ -110,7 +111,7 @@ fn cursor_position_erasure_and_saved_cursor() {
     assert_eq!(row(&t, 0), "ab    ");
     t.feed(b"\x1b[2J");
     assert!(t.rows.iter().all(|r| r.iter().all(|c| matches!(
-        &c.content, Content::Text { text, .. } if text == " "
+        &c.content, Content::Text { text, .. } if text.chars().eq([' '])
     ))));
     assert_eq!(t.cursor, (2, 0));
 }
@@ -164,6 +165,48 @@ fn combining_mark_does_not_advance_cursor() {
     t.feed("e\u{301}".as_bytes());
     assert_eq!(t.cursor, (1, 0));
     assert!(row(&t, 0).starts_with("e\u{301}"));
+}
+
+#[test]
+fn scrolling_reuses_rows_and_clears_combining_marks() {
+    let mut t = Terminal::new(4, 4);
+    t.feed("AAAA\r\ne\u{301}bbb\r\nCCCC\r\nDDDD".as_bytes());
+    let mut allocations: Vec<_> = t.rows.iter().map(|r| r.as_ptr()).collect();
+    allocations.sort();
+    t.feed(b"\x1b[2;3r\x1b[31m\x1b[99T");
+    assert_eq!(row(&t, 0), "AAAA");
+    assert_eq!(row(&t, 1), "    ");
+    assert_eq!(row(&t, 2), "    ");
+    assert_eq!(row(&t, 3), "DDDD");
+    assert!(
+        t.rows[1..3]
+            .iter()
+            .flatten()
+            .all(|c| c.style.fg == PALETTE[1])
+    );
+    t.feed(b"\x1b[99S");
+    let mut reused: Vec<_> = t.rows.iter().map(|r| r.as_ptr()).collect();
+    reused.sort();
+    assert_eq!(allocations, reused);
+    valid(&t);
+}
+
+#[test]
+fn csi_capacity_cancellation_and_restart_preserve_parser_state() {
+    let mut t = Terminal::new(8, 2);
+    t.feed(b"\x1b[31m");
+    t.feed(b"\x1b[");
+    t.feed(&[b';'; 128]);
+    t.feed(b"mA");
+    assert_eq!(t.rows[0][0].style.fg, FOREGROUND);
+    t.feed(b"\x1b[");
+    t.feed(&[b'1'; 200]);
+    t.feed(b"mB");
+    assert_eq!(row(&t, 0), "AB      ");
+    t.feed(b"\x1b[31\x18C\x1b[32\x1b[34mD");
+    assert_eq!(row(&t, 0), "ABCD    ");
+    assert_eq!(t.rows[0][2].style.fg, FOREGROUND);
+    assert_eq!(t.rows[0][3].style.fg, PALETTE[4]);
 }
 
 #[test]

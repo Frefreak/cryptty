@@ -1,5 +1,32 @@
 A vibe-coded personal terminal that suits my needs.
 
+Rendering uses wgpu with Metal on macOS and Vulkan on Linux. Automatic
+selection prefers an integrated GPU, then discrete and virtual GPUs.
+If initialization or rendering fails, automatic mode switches to the
+software renderer. CPU-only graphics adapters are skipped in automatic
+selection. Software mode skips GPU initialization, for VMs and drivers
+without suitable GPU support.
+
+```sh
+cryptty                         # Automatic GPU selection with fallback
+cryptty --renderer software     # Force CPU rendering
+cryptty --renderer gpu          # Require a compatible GPU
+cryptty --list-gpus             # List adapter indices, names, and types
+cryptty --gpu 0 -- fish          # Require the listed adapter
+```
+
+Explicit GPU requests report errors instead of falling back. Adapter
+indices refer to the current enumeration; check the list again after
+hardware or driver changes. Selection uses one adapter per process.
+Font rasterization remains on the CPU; the GPU caches glyph images and
+draws text, backgrounds, underlines, preedit, and the cursor.
+
+The offscreen rendering comparison requires a working GPU:
+
+```sh
+cargo test gpu_pixels_match_software -- --ignored
+```
+
 Configuration lives in `$XDG_CONFIG_HOME/cryptty/cryptty.yaml`, or
 `~/.config/cryptty/cryptty.yaml` when `XDG_CONFIG_HOME` is unset.
 Cryptty creates a missing file with plain commented YAML defaults.

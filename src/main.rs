@@ -1,16 +1,16 @@
 use std::ffi::OsString;
-use std::num::NonZeroU32;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use anyhow::{Context as _, Result};
 use cryptty::{
     config::{Config, Font, Padding},
-    input, pty,
+    input,
+    options::{self, Action, RendererChoice},
+    pty,
     render::Renderer,
     terminal::Terminal,
 };
 use portable_pty::PtySize;
-use softbuffer::{Context, Surface};
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalSize, PhysicalPosition, PhysicalSize};
 use winit::event::{ElementState, Ime, WindowEvent};
@@ -20,12 +20,13 @@ use winit::event_loop::{
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Fullscreen, Window, WindowId};
 
+mod display;
 #[cfg(target_os = "macos")]
 mod macos_input;
 
 struct View {
-    surface: Surface<Rc<Window>, Rc<Window>>,
-    window: Rc<Window>,
+    display: display::Display,
+    window: Arc<Window>,
     renderer: Renderer,
     terminal: Terminal,
     pty: pty::Pty,
@@ -40,12 +41,13 @@ struct App {
     proxy: EventLoopProxy<()>,
     command: Vec<OsString>,
     config: Config,
+    renderer_choice: RendererChoice,
     error: Option<anyhow::Error>,
 }
 
 impl App {
     fn create(&mut self, events: &ActiveEventLoop) -> Result<()> {
-        let window = Rc::new(
+        let window = Arc::new(
             events.create_window(
                 Window::default_attributes()
                     .with_title("Cryptty")
@@ -57,10 +59,8 @@ impl App {
         window.set_ime_allowed(true);
         #[cfg(target_os = "macos")]
         macos_input::install(&window)?;
-        let context = Context::new(window.clone())
-            .map_err(|e| anyhow::anyhow!("software display: {e}"))?;
-        let surface = Surface::new(&context, window.clone())
-            .map_err(|e| anyhow::anyhow!("software surface: {e}"))?;
+        let display =
+            display::Display::new(window.clone(), self.renderer_choice)?;
         let renderer = Renderer::with_options(
             self.config.font.size.pixels(window.scale_factor()),
             self.config.window.padding.physical(window.scale_factor()),
@@ -80,7 +80,7 @@ impl App {
             },
         )?;
         self.view = Some(View {
-            surface,
+            display,
             window,
             renderer,
             terminal,
@@ -124,30 +124,12 @@ impl View {
     }
 
     fn draw(&mut self) -> Result<()> {
-        let size = self.window.inner_size();
-        let (Some(width), Some(height)) =
-            (NonZeroU32::new(size.width), NonZeroU32::new(size.height))
-        else {
-            return Ok(());
-        };
-        self.surface
-            .resize(width, height)
-            .map_err(|e| anyhow::anyhow!("resize software surface: {e}"))?;
-        self.renderer.draw(
+        self.display.draw(
+            &self.window,
+            &mut self.renderer,
             &self.terminal,
-            size.width,
-            size.height,
             &self.preedit,
-        );
-        let mut buffer = self
-            .surface
-            .buffer_mut()
-            .map_err(|e| anyhow::anyhow!("acquire software buffer: {e}"))?;
-        buffer.copy_from_slice(&self.renderer.pixels);
-        self.window.pre_present_notify();
-        buffer
-            .present()
-            .map_err(|e| anyhow::anyhow!("present frame: {e}"))?;
+        )?;
         let (x, y) = self.terminal.cursor;
         let (left, top) = self.renderer.cell_origin(x, y);
         self.window.set_ime_cursor_area(
@@ -175,9 +157,11 @@ impl View {
                     self.font.hinting,
                     &self.font.family,
                 )?;
+                self.display.clear_glyphs();
                 self.resize()?;
             }
             WindowEvent::RedrawRequested => self.draw()?,
+            WindowEvent::Occluded(false) => self.window.request_redraw(),
             WindowEvent::ModifiersChanged(modifiers) => {
                 self.modifiers = modifiers.state();
             }
@@ -269,6 +253,7 @@ impl ApplicationHandler<()> for App {
             }
         }
         // Bound each batch so keyboard and window events can run under load.
+        let mut changed = false;
         for _ in 0..32 {
             match view.pty.output.try_recv() {
                 Ok(pty::Event::Output(bytes)) => {
@@ -277,7 +262,7 @@ impl ApplicationHandler<()> for App {
                         self.fail(events, error);
                         return;
                     }
-                    view.window.request_redraw();
+                    changed = true;
                     match view.pty.flush_input() {
                         Ok(_) => (),
                         Err(error) => {
@@ -297,6 +282,9 @@ impl ApplicationHandler<()> for App {
                 Err(_) => break,
             }
         }
+        if changed {
+            view.window.request_redraw();
+        }
     }
 
     fn exiting(&mut self, _: &ActiveEventLoop) {
@@ -315,20 +303,18 @@ fn pty_size(cols: usize, rows: usize, renderer: &Renderer) -> PtySize {
 }
 
 fn main() -> Result<()> {
-    let mut args = std::env::args_os().skip(1);
-    let command = match args.next() {
-        Some(arg) if arg == "--" => args.collect(),
-        Some(arg) if arg == "--help" || arg == "-h" => {
-            println!(
-                "Cryptty — software-rendered terminal\n\n\
-                Usage: cryptty [-- PROGRAM [ARG...]]\n\n\
-                Runs $SHELL by default. Alt+Enter toggles fullscreen."
-            );
-            return Ok(());
-        }
-        Some(arg) => anyhow::bail!("Unknown argument {arg:?}; use --help"),
-        None => Vec::new(),
-    };
+    let (renderer_choice, command) =
+        match options::parse(std::env::args_os().skip(1))? {
+            Action::Help => {
+                println!("{}", options::HELP);
+                return Ok(());
+            }
+            Action::ListGpus => {
+                cryptty::render::gpu::list_adapters();
+                return Ok(());
+            }
+            Action::Run { renderer, command } => (renderer, command),
+        };
     let config = Config::load()?;
     let events = EventLoop::with_user_event()
         .build()
@@ -339,6 +325,7 @@ fn main() -> Result<()> {
         proxy: events.create_proxy(),
         command,
         config,
+        renderer_choice,
         error: None,
     };
     events.run_app(&mut app)?;

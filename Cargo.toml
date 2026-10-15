@@ -2,10 +2,15 @@
 name = "cryptty"
 version = "0.1.0"
 edition = "2024"
-description = "A small software-rendered terminal for macOS and Linux"
+description = "A small terminal for macOS and Linux"
 
 [dependencies]
 anyhow = "1"
+wgpu = { version = "30", default-features = false, features = [
+    "std", "metal", "vulkan", "wgsl",
+] }
+pollster = "0.4"
+bytemuck = { version = "1", features = ["derive"] }
 serde = { version = "1", features = ["derive"] }
 serde_yaml_ng = "0.10"
 portable-pty = "0.9"

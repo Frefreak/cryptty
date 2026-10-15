@@ -13,6 +13,13 @@ mod font;
 #[path = "render/swash.rs"]
 mod font;
 
+mod atlas;
+pub mod gpu;
+#[cfg(test)]
+mod gpu_tests;
+mod painter;
+mod scene;
+
 const CACHE_LIMIT: usize = 4096;
 
 pub struct Renderer {
@@ -204,14 +211,8 @@ impl Renderer {
         columns: usize,
         color: u32,
     ) {
+        self.cache_glyph(ch, bold);
         let key = (ch, bold);
-        if !self.glyphs.contains_key(&key) {
-            if self.glyphs.len() >= CACHE_LIMIT {
-                self.glyphs.clear();
-            }
-            let image = self.rasterizer.rasterize(ch, bold);
-            self.glyphs.insert(key, image);
-        }
         let Some(Some(image)) = self.glyphs.get(&key) else {
             return;
         };
@@ -260,6 +261,17 @@ impl Renderer {
                 };
                 *dst = blend(*dst, fg, alpha);
             }
+        }
+    }
+
+    fn cache_glyph(&mut self, ch: char, bold: bool) {
+        let key = (ch, bold);
+        if !self.glyphs.contains_key(&key) {
+            if self.glyphs.len() >= CACHE_LIMIT {
+                self.glyphs.clear();
+            }
+            let image = self.rasterizer.rasterize(ch, bold);
+            self.glyphs.insert(key, image);
         }
     }
 }
