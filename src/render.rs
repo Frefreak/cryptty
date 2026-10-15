@@ -63,17 +63,24 @@ pub struct Renderer {
 
 impl Renderer {
     pub fn new(size: f32) -> Result<Self> {
-        Self::with_options(size, (0, 0), false)
+        Self::with_options(
+            size,
+            (0, 0),
+            false,
+            &crate::config::Font::default().family,
+        )
     }
 
     pub fn with_options(
         size: f32,
         padding: (u32, u32),
         hinting: bool,
+        family: &str,
     ) -> Result<Self> {
         let mut db = Database::new();
         db.load_system_fonts();
         let families = [
+            Family::Name(family),
             Family::Name("FantasqueSansM Nerd Font Mono"),
             Family::Name("Menlo"),
             Family::Name("DejaVu Sans Mono"),
@@ -416,6 +423,41 @@ mod tests {
     use crate::terminal::BACKGROUND;
 
     #[test]
+    fn configured_family_is_used_for_regular_and_bold() {
+        let default = Renderer::new(19.0).unwrap();
+        let default_family =
+            &default.db.face(default.regular).unwrap().families[0].0;
+        let family = default
+            .db
+            .faces()
+            .find(|face| {
+                face.monospaced
+                    && face.style == fontdb::Style::Normal
+                    && face.weight == Weight::NORMAL
+            })
+            .expect("A system monospace family is required")
+            .families[0]
+            .0
+            .clone();
+        let selected =
+            Renderer::with_options(19.0, (0, 0), false, &family).unwrap();
+        for id in [selected.regular, selected.bold] {
+            assert!(
+                selected
+                    .db
+                    .face(id)
+                    .unwrap()
+                    .families
+                    .iter()
+                    .any(|(name, _)| name == &family)
+            );
+        }
+        eprintln!(
+            "Default family: {default_family}; requested family: {family}"
+        );
+    }
+
+    #[test]
     fn baseline_leaves_room_for_underscores_and_descenders() {
         for size in [16.0, 20.0, 32.0] {
             let mut renderer = Renderer::new(size).unwrap();
@@ -486,8 +528,13 @@ colors:
         .unwrap();
         let theme = config.colors.theme();
         let mut plain = Renderer::new(17.0 * 96.0 / 72.0).unwrap();
-        let mut padded =
-            Renderer::with_options(17.0 * 96.0 / 72.0, (3, 5), false).unwrap();
+        let mut padded = Renderer::with_options(
+            17.0 * 96.0 / 72.0,
+            (3, 5),
+            false,
+            &crate::config::Font::default().family,
+        )
+        .unwrap();
         let width = plain.cell_width * 8;
         let height = plain.cell_height * 2;
         let padded_width = width + 6;

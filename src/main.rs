@@ -4,7 +4,7 @@ use std::rc::Rc;
 
 use anyhow::{Context as _, Result};
 use cryptty::{
-    config::{Config, Padding},
+    config::{Config, Font, Padding},
     input, pty,
     render::Renderer,
     terminal::Terminal,
@@ -20,12 +20,6 @@ use winit::event_loop::{
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Fullscreen, Window, WindowId};
 
-const FONT_SIZE_PT: f32 = 17.0;
-
-fn font_size_pixels(scale_factor: f64) -> f32 {
-    FONT_SIZE_PT * 96.0 / 72.0 * scale_factor as f32
-}
-
 struct View {
     surface: Surface<Rc<Window>, Rc<Window>>,
     window: Rc<Window>,
@@ -35,7 +29,7 @@ struct View {
     modifiers: ModifiersState,
     preedit: String,
     padding: Padding,
-    font_hinting: bool,
+    font: Font,
 }
 
 struct App {
@@ -63,9 +57,10 @@ impl App {
         let surface = Surface::new(&context, window.clone())
             .map_err(|e| anyhow::anyhow!("software surface: {e}"))?;
         let renderer = Renderer::with_options(
-            font_size_pixels(window.scale_factor()),
+            self.config.font.size.pixels(window.scale_factor()),
             self.config.window.padding.physical(window.scale_factor()),
             self.config.font.hinting,
+            &self.config.font.family,
         )?;
         let size = window.inner_size();
         let (cols, rows) = renderer.grid_size(size.width, size.height);
@@ -88,7 +83,7 @@ impl App {
             modifiers: ModifiersState::empty(),
             preedit: String::new(),
             padding: self.config.window.padding,
-            font_hinting: self.config.font.hinting,
+            font: self.config.font.clone(),
         });
         self.view.as_mut().unwrap().draw()?;
         self.view.as_ref().unwrap().window.set_visible(true);
@@ -170,9 +165,10 @@ impl View {
             WindowEvent::Resized(_) => self.resize()?,
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 self.renderer = Renderer::with_options(
-                    font_size_pixels(scale_factor),
+                    self.font.size.pixels(scale_factor),
                     self.padding.physical(scale_factor),
-                    self.font_hinting,
+                    self.font.hinting,
+                    &self.font.family,
                 )?;
                 self.resize()?;
             }

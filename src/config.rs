@@ -1,10 +1,13 @@
 use std::ffi::OsString;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use serde::Deserialize;
 
 use crate::terminal::Theme;
+
+mod defaults;
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -16,10 +19,17 @@ pub struct Config {
 
 impl Config {
     pub fn load() -> Result<Self> {
-        let path = user_path(
-            std::env::var_os("XDG_CONFIG_HOME"),
-            std::env::var_os("HOME"),
-        )?;
+        let xdg = std::env::var_os("XDG_CONFIG_HOME")
+            .filter(|value| !value.is_empty());
+        let home = std::env::var_os("HOME").filter(|value| !value.is_empty());
+        if xdg.is_none() && home.is_none() {
+            eprintln!(
+                "Warning: HOME and XDG_CONFIG_HOME are unset or empty; \
+                 using built-in defaults without creating a config file"
+            );
+            return Ok(Self::default());
+        }
+        let path = user_path(xdg, home)?;
         Self::read(&path)
     }
 
@@ -32,7 +42,48 @@ impl Config {
         let text = match std::fs::read_to_string(path) {
             Ok(text) => text,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(Self::default());
+                if let Some(parent) = path
+                    .parent()
+                    .filter(|parent| !parent.as_os_str().is_empty())
+                {
+                    std::fs::create_dir_all(parent).with_context(|| {
+                        format!(
+                            "Cannot create config directory {}",
+                            parent.display()
+                        )
+                    })?;
+                }
+                match std::fs::OpenOptions::new()
+                    .read(true)
+                    .append(true)
+                    .create_new(true)
+                    .open(path)
+                {
+                    Ok(mut file) => {
+                        return Self::append_defaults(&mut file).with_context(
+                            || {
+                                format!(
+                                    "Cannot initialize config {}",
+                                    path.display()
+                                )
+                            },
+                        );
+                    }
+                    Err(error)
+                        if error.kind()
+                            == std::io::ErrorKind::AlreadyExists =>
+                    {
+                        let text = std::fs::read_to_string(path).with_context(
+                            || format!("Cannot read config {}", path.display()),
+                        )?;
+                        return Self::read_existing(path, &text);
+                    }
+                    Err(error) => {
+                        return Err(error).with_context(|| {
+                            format!("Cannot create config {}", path.display())
+                        });
+                    }
+                }
             }
             Err(error) => {
                 return Err(error).with_context(|| {
@@ -40,8 +91,39 @@ impl Config {
                 });
             }
         };
-        Self::parse(&text)
-            .with_context(|| format!("Invalid config {}", path.display()))
+        Self::read_existing(path, &text)
+    }
+
+    fn read_existing(path: &Path, text: &str) -> Result<Self> {
+        let config = Self::parse(text)
+            .with_context(|| format!("Invalid config {}", path.display()))?;
+        if !defaults::additions(text)?.is_empty() {
+            let result = (|| -> Result<Self> {
+                let mut file = std::fs::OpenOptions::new()
+                    .read(true)
+                    .append(true)
+                    .open(path)?;
+                Self::append_defaults(&mut file)
+            })();
+            match result {
+                Ok(config) => return Ok(config),
+                Err(error) => eprintln!(
+                    "Warning: cannot append default comments to {}: {error}",
+                    path.display()
+                ),
+            }
+        }
+        Ok(config)
+    }
+
+    fn append_defaults(file: &mut std::fs::File) -> Result<Self> {
+        file.lock()?;
+        let mut text = String::new();
+        file.read_to_string(&mut text)?;
+        let config = Self::parse(&text)?;
+        let additions = defaults::additions(&text)?;
+        file.write_all(additions.as_bytes())?;
+        Ok(config)
     }
 }
 
@@ -68,10 +150,54 @@ pub fn user_path(
     Ok(root.join("cryptty/cryptty.yaml"))
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Font {
+    pub family: String,
+    pub size: FontSize,
     pub hinting: bool,
+}
+
+impl Default for Font {
+    fn default() -> Self {
+        Self {
+            family: "Alacritty Fantasque WenKai Mono".to_string(),
+            size: FontSize::default(),
+            hinting: false,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(try_from = "f32")]
+pub struct FontSize(f32);
+
+impl Default for FontSize {
+    fn default() -> Self {
+        Self(19.0)
+    }
+}
+
+impl TryFrom<f32> for FontSize {
+    type Error = &'static str;
+
+    fn try_from(points: f32) -> Result<Self, Self::Error> {
+        if !points.is_finite() || points <= 0.0 {
+            return Err("Font size must be a finite positive number of points");
+        }
+        Ok(Self(points))
+    }
+}
+
+impl FontSize {
+    pub fn pixels(self, scale: f64) -> f32 {
+        let pixels = if cfg!(target_os = "macos") {
+            self.0
+        } else {
+            self.0 * 96.0 / 72.0
+        };
+        pixels * scale as f32
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize)]
@@ -80,11 +206,17 @@ pub struct Window {
     pub padding: Padding,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Padding {
     pub x: u16,
     pub y: u16,
+}
+
+impl Default for Padding {
+    fn default() -> Self {
+        Self { x: 2, y: 2 }
+    }
 }
 
 impl Padding {

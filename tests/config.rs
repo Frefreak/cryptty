@@ -3,6 +3,153 @@ use std::path::Path;
 use cryptty::config::{Config, user_path};
 use cryptty::terminal::{PALETTE, Theme};
 
+const DEFAULT_PIXELS_AT_1_5X: f32 = if cfg!(target_os = "macos") {
+    28.5
+} else {
+    38.0
+};
+
+struct TestDirectory(std::path::PathBuf);
+
+impl TestDirectory {
+    fn new() -> Self {
+        static NEXT_ID: std::sync::atomic::AtomicUsize =
+            std::sync::atomic::AtomicUsize::new(0);
+        let id = NEXT_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let path = std::env::temp_dir()
+            .join(format!("cryptty-config-{}-{id}", std::process::id()));
+        std::fs::create_dir(&path).unwrap();
+        Self(path)
+    }
+
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for TestDirectory {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+#[test]
+fn missing_environment_warns_and_uses_defaults() {
+    const CHILD: &str = "CRYPTTY_CONFIG_TEST_CHILD";
+    if std::env::var_os(CHILD).is_some() {
+        let config = Config::load().unwrap();
+        assert_eq!(config.colors.theme(), Theme::default());
+        assert!(!config.font.hinting);
+        assert_eq!(config.font.size.pixels(1.5), DEFAULT_PIXELS_AT_1_5X);
+        assert_eq!(config.window.padding.physical(1.0), (2, 2));
+        return;
+    }
+    for empty in [false, true] {
+        let mut command =
+            std::process::Command::new(std::env::current_exe().unwrap());
+        command.args([
+            "--exact",
+            "missing_environment_warns_and_uses_defaults",
+            "--nocapture",
+        ]);
+        command.env(CHILD, "1");
+        for key in ["HOME", "XDG_CONFIG_HOME"] {
+            if empty {
+                command.env(key, "");
+            } else {
+                command.env_remove(key);
+            }
+        }
+        let output = command.output().unwrap();
+        assert!(output.status.success());
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        assert!(stderr.contains("Warning: HOME and XDG_CONFIG_HOME"));
+        assert!(stderr.contains("using built-in defaults"));
+    }
+}
+
+#[test]
+fn missing_config_is_created_with_current_defaults() {
+    let directory = TestDirectory::new();
+    let path = directory.path().join("nested/cryptty/cryptty.yaml");
+    let loaded = Config::read(&path).unwrap();
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.lines().all(|line| line.starts_with('#')));
+    let saved = Config::read(&path).unwrap();
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), text);
+    for config in [loaded, saved] {
+        assert_eq!(config.colors.theme(), Theme::default());
+        assert!(!config.font.hinting);
+        assert_eq!(config.font.size.pixels(1.5), DEFAULT_PIXELS_AT_1_5X);
+        assert_eq!(config.window.padding.physical(1.0), (2, 2));
+    }
+}
+
+#[test]
+fn existing_config_is_preserved_even_when_invalid() {
+    let directory = TestDirectory::new();
+    let path = directory.path().join("cryptty.yaml");
+    for (text, valid) in [("font: {hinting: true}\n", true), ("font: [", false)]
+    {
+        std::fs::write(&path, text).unwrap();
+        let result = Config::read(&path);
+        assert_eq!(result.is_ok(), valid);
+        if let Ok(config) = result {
+            assert!(config.font.hinting);
+        }
+        let updated = std::fs::read_to_string(&path).unwrap();
+        if valid {
+            assert!(updated.starts_with(text));
+            assert!(!updated.contains("#   hinting:"));
+            assert!(updated.contains("#   size: 19"));
+            Config::read(&path).unwrap();
+            assert_eq!(std::fs::read_to_string(&path).unwrap(), updated);
+        } else {
+            assert_eq!(updated, text);
+        }
+    }
+}
+
+#[test]
+fn config_directory_errors_are_reported() {
+    let directory = TestDirectory::new();
+    let parent = directory.path().join("file");
+    std::fs::write(&parent, "occupied").unwrap();
+    assert!(Config::read(&parent.join("cryptty.yaml")).is_err());
+}
+
+#[test]
+fn simultaneous_startups_append_defaults_once() {
+    for existing in [false, true] {
+        let directory = TestDirectory::new();
+        let path = directory.path().join("cryptty.yaml");
+        if existing {
+            std::fs::write(&path, "font: {size: 24}\n").unwrap();
+        }
+        let barrier = std::sync::Barrier::new(8);
+        std::thread::scope(|scope| {
+            for _ in 0..8 {
+                let path = &path;
+                let barrier = &barrier;
+                scope.spawn(move || {
+                    barrier.wait();
+                    let config = Config::read(path).unwrap();
+                    let pixels = if !existing {
+                        DEFAULT_PIXELS_AT_1_5X
+                    } else if cfg!(target_os = "macos") {
+                        36.0
+                    } else {
+                        48.0
+                    };
+                    assert_eq!(config.font.size.pixels(1.5), pixels);
+                });
+            }
+        });
+        let text = std::fs::read_to_string(path).unwrap();
+        assert_eq!(text.matches("#   hinting: false").count(), 1);
+    }
+}
+
 #[test]
 fn partial_theme_overrides_preserve_other_palette_entries() {
     let config = Config::parse(
@@ -30,8 +177,8 @@ colors:
     for i in (0..16).filter(|i| *i != 4 && *i != 9) {
         assert_eq!(theme.palette[i], PALETTE[i]);
     }
-    assert_eq!(config.window.padding.physical(1.25), (2, 0));
-    assert_eq!(config.window.padding.physical(2.0), (4, 0));
+    assert_eq!(config.window.padding.physical(1.25), (2, 2));
+    assert_eq!(config.window.padding.physical(2.0), (4, 4));
     for empty in ["", "# Comment-only file", "{}"] {
         assert_eq!(
             Config::parse(empty).unwrap().colors.theme(),
@@ -55,7 +202,7 @@ fn malformed_colors_padding_and_unknown_keys_report_errors() {
         "colors: {primary: {foregound: '#123456'}}",
         "colors: {normal: {blu: '#123456'}}",
         "colors: {unknown: 1}",
-        "font: {size: 20}",
+        "font: {sizes: 20}",
         "font: {hinting: 'false'}",
         "font: {hinting: 1}",
         "window: [1, 2]",
@@ -64,6 +211,26 @@ fn malformed_colors_padding_and_unknown_keys_report_errors() {
     ] {
         assert!(Config::parse(text).is_err(), "{text}");
     }
+}
+
+#[test]
+fn font_size_uses_points_and_scales_with_the_display() {
+    let cases = if cfg!(target_os = "macos") {
+        [("12", 12.0), ("11.25", 11.25), ("19", 19.0)]
+    } else {
+        [("12", 16.0), ("11.25", 15.0), ("19.5", 26.0)]
+    };
+    for (value, pixels) in cases {
+        let config =
+            Config::parse(&format!("font: {{size: {value}}}")).unwrap();
+        assert_eq!(config.font.size.pixels(1.0), pixels);
+        assert_eq!(config.font.size.pixels(2.0), pixels * 2.0);
+    }
+    for value in ["0", "-1", ".nan", ".inf", "-.inf", "'19'", "true"] {
+        assert!(Config::parse(&format!("font: {{size: {value}}}")).is_err());
+    }
+    let config = Config::parse("window: {padding: {x: 0, y: 0}}").unwrap();
+    assert_eq!(config.window.padding.physical(2.0), (0, 0));
 }
 
 #[test]
@@ -94,4 +261,14 @@ fn font_hinting_accepts_boolean_overrides() {
             .font
             .hinting
     );
+}
+
+#[test]
+fn font_family_is_configurable_and_defaults_to_the_alacritty_family() {
+    let default = Config::parse("").unwrap();
+    assert_eq!(default.font.family, "Alacritty Fantasque WenKai Mono");
+    let config = Config::parse("font: {family: Menlo}").unwrap();
+    assert_eq!(config.font.family, "Menlo");
+    assert_eq!(config.font.size.pixels(1.5), DEFAULT_PIXELS_AT_1_5X);
+    assert!(Config::parse("font: {family: [Menlo]}").is_err());
 }
