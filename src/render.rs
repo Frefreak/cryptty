@@ -4,7 +4,8 @@ use anyhow::Result;
 use swash::scale::image::{Content as ImageContent, Image};
 use unicode_width::UnicodeWidthChar;
 
-use crate::terminal::{Cell, Content, Terminal};
+use crate::terminal::{Content, CursorShape, FontStyle, Terminal};
+use decoration::{cursor_layout, cursor_rect, decorations};
 
 #[cfg(target_os = "macos")]
 #[path = "render/native.rs"]
@@ -14,6 +15,7 @@ mod font;
 mod font;
 
 mod atlas;
+mod decoration;
 pub mod gpu;
 #[cfg(test)]
 mod gpu_tests;
@@ -24,7 +26,7 @@ const CACHE_LIMIT: usize = 4096;
 
 pub struct Renderer {
     rasterizer: font::Rasterizer,
-    glyphs: HashMap<(char, bool), Option<Image>>,
+    glyphs: HashMap<(char, FontStyle), Option<Image>>,
     padding: (usize, usize),
     pub cell_width: usize,
     pub cell_height: usize,
@@ -32,7 +34,8 @@ pub struct Renderer {
     width: usize,
     height: usize,
     pub pixels: Vec<u32>,
-    previous: Vec<Vec<Cell>>,
+    previous: Vec<Vec<crate::terminal::Cell>>,
+    color_revision: u64,
     old_cursor: Option<(usize, usize)>,
     old_preedit_row: Option<usize>,
 }
@@ -65,6 +68,7 @@ impl Renderer {
             height: 0,
             pixels: Vec::new(),
             previous: Vec::new(),
+            color_revision: 0,
             old_cursor: None,
             old_preedit_row: None,
         })
@@ -113,10 +117,14 @@ impl Renderer {
             self.pixels = vec![terminal.theme().background; width * height];
             self.invalidate();
         }
+        if self.color_revision != terminal.color_revision {
+            self.color_revision = terminal.color_revision;
+            self.invalidate();
+        }
         if self.previous.is_empty() {
             self.pixels.fill(terminal.theme().background);
         }
-        let cursor = terminal.cursor_visible.then_some(terminal.cursor);
+        let cursor = terminal.cursor_drawn().then_some(terminal.cursor);
         let preedit_row = (!preedit.is_empty()).then_some(terminal.cursor.1);
         for (y, row) in terminal.rows.iter().enumerate() {
             let cursor_row = cursor.map(|c| c.1) == Some(y)
@@ -126,7 +134,7 @@ impl Renderer {
             if self.previous.get(y) == Some(row) && !cursor_row {
                 continue;
             }
-            self.draw_row(y, row);
+            self.draw_row(y, terminal);
         }
         if !preedit.is_empty() {
             let (mut x, y) = terminal.cursor;
@@ -137,7 +145,7 @@ impl Renderer {
                 let columns = ch.width().unwrap_or(1).max(1);
                 self.paint_char(
                     ch,
-                    false,
+                    FontStyle::default(),
                     x,
                     y,
                     columns,
@@ -146,12 +154,27 @@ impl Renderer {
                 x += columns;
             }
         }
-        if let Some((x, y)) = cursor {
+        if cursor.is_some() {
+            let (x, y, columns, shape) = cursor_layout(terminal, preedit);
             let (left, top) = self.cell_origin(x, y);
-            let (right, bottom) = self.content_end();
-            for py in top..(top + self.cell_height).min(bottom) {
-                for px in left..(left + 2).min(right) {
-                    self.pixels[py * width + px] = terminal.theme().cursor;
+            let [dx, dy, w, h] =
+                cursor_rect(shape, self.cell_width * columns, self.cell_height);
+            self.solid(left + dx, top + dy, w, h, terminal.theme().cursor);
+            let cell = &terminal.rows[y][x];
+            if shape == CursorShape::Block
+                && !cell.style.hidden
+                && let Content::Text { text, wide } = &cell.content
+            {
+                let (_, bg) = terminal.colors(cell.style);
+                for ch in text.chars().filter(|c| *c != ' ') {
+                    self.paint_char(
+                        ch,
+                        cell.style.font(),
+                        x,
+                        y,
+                        if *wide { 2 } else { 1 },
+                        bg,
+                    );
                 }
             }
         }
@@ -160,44 +183,52 @@ impl Renderer {
         self.old_preedit_row = preedit_row;
     }
 
-    fn draw_row(&mut self, y: usize, row: &[Cell]) {
-        let (_, top) = self.cell_origin(0, y);
+    fn solid(&mut self, x: usize, y: usize, w: usize, h: usize, rgb: u32) {
         let (right, bottom) = self.content_end();
+        for py in y..(y + h).min(bottom) {
+            let start = py * self.width + x.min(right);
+            let end = py * self.width + (x + w).min(right);
+            self.pixels[start..end].fill(rgb);
+        }
+    }
+
+    fn draw_row(&mut self, y: usize, terminal: &Terminal) {
+        let row = &terminal.rows[y];
+        let (_, top) = self.cell_origin(0, y);
         for (x, cell) in row.iter().enumerate() {
-            let bg = if cell.style.inverse {
-                cell.style.fg
-            } else {
-                cell.style.bg
-            };
+            let (_, bg) = terminal.colors(cell.style);
             let (left, _) = self.cell_origin(x, y);
-            for py in top..(top + self.cell_height).min(bottom) {
-                let start = py * self.width + left.min(right);
-                let end = py * self.width + (left + self.cell_width).min(right);
-                self.pixels[start..end].fill(bg);
-            }
+            self.solid(left, top, self.cell_width, self.cell_height, bg);
         }
         for (x, cell) in row.iter().enumerate() {
+            if cell.style.hidden {
+                continue;
+            }
             if let Content::Text { text, wide } = &cell.content {
-                let fg = if cell.style.inverse {
-                    cell.style.bg
-                } else {
-                    cell.style.fg
-                };
+                let (fg, _) = terminal.colors(cell.style);
                 let columns = if *wide { 2 } else { 1 };
                 for ch in text.chars().filter(|c| *c != ' ') {
-                    self.paint_char(ch, cell.style.bold, x, y, columns, fg);
+                    self.paint_char(ch, cell.style.font(), x, y, columns, fg);
                 }
-                if cell.style.underline {
-                    let py = top + self.cell_height - 2;
-                    if py < bottom {
-                        let (left, _) = self.cell_origin(x, y);
-                        let end = (left + columns * self.cell_width).min(right);
-                        let start = left.min(right);
-                        self.pixels
-                            [py * self.width + start..py * self.width + end]
-                            .fill(fg);
-                    }
-                }
+                let (left, _) = self.cell_origin(x, y);
+                let underline = cell
+                    .style
+                    .underline_color
+                    .map_or(fg, |color| terminal.color(color));
+                decorations(
+                    cell.style,
+                    self.cell_width * columns,
+                    self.cell_height,
+                    |x, y, w, h, is_underline| {
+                        self.solid(
+                            left + x,
+                            top + y,
+                            w,
+                            h,
+                            if is_underline { underline } else { fg },
+                        );
+                    },
+                );
             }
         }
     }
@@ -205,14 +236,14 @@ impl Renderer {
     fn paint_char(
         &mut self,
         ch: char,
-        bold: bool,
+        font: FontStyle,
         x: usize,
         y: usize,
         columns: usize,
         color: u32,
     ) {
-        self.cache_glyph(ch, bold);
-        let key = (ch, bold);
+        self.cache_glyph(ch, font);
+        let key = (ch, font);
         let Some(Some(image)) = self.glyphs.get(&key) else {
             return;
         };
@@ -264,13 +295,13 @@ impl Renderer {
         }
     }
 
-    fn cache_glyph(&mut self, ch: char, bold: bool) {
-        let key = (ch, bold);
+    fn cache_glyph(&mut self, ch: char, font: FontStyle) {
+        let key = (ch, font);
         if !self.glyphs.contains_key(&key) {
             if self.glyphs.len() >= CACHE_LIMIT {
                 self.glyphs.clear();
             }
-            let image = self.rasterizer.rasterize(ch, bold);
+            let image = self.rasterizer.rasterize(ch, font);
             self.glyphs.insert(key, image);
         }
     }
@@ -304,6 +335,60 @@ mod tests {
     }
 
     #[test]
+    fn block_cursor_covers_wide_glyph_and_preserves_preedit() {
+        let theme = crate::terminal::Theme {
+            cursor: 0x1234ab,
+            ..Default::default()
+        };
+        let mut terminal = Terminal::with_theme(6, 2, theme);
+        let mut renderer = Renderer::new(19.0).unwrap();
+        let (w, h) = (renderer.cell_width, renderer.cell_height);
+        terminal.feed("中\x1b[H\x1b[2 q".as_bytes());
+        renderer.draw(&terminal, (w * 6) as u32, (h * 2) as u32, "");
+        let first = renderer.pixels.clone();
+        let mut right_half = 0;
+        for y in 0..h {
+            for x in w..w * 2 {
+                right_half +=
+                    usize::from(renderer.pixels[y * w * 6 + x] == theme.cursor);
+            }
+        }
+        assert!(right_half > w * h / 2);
+        terminal.feed(b"\x1b[1;2H");
+        renderer.draw(&terminal, (w * 6) as u32, (h * 2) as u32, "");
+        assert_eq!(renderer.pixels, first);
+        terminal.feed(b"\x1b[H");
+        renderer.draw(&terminal, (w * 6) as u32, (h * 2) as u32, "abc");
+        let composed = renderer.pixels.clone();
+        terminal.cursor_visible = false;
+        renderer.draw(&terminal, (w * 6) as u32, (h * 2) as u32, "abc");
+        for y in 0..h {
+            let start = y * w * 6;
+            assert_eq!(
+                &renderer.pixels[start..start + w * 3],
+                &composed[start..start + w * 3]
+            );
+        }
+    }
+
+    #[test]
+    fn osc_palette_changes_invalidate_cached_rows() {
+        let mut terminal = Terminal::new(4, 2);
+        terminal.cursor_visible = false;
+        terminal.feed(b"\x1b[41mX");
+        let mut renderer = Renderer::new(19.0).unwrap();
+        renderer.draw(&terminal, 120, 80, "");
+        let first = renderer.pixels.clone();
+        terminal.feed(b"\x1b]4;1;#010203\x07\x1b]11;#040506\x07");
+        renderer.draw(&terminal, 120, 80, "");
+        let incremental = renderer.pixels.clone();
+        assert_ne!(first, incremental);
+        renderer.invalidate();
+        renderer.draw(&terminal, 120, 80, "");
+        assert_eq!(renderer.pixels, incremental);
+    }
+
+    #[test]
     fn baseline_leaves_room_for_underscores_and_descenders() {
         for size in [16.0, 20.0, 32.0] {
             let mut renderer = Renderer::new(size).unwrap();
@@ -325,7 +410,9 @@ mod tests {
                 );
             }
             for ch in "_gjpqy".chars() {
-                let image = renderer.glyphs[&(ch, false)].as_ref().unwrap();
+                let image = renderer.glyphs[&(ch, FontStyle::default())]
+                    .as_ref()
+                    .unwrap();
                 let bottom = renderer.baseline - image.placement.top
                     + image.placement.height as i32;
                 assert!(

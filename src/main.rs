@@ -1,5 +1,6 @@
 use std::ffi::OsString;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result};
 use cryptty::{
@@ -17,10 +18,11 @@ use winit::event::{ElementState, Ime, WindowEvent};
 use winit::event_loop::{
     ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy,
 };
-use winit::keyboard::{Key, ModifiersState, NamedKey};
+use winit::keyboard::{Key, KeyLocation, ModifiersState, NamedKey};
 use winit::window::{Fullscreen, Window, WindowId};
 
 mod display;
+mod interaction;
 #[cfg(target_os = "macos")]
 mod macos_input;
 
@@ -34,6 +36,10 @@ struct View {
     preedit: String,
     padding: Padding,
     font: Font,
+    interaction: interaction::Interaction,
+    next_blink: Instant,
+    displayed_title: String,
+    backlog_full: bool,
 }
 
 struct App {
@@ -89,6 +95,10 @@ impl App {
             preedit: String::new(),
             padding: self.config.window.padding,
             font: self.config.font.clone(),
+            interaction: interaction::Interaction::default(),
+            next_blink: Instant::now() + Duration::from_millis(500),
+            displayed_title: "Cryptty".into(),
+            backlog_full: false,
         });
         self.view.as_mut().unwrap().draw()?;
         self.view.as_ref().unwrap().window.set_visible(true);
@@ -104,10 +114,28 @@ impl App {
 impl View {
     fn send_input(&mut self, bytes: Vec<u8>) -> Result<()> {
         if !self.pty.write(bytes)? {
-            self.window.set_title("Cryptty — input backlog full");
+            self.backlog_full = true;
+            self.update_title();
             eprintln!("Cryptty: input backlog full; input rejected");
         }
         Ok(())
+    }
+
+    fn update_title(&mut self) {
+        let title = if self.backlog_full {
+            format!("{} — input backlog full", self.terminal.title)
+        } else {
+            self.terminal.title.clone()
+        };
+        if title != self.displayed_title {
+            self.window.set_title(&title);
+            self.displayed_title = title;
+        }
+    }
+
+    fn reset_blink(&mut self) {
+        self.terminal.cursor_blink_on = true;
+        self.next_blink = Instant::now() + Duration::from_millis(500);
     }
 
     fn resize(&mut self) -> Result<()> {
@@ -124,6 +152,13 @@ impl View {
     }
 
     fn draw(&mut self) -> Result<()> {
+        if self
+            .terminal
+            .synchronized_until()
+            .is_some_and(|t| t > Instant::now())
+        {
+            return Ok(());
+        }
         self.display.draw(
             &self.window,
             &mut self.renderer,
@@ -165,18 +200,34 @@ impl View {
             WindowEvent::ModifiersChanged(modifiers) => {
                 self.modifiers = modifiers.state();
             }
-            WindowEvent::Focused(false) => {
-                self.modifiers = ModifiersState::empty();
-                self.preedit.clear();
+            WindowEvent::Focused(focused) => {
+                self.send_input(input::focus(
+                    focused,
+                    self.terminal.focus_reporting,
+                ))?;
+                if !focused {
+                    self.modifiers = ModifiersState::empty();
+                    self.preedit.clear();
+                    self.interaction.reset_buttons();
+                }
+                self.reset_blink();
                 self.renderer.invalidate();
                 self.window.request_redraw();
             }
+            WindowEvent::CursorMoved { position, .. } => {
+                self.pointer_moved(position.x, position.y)?;
+            }
+            WindowEvent::MouseInput { state, button, .. } => {
+                self.mouse_button(button, state)?;
+            }
+            WindowEvent::MouseWheel { delta, .. } => self.mouse_wheel(delta)?,
             WindowEvent::Ime(Ime::Preedit(text, _)) => {
                 self.preedit = text;
                 self.renderer.invalidate();
                 self.window.request_redraw();
             }
             WindowEvent::Ime(Ime::Commit(text)) => {
+                self.reset_blink();
                 self.preedit.clear();
                 self.renderer.invalidate();
                 self.send_input(text.into_bytes())?;
@@ -192,7 +243,23 @@ impl View {
                 is_synthetic: false,
                 ..
             } if event.state == ElementState::Pressed => {
-                if event.logical_key == Key::Named(NamedKey::Enter)
+                self.reset_blink();
+                let paste_modifier = if cfg!(target_os = "macos") {
+                    self.modifiers.super_key()
+                } else {
+                    self.modifiers.control_key() && self.modifiers.shift_key()
+                };
+                let paste_key = match &event.logical_key {
+                    Key::Character(text) => text.eq_ignore_ascii_case("v"),
+                    _ => false,
+                };
+                if paste_modifier && paste_key {
+                    self.paste();
+                } else if event.logical_key == Key::Named(NamedKey::Insert)
+                    && self.modifiers.shift_key()
+                {
+                    self.paste();
+                } else if event.logical_key == Key::Named(NamedKey::Enter)
                     && self.modifiers.alt_key()
                     && !self.modifiers.control_key()
                     && !self.modifiers.super_key()
@@ -204,13 +271,25 @@ impl View {
                     };
                     self.window.set_fullscreen(fullscreen);
                 } else if self.preedit.is_empty() {
-                    self.send_input(input::encode(
-                        &event.logical_key,
-                        event.text.as_deref(),
-                        self.modifiers,
-                        self.terminal.application_cursor,
-                    ))?;
+                    let keypad = (event.location == KeyLocation::Numpad)
+                        .then(|| {
+                            input::keypad(
+                                &event.logical_key,
+                                self.modifiers,
+                                self.terminal.application_keypad,
+                            )
+                        })
+                        .flatten();
+                    self.send_input(keypad.unwrap_or_else(|| {
+                        input::encode(
+                            &event.logical_key,
+                            event.text.as_deref(),
+                            self.modifiers,
+                            self.terminal.application_cursor,
+                        )
+                    }))?;
                 }
+                self.window.request_redraw();
             }
             _ => (),
         }
@@ -246,7 +325,7 @@ impl ApplicationHandler<()> for App {
         };
         match view.pty.flush_input() {
             Ok(false) => (),
-            Ok(true) => view.window.set_title("Cryptty"),
+            Ok(true) => view.backlog_full = false,
             Err(error) => {
                 self.fail(events, error);
                 return;
@@ -258,6 +337,7 @@ impl ApplicationHandler<()> for App {
             match view.pty.output.try_recv() {
                 Ok(pty::Event::Output(bytes)) => {
                     let replies = view.terminal.feed(&bytes);
+                    view.apply_effects();
                     if let Err(error) = view.send_input(replies) {
                         self.fail(events, error);
                         return;
@@ -282,9 +362,35 @@ impl ApplicationHandler<()> for App {
                 Err(_) => break,
             }
         }
+        view.update_title();
         if changed {
             view.window.request_redraw();
         }
+    }
+
+    fn about_to_wait(&mut self, events: &ActiveEventLoop) {
+        let Some(view) = self.view.as_mut() else {
+            return;
+        };
+        let now = Instant::now();
+        let mut wake = view.terminal.synchronized_until();
+        if wake.is_some_and(|t| t <= now) {
+            view.terminal.finish_synchronized_update();
+            view.window.request_redraw();
+            wake = None;
+        }
+        if view.terminal.cursor_style.blinking && view.terminal.cursor_visible {
+            if now >= view.next_blink {
+                view.terminal.cursor_blink_on = !view.terminal.cursor_blink_on;
+                view.next_blink = now + Duration::from_millis(500);
+                view.window.request_redraw();
+            }
+            wake =
+                Some(wake.map_or(view.next_blink, |t| t.min(view.next_blink)));
+        }
+        events.set_control_flow(
+            wake.map_or(ControlFlow::Wait, ControlFlow::WaitUntil),
+        );
     }
 
     fn exiting(&mut self, _: &ActiveEventLoop) {

@@ -17,9 +17,18 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
     )
     .unwrap();
     let mut painter = Painter::new(&device, wgpu::TextureFormat::Rgba8Unorm);
-    let mut terminal = Terminal::new(18, 5);
+    let mut terminal = Terminal::new(26, 9);
     terminal.feed(
-        "ABC_gjpq\x1b[1;31mBold\x1b[0m\r\n中文😀e\u{301}\r\n\x1b[4;44mUnder\x1b[7mInverse\x1b[0m".as_bytes(),
+        concat!(
+            "中文😀e\u{301}\x1b[1;31mBold\x1b[0m\r\n",
+            "\x1b[3;2;9mItalic dim strike\x1b[0m\r\n",
+            "\x1b[1;3;53mBold italic overline\x1b[0m\r\n",
+            "\x1b[4:3;58:2::255:0:0mCurly\x1b[4:2mDouble\x1b[0m\r\n",
+            "\x1b[4:4mDotted\x1b[4:5mDashed\x1b[0m\r\n",
+            "\x1b[4;44mUnder\x1b[7mInverse\x1b[0m\r\n",
+            "\x1b[8mHidden\x1b[0m ABC_gjpq\x1b[H",
+        )
+        .as_bytes(),
     );
     for font_size in [19.0, 38.0] {
         let mut renderer = Renderer::with_options(
@@ -30,9 +39,14 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
         )
         .unwrap();
         painter.clear_glyphs();
-        for (width, height, preedit) in
-            [(384, 160, "测试"), (256, 90, ""), (1, 1, "中")]
-        {
+        for (width, height, preedit, shape) in [
+            (640, 640, "", 2),
+            (640, 640, "", 4),
+            (384, 160, "测试", 2),
+            (256, 90, "", 6),
+            (1, 1, "中", 6),
+        ] {
+            terminal.feed(format!("\x1b[{shape} q").as_bytes());
             renderer.draw(&terminal, width, height, preedit);
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("pixel comparison"),

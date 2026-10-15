@@ -1,5 +1,96 @@
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 
+pub fn paste(text: &str, bracketed: bool) -> Vec<u8> {
+    let text = text.replace("\r\n", "\n");
+    if bracketed {
+        let text: String = text
+            .chars()
+            .filter(|c| !matches!(*c, '\x1b' | '\u{009b}'))
+            .collect();
+        format!("\x1b[200~{text}\x1b[201~").into_bytes()
+    } else {
+        text.replace('\n', "\r").into_bytes()
+    }
+}
+
+pub fn focus(focused: bool, reporting: bool) -> Vec<u8> {
+    if !reporting {
+        return Vec::new();
+    }
+    if focused {
+        b"\x1b[I".to_vec()
+    } else {
+        b"\x1b[O".to_vec()
+    }
+}
+
+pub fn keypad(
+    key: &Key,
+    modifiers: ModifiersState,
+    application: bool,
+) -> Option<Vec<u8>> {
+    if !application {
+        return None;
+    }
+    if modifiers.super_key() {
+        return Some(Vec::new());
+    }
+    let code = match key {
+        Key::Named(NamedKey::Enter) => 'M',
+        Key::Character(text) => match text.as_str() {
+            "0" => 'p',
+            "1" => 'q',
+            "2" => 'r',
+            "3" => 's',
+            "4" => 't',
+            "5" => 'u',
+            "6" => 'v',
+            "7" => 'w',
+            "8" => 'x',
+            "9" => 'y',
+            "." => 'n',
+            "," => 'l',
+            "+" => 'k',
+            "-" => 'm',
+            "*" => 'j',
+            "/" => 'o',
+            "=" => 'X',
+            _ => return None,
+        },
+        _ => return None,
+    };
+    Some(format!("\x1bO{code}").into_bytes())
+}
+
+pub fn mouse(
+    button: u8,
+    released: bool,
+    position: (usize, usize),
+    modifiers: ModifiersState,
+    sgr: bool,
+) -> Vec<u8> {
+    let flags = 4 * u8::from(modifiers.shift_key())
+        + 8 * u8::from(modifiers.alt_key())
+        + 16 * u8::from(modifiers.control_key());
+    let (x, y) = (position.0 + 1, position.1 + 1);
+    if sgr {
+        let end = if released { 'm' } else { 'M' };
+        format!("\x1b[<{};{x};{y}{end}", button + flags).into_bytes()
+    } else if x < 224 && y < 224 {
+        let button = if released { 3 } else { button };
+        vec![
+            0x1b,
+            b'[',
+            b'M',
+            32 + button + flags,
+            32 + x as u8,
+            32 + y as u8,
+        ]
+    } else {
+        Vec::new()
+    }
+}
+
 pub fn encode(
     key: &Key,
     text: Option<&str>,

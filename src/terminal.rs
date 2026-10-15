@@ -1,4 +1,18 @@
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
 use unicode_width::UnicodeWidthChar;
+
+mod control;
+mod osc;
+mod parser;
+mod sgr;
+mod style;
+pub use style::{
+    Color, CursorShape, CursorStyle, FontStyle, MouseMode, Style, Underline,
+};
+
+const OSC_LIMIT: usize = 65536;
 
 pub const BACKGROUND: u32 = 0x282a36;
 pub const FOREGROUND: u32 = 0xf8f8f2;
@@ -23,45 +37,6 @@ impl Default for Theme {
             background: BACKGROUND,
             cursor: FOREGROUND,
             palette: PALETTE,
-        }
-    }
-}
-
-impl Theme {
-    fn style(self) -> Style {
-        Style {
-            fg: self.foreground,
-            bg: self.background,
-            ..Style::default()
-        }
-    }
-
-    fn indexed_color(self, index: u8) -> u32 {
-        if index < 16 {
-            self.palette[index as usize]
-        } else {
-            indexed_color(index)
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Style {
-    pub fg: u32,
-    pub bg: u32,
-    pub bold: bool,
-    pub underline: bool,
-    pub inverse: bool,
-}
-
-impl Default for Style {
-    fn default() -> Self {
-        Self {
-            fg: FOREGROUND,
-            bg: BACKGROUND,
-            bold: false,
-            underline: false,
-            inverse: false,
         }
     }
 }
@@ -105,6 +80,7 @@ pub enum Content {
 pub struct Cell {
     pub content: Content,
     pub style: Style,
+    pub hyperlink: Option<Arc<str>>,
 }
 
 impl Cell {
@@ -114,39 +90,89 @@ impl Cell {
                 text: CellText::new(' '),
                 wide: false,
             },
-            style,
+            style: style.erased(),
+            hyperlink: None,
         }
     }
 }
 
-#[derive(Default)]
-enum Parser {
-    #[default]
-    Ground,
-    Escape,
-    Csi,
-    String {
-        escape: bool,
-    },
-    Charset,
+#[derive(Clone)]
+struct SavedCursor {
+    position: (usize, usize),
+    style: Style,
+    origin: bool,
+    auto_wrap: bool,
+    pending_wrap: bool,
+    charsets: [bool; 2],
+    active_charset: usize,
+    hyperlink: Option<Arc<str>>,
+}
+
+impl Default for SavedCursor {
+    fn default() -> Self {
+        Self {
+            position: (0, 0),
+            style: Style::default(),
+            origin: false,
+            auto_wrap: true,
+            pending_wrap: false,
+            charsets: [false; 2],
+            active_charset: 0,
+            hyperlink: None,
+        }
+    }
+}
+
+struct InactiveScreen {
+    rows: Vec<Vec<Cell>>,
+    cursor: (usize, usize),
+    saved: SavedCursor,
+}
+
+pub enum Effect {
+    Clipboard(String),
 }
 
 pub struct Terminal {
     theme: Theme,
+    initial_theme: Theme,
+    palette: [u32; 256],
+    pub color_revision: u64,
     pub rows: Vec<Vec<Cell>>,
     pub cursor: (usize, usize),
     pub cursor_visible: bool,
+    pub cursor_style: CursorStyle,
+    pub cursor_blink_on: bool,
     pub application_cursor: bool,
+    pub application_keypad: bool,
+    pub bracketed_paste: bool,
+    pub focus_reporting: bool,
+    pub mouse_mode: MouseMode,
+    pub mouse_sgr: bool,
+    pub title: String,
+    pub effects: Vec<Effect>,
+    pub reverse_video: bool,
     style: Style,
-    saved: ((usize, usize), Style),
-    parser: Parser,
-    csi_bytes: [u8; 128],
-    csi_len: usize,
-    utf8: Vec<u8>,
+    saved: SavedCursor,
+    parser: Option<Box<vte::Parser<OSC_LIMIT>>>,
+    cancelling: bool,
+    replies: Vec<u8>,
+    dcs: Option<Vec<u8>>,
     pending_wrap: bool,
     auto_wrap: bool,
+    origin_mode: bool,
+    insert_mode: bool,
+    newline_mode: bool,
+    charsets: [bool; 2],
+    active_charset: usize,
+    tabs: Vec<bool>,
     scroll_top: usize,
     scroll_bottom: usize,
+    inactive: InactiveScreen,
+    alternate: bool,
+    hyperlink: Option<Arc<str>>,
+    preceding: Option<char>,
+    sync_deadline: Option<Instant>,
 }
 
 impl Terminal {
@@ -156,22 +182,60 @@ impl Terminal {
 
     pub fn with_theme(cols: usize, rows: usize, theme: Theme) -> Self {
         let (cols, rows) = (cols.max(1), rows.max(1));
+        let style = Style::default();
+        let rows = vec![vec![Cell::blank(style); cols]; rows];
+        let inactive = InactiveScreen {
+            rows: rows.clone(),
+            cursor: (0, 0),
+            saved: SavedCursor::default(),
+        };
+        let scroll_bottom = rows.len() - 1;
         Self {
             theme,
-            rows: vec![vec![Cell::blank(theme.style()); cols]; rows],
+            initial_theme: theme,
+            palette: std::array::from_fn(|i| {
+                if i < 16 {
+                    theme.palette[i]
+                } else {
+                    indexed_color(i as u8)
+                }
+            }),
+            color_revision: 0,
+            rows,
             cursor: (0, 0),
             cursor_visible: true,
+            cursor_style: CursorStyle::default(),
+            cursor_blink_on: true,
             application_cursor: false,
-            style: theme.style(),
-            saved: ((0, 0), theme.style()),
-            parser: Parser::Ground,
-            csi_bytes: [0; 128],
-            csi_len: 0,
-            utf8: Vec::with_capacity(4),
+            application_keypad: false,
+            bracketed_paste: false,
+            focus_reporting: false,
+            mouse_mode: MouseMode::Off,
+            mouse_sgr: false,
+            title: "Cryptty".into(),
+            effects: Vec::new(),
+            reverse_video: false,
+            style,
+            saved: SavedCursor::default(),
+            parser: Some(Box::default()),
+            cancelling: false,
+            replies: Vec::new(),
+            dcs: None,
             pending_wrap: false,
             auto_wrap: true,
+            origin_mode: false,
+            insert_mode: false,
+            newline_mode: false,
+            charsets: [false; 2],
+            active_charset: 0,
+            tabs: (0..cols).map(|i| i % 8 == 0).collect(),
             scroll_top: 0,
-            scroll_bottom: rows - 1,
+            scroll_bottom,
+            inactive,
+            alternate: false,
+            hyperlink: None,
+            preceding: None,
+            sync_deadline: None,
         }
     }
 
@@ -183,150 +247,100 @@ impl Terminal {
         self.rows[0].len()
     }
 
+    pub fn color(&self, color: Color) -> u32 {
+        match color {
+            Color::Foreground => self.theme.foreground,
+            Color::Background => self.theme.background,
+            Color::Indexed(index) => self.palette[index as usize],
+            Color::Rgb(rgb) => rgb,
+        }
+    }
+
+    pub fn colors(&self, style: Style) -> (u32, u32) {
+        let (mut fg, mut bg) = (self.color(style.fg), self.color(style.bg));
+        if style.inverse ^ self.reverse_video {
+            std::mem::swap(&mut fg, &mut bg);
+        }
+        if style.dim {
+            fg = style::dim(fg);
+        }
+        (fg, bg)
+    }
+
+    pub fn alternate_screen(&self) -> bool {
+        self.alternate
+    }
+
+    pub fn synchronized_until(&self) -> Option<Instant> {
+        self.sync_deadline
+    }
+
+    pub fn finish_synchronized_update(&mut self) {
+        self.sync_deadline = None;
+    }
+
+    pub fn cursor_drawn(&self) -> bool {
+        self.cursor_visible
+            && (!self.cursor_style.blinking || self.cursor_blink_on)
+    }
+
     pub fn resize(&mut self, cols: usize, rows: usize) {
         let (cols, rows) = (cols.max(1), rows.max(1));
         if cols == self.cols() && rows == self.rows.len() {
             return;
         }
-        // Keep the cursor's row visible when the window shrinks.
-        if self.cursor.1 >= rows {
-            let remove = self.cursor.1 + 1 - rows;
-            self.rows.drain(..remove);
-            self.cursor.1 -= remove;
+        Self::resize_screen(&mut self.rows, &mut self.cursor, cols, rows);
+        Self::resize_screen(
+            &mut self.inactive.rows,
+            &mut self.inactive.cursor,
+            cols,
+            rows,
+        );
+        let old_cols = self.tabs.len();
+        self.tabs.resize(cols, false);
+        for col in old_cols..cols {
+            self.tabs[col] = col % 8 == 0;
         }
-        let default_style = self.theme.style();
-        self.rows
-            .resize_with(rows, || vec![Cell::blank(default_style); cols]);
-        for row in &mut self.rows {
-            row.resize(cols, Cell::blank(default_style));
-            Self::repair_row(row);
-        }
-        self.cursor.0 = self.cursor.0.min(cols - 1);
-        self.cursor.1 = self.cursor.1.min(rows - 1);
         self.scroll_top = 0;
         self.scroll_bottom = rows - 1;
         self.pending_wrap = false;
     }
 
+    fn resize_screen(
+        screen: &mut Vec<Vec<Cell>>,
+        cursor: &mut (usize, usize),
+        cols: usize,
+        rows: usize,
+    ) {
+        if cursor.1 >= rows {
+            let remove = cursor.1 + 1 - rows;
+            screen.drain(..remove);
+            cursor.1 -= remove;
+        }
+        let blank = Cell::blank(Style::default());
+        screen.resize_with(rows, || vec![blank.clone(); cols]);
+        for row in screen {
+            row.resize(cols, blank.clone());
+            Self::repair_row(row);
+        }
+        cursor.0 = cursor.0.min(cols - 1);
+        cursor.1 = cursor.1.min(rows - 1);
+    }
+
     pub fn feed(&mut self, bytes: &[u8]) -> Vec<u8> {
-        let mut replies = Vec::new();
-        for &byte in bytes {
-            let state = std::mem::take(&mut self.parser);
-            match state {
-                Parser::Ground => self.ground(byte),
-                Parser::Escape => match byte {
-                    b'[' => {
-                        self.csi_len = 0;
-                        self.parser = Parser::Csi;
-                    }
-                    b']' | b'P' | b'_' | b'^' | b'X' => {
-                        self.parser = Parser::String { escape: false };
-                    }
-                    b'(' | b')' => self.parser = Parser::Charset,
-                    b'7' => self.saved = (self.cursor, self.style),
-                    b'8' => self.restore_cursor(),
-                    b'D' => self.linefeed(),
-                    b'E' => {
-                        self.cursor.0 = 0;
-                        self.linefeed();
-                    }
-                    b'M' => self.reverse_index(),
-                    b'c' => {
-                        *self = Self::with_theme(
-                            self.cols(),
-                            self.rows.len(),
-                            self.theme,
-                        );
-                    }
-                    0x1b => self.parser = Parser::Escape,
-                    _ => (),
-                },
-                Parser::Csi => {
-                    if (0x40..=0x7e).contains(&byte) {
-                        let raw = self.csi_bytes;
-                        self.csi(&raw[..self.csi_len], byte, &mut replies);
-                    } else if byte == 0x1b {
-                        self.parser = Parser::Escape;
-                    } else if byte == 0x18 || byte == 0x1a {
-                        self.parser = Parser::Ground;
-                    } else if byte < 0x20 {
-                        self.control(byte);
-                        self.parser = Parser::Csi;
-                    } else {
-                        // Retain the state until the final byte, even on overflow.
-                        if self.csi_len < self.csi_bytes.len() {
-                            self.csi_bytes[self.csi_len] = byte;
-                            self.csi_len += 1;
-                        }
-                        self.parser = Parser::Csi;
-                    }
-                }
-                Parser::String { escape } => {
-                    if byte != 7 && !(escape && byte == b'\\') {
-                        self.parser = Parser::String {
-                            escape: byte == 0x1b,
-                        };
-                    }
-                }
-                Parser::Charset => (),
-            }
+        // Detach the parser while it calls back into the terminal model.
+        let mut parser = self.parser.take().expect("parser outside feed");
+        let mut bytes = bytes;
+        while let Some(index) = memchr::memchr2(0x18, 0x1a, bytes) {
+            parser.advance(self, &bytes[..index]);
+            self.cancelling = true;
+            parser.advance(self, &bytes[index..index + 1]);
+            self.cancelling = false;
+            bytes = &bytes[index + 1..];
         }
-        replies
-    }
-
-    fn ground(&mut self, byte: u8) {
-        if byte < 0x20 || byte == 0x7f {
-            if !self.utf8.is_empty() {
-                self.utf8.clear();
-                self.put('\u{fffd}');
-            }
-            self.control(byte);
-            return;
-        }
-        if self.utf8.is_empty() && byte < 0x80 {
-            self.put(byte as char);
-            return;
-        }
-        if !self.utf8.is_empty() && byte & 0xc0 != 0x80 {
-            self.utf8.clear();
-            self.put('\u{fffd}');
-            self.ground(byte);
-            return;
-        }
-        self.utf8.push(byte);
-        match std::str::from_utf8(&self.utf8) {
-            Ok(text) => {
-                let ch = text.chars().next().unwrap();
-                self.utf8.clear();
-                self.put(ch);
-            }
-            Err(error) if error.error_len().is_some() => {
-                self.utf8.clear();
-                self.put('\u{fffd}');
-            }
-            Err(_) => (),
-        }
-    }
-
-    fn control(&mut self, byte: u8) {
-        match byte {
-            0x1b => self.parser = Parser::Escape,
-            b'\r' => {
-                self.cursor.0 = 0;
-                self.pending_wrap = false;
-            }
-            b'\n' | 0x0b | 0x0c => self.linefeed(),
-            8 => {
-                self.cursor.0 = self.cursor.0.saturating_sub(1);
-                self.pending_wrap = false;
-            }
-            b'\t' => {
-                self.cursor.0 =
-                    ((self.cursor.0 / 8 + 1) * 8).min(self.cols() - 1);
-                self.pending_wrap = false;
-            }
-            _ => (),
-        }
+        parser.advance(self, bytes);
+        self.parser = Some(parser);
+        std::mem::take(&mut self.replies)
     }
 
     fn put(&mut self, ch: char) {
@@ -359,6 +373,9 @@ impl Terminal {
             return;
         }
         let (x, y) = self.cursor;
+        if self.insert_mode {
+            self.insert_characters(width);
+        }
         for col in x..x + width {
             if !matches!(
                 self.rows[y][col].content,
@@ -373,11 +390,13 @@ impl Terminal {
                 wide: width == 2,
             },
             style: self.style,
+            hyperlink: self.hyperlink.clone(),
         };
         if width == 2 {
             self.rows[y][x + 1] = Cell {
                 content: Content::Continuation,
                 style: self.style,
+                hyperlink: self.hyperlink.clone(),
             };
         }
         if x + width >= self.cols() {
@@ -460,129 +479,56 @@ impl Terminal {
         }
     }
 
-    fn restore_cursor(&mut self) {
-        self.cursor = (
-            self.saved.0.0.min(self.cols() - 1),
-            self.saved.0.1.min(self.rows.len() - 1),
-        );
-        self.style = self.saved.1;
-        self.pending_wrap = false;
+    fn save_cursor(&mut self) {
+        self.saved = SavedCursor {
+            position: self.cursor,
+            style: self.style,
+            origin: self.origin_mode,
+            auto_wrap: self.auto_wrap,
+            pending_wrap: self.pending_wrap,
+            charsets: self.charsets,
+            active_charset: self.active_charset,
+            hyperlink: self.hyperlink.clone(),
+        };
     }
 
-    fn csi(&mut self, raw: &[u8], end: u8, replies: &mut Vec<u8>) {
-        let private = raw.first() == Some(&b'?');
-        let raw = if private { &raw[1..] } else { raw };
-        if raw.iter().any(|b| !b.is_ascii_digit() && *b != b';') {
+    fn restore_cursor(&mut self) {
+        self.cursor = (
+            self.saved.position.0.min(self.cols() - 1),
+            self.saved.position.1.min(self.rows.len() - 1),
+        );
+        self.style = self.saved.style;
+        self.origin_mode = self.saved.origin;
+        self.auto_wrap = self.saved.auto_wrap;
+        self.pending_wrap = self.saved.pending_wrap;
+        self.charsets = self.saved.charsets;
+        self.active_charset = self.saved.active_charset;
+        self.hyperlink = self.saved.hyperlink.clone();
+    }
+
+    fn switch_screen(&mut self, alternate: bool, clear: bool) {
+        if self.alternate == alternate {
             return;
         }
-        // A 128-byte sequence has at most 129 semicolon-separated parameters.
-        let mut values = [0usize; 129];
-        let mut count = 0;
-        for part in raw.split(|b| *b == b';') {
-            values[count] = part.iter().fold(0usize, |n, b| {
-                n.saturating_mul(10).saturating_add((b - b'0') as usize)
-            });
-            count += 1;
-        }
-        let params = &values[..count];
-        let first = params[0];
-        let n = first.clamp(1, 65535);
-        if private {
-            for &param in params {
-                match (param, end) {
-                    (1, b'h' | b'l') => self.application_cursor = end == b'h',
-                    (7, b'h' | b'l') => {
-                        self.auto_wrap = end == b'h';
-                        self.pending_wrap = false;
-                    }
-                    (25, b'h' | b'l') => self.cursor_visible = end == b'h',
-                    _ => (),
-                }
+        std::mem::swap(&mut self.rows, &mut self.inactive.rows);
+        std::mem::swap(&mut self.cursor, &mut self.inactive.cursor);
+        std::mem::swap(&mut self.saved, &mut self.inactive.saved);
+        self.alternate = alternate;
+        self.pending_wrap = false;
+        if clear {
+            for row in &mut self.rows {
+                row.fill(Cell::blank(Style::default()));
             }
-            return;
         }
+    }
+
+    fn insert_characters(&mut self, count: usize) {
         let (x, y) = self.cursor;
-        match end {
-            b'A' => self.cursor.1 = y.saturating_sub(n),
-            b'B' | b'e' => self.cursor.1 = (y + n).min(self.rows.len() - 1),
-            b'C' | b'a' => self.cursor.0 = (x + n).min(self.cols() - 1),
-            b'D' => self.cursor.0 = x.saturating_sub(n),
-            b'E' => self.cursor = (0, (y + n).min(self.rows.len() - 1)),
-            b'F' => self.cursor = (0, y.saturating_sub(n)),
-            b'G' | b'`' => self.cursor.0 = (n - 1).min(self.cols() - 1),
-            b'd' => self.cursor.1 = (n - 1).min(self.rows.len() - 1),
-            b'H' | b'f' => {
-                let col = params.get(1).copied().unwrap_or(1).max(1);
-                self.cursor = (
-                    (col - 1).min(self.cols() - 1),
-                    (n - 1).min(self.rows.len() - 1),
-                );
-            }
-            b'J' => self.erase_display(first),
-            b'K' => {
-                let range = match first {
-                    0 => x..self.cols(),
-                    1 => 0..x + 1,
-                    2 => 0..self.cols(),
-                    _ => 0..0,
-                };
-                for col in range {
-                    self.clear_cell(col, y);
-                }
-            }
-            b'X' => {
-                for col in x..(x + n).min(self.cols()) {
-                    self.clear_cell(col, y);
-                }
-            }
-            b'P' | b'@' => {
-                let cols = self.cols();
-                let count = n.min(cols - x);
-                let row = &mut self.rows[y];
-                if end == b'P' {
-                    row.drain(x..x + count);
-                    row.resize(cols, Cell::blank(self.style));
-                } else {
-                    row.splice(x..x, vec![Cell::blank(self.style); count]);
-                    row.truncate(cols);
-                }
-                Self::repair_row(row);
-            }
-            b'L' | b'M'
-                if (self.scroll_top..=self.scroll_bottom).contains(&y) =>
-            {
-                if end == b'L' {
-                    self.scroll_down(y, n);
-                } else {
-                    self.scroll_up(y, n);
-                }
-            }
-            b'S' => self.scroll_up(self.scroll_top, n),
-            b'T' => self.scroll_down(self.scroll_top, n),
-            b'm' => self.sgr(params),
-            b'r' => {
-                let bottom = params.get(1).copied().unwrap_or(0);
-                let bottom = if bottom == 0 { self.rows.len() } else { bottom };
-                if n < bottom && bottom <= self.rows.len() {
-                    self.scroll_top = n - 1;
-                    self.scroll_bottom = bottom - 1;
-                    self.cursor = (0, 0);
-                }
-            }
-            b's' => self.saved = (self.cursor, self.style),
-            b'u' => self.restore_cursor(),
-            b'c' if first == 0 => replies.extend_from_slice(b"\x1b[?1;0c"),
-            b'n' if first == 5 => replies.extend_from_slice(b"\x1b[0n"),
-            b'n' if first == 6 => {
-                replies.extend_from_slice(
-                    format!("\x1b[{};{}R", y + 1, x + 1).as_bytes(),
-                );
-            }
-            _ => (),
-        }
-        if !matches!(end, b'm' | b'n' | b's' | b'c') {
-            self.pending_wrap = false;
-        }
+        let count = count.min(self.cols() - x);
+        let row = &mut self.rows[y];
+        row[x..].rotate_right(count);
+        row[x..x + count].fill(Cell::blank(self.style));
+        Self::repair_row(row);
     }
 
     fn erase_display(&mut self, mode: usize) {
@@ -602,60 +548,17 @@ impl Terminal {
         }
     }
 
-    fn sgr(&mut self, params: &[usize]) {
-        let mut i = 0;
-        while i < params.len() {
-            match params[i] {
-                0 => self.style = self.theme.style(),
-                1 => self.style.bold = true,
-                4 => self.style.underline = true,
-                7 => self.style.inverse = true,
-                22 => self.style.bold = false,
-                24 => self.style.underline = false,
-                27 => self.style.inverse = false,
-                30..=37 => self.style.fg = self.theme.palette[params[i] - 30],
-                40..=47 => self.style.bg = self.theme.palette[params[i] - 40],
-                90..=97 => {
-                    self.style.fg = self.theme.palette[params[i] - 90 + 8]
-                }
-                100..=107 => {
-                    self.style.bg = self.theme.palette[params[i] - 100 + 8]
-                }
-                39 => self.style.fg = self.theme.foreground,
-                49 => self.style.bg = self.theme.background,
-                38 | 48 => {
-                    let fg = params[i] == 38;
-                    let color = match params.get(i + 1) {
-                        Some(5) if i + 2 < params.len() => {
-                            i += 2;
-                            Some(
-                                self.theme
-                                    .indexed_color(params[i].min(255) as u8),
-                            )
-                        }
-                        Some(2) if i + 4 < params.len() => {
-                            let rgb = &params[i + 2..i + 5];
-                            i += 4;
-                            Some(
-                                ((rgb[0].min(255) as u32) << 16)
-                                    | ((rgb[1].min(255) as u32) << 8)
-                                    | rgb[2].min(255) as u32,
-                            )
-                        }
-                        _ => return,
-                    };
-                    if let Some(color) = color {
-                        if fg {
-                            self.style.fg = color;
-                        } else {
-                            self.style.bg = color;
-                        }
-                    }
-                }
-                _ => (),
-            }
-            i += 1;
-        }
+    fn reset(&mut self) {
+        let parser = self.parser.take();
+        let replies = std::mem::take(&mut self.replies);
+        let effects = std::mem::take(&mut self.effects);
+        let revision = self.color_revision.wrapping_add(1);
+        *self =
+            Self::with_theme(self.cols(), self.rows.len(), self.initial_theme);
+        self.parser = parser;
+        self.replies = replies;
+        self.effects = effects;
+        self.color_revision = revision;
     }
 }
 

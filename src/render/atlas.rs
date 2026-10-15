@@ -1,3 +1,4 @@
+use crate::terminal::FontStyle;
 use std::collections::HashMap;
 
 use swash::scale::image::{Content, Image};
@@ -12,7 +13,7 @@ pub(super) struct Glyph {
 
 pub(super) struct Atlas {
     pub texture: wgpu::Texture,
-    glyphs: HashMap<(char, bool), Glyph>,
+    glyphs: HashMap<(char, FontStyle), Glyph>,
     next: [u32; 2],
     row_height: u32,
 }
@@ -50,7 +51,7 @@ impl Atlas {
     pub fn get(
         &mut self,
         queue: &wgpu::Queue,
-        key: (char, bool),
+        key: (char, FontStyle),
         image: &Image,
     ) -> Option<Glyph> {
         if let Some(glyph) = self.glyphs.get(&key) {

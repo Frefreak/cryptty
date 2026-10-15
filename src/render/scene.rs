@@ -1,8 +1,12 @@
 use bytemuck::{Pod, Zeroable};
 use unicode_width::UnicodeWidthChar;
 
-use super::{Renderer, atlas::Atlas};
-use crate::terminal::{Content, Terminal};
+use super::{
+    Renderer,
+    atlas::Atlas,
+    decoration::{cursor_layout, cursor_rect, decorations},
+};
+use crate::terminal::{Content, CursorShape, FontStyle, Terminal};
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
@@ -48,13 +52,13 @@ impl Scene<'_> {
     fn glyph(
         &mut self,
         ch: char,
-        bold: bool,
+        font: FontStyle,
         cell: (usize, usize),
         columns: usize,
         rgb: u32,
     ) -> Option<()> {
-        self.renderer.cache_glyph(ch, bold);
-        let Some(image) = self.renderer.glyphs[&(ch, bold)].as_ref() else {
+        self.renderer.cache_glyph(ch, font);
+        let Some(image) = self.renderer.glyphs[&(ch, font)].as_ref() else {
             return Some(());
         };
         if image.placement.width == 0 || image.placement.height == 0 {
@@ -74,7 +78,7 @@ impl Scene<'_> {
         if right <= x || bottom <= y {
             return Some(());
         }
-        let glyph = self.atlas.get(self.queue, (ch, bold), image)?;
+        let glyph = self.atlas.get(self.queue, (ch, font), image)?;
         self.quads.push(Quad {
             rect: [x as f32, y as f32, (right - x) as f32, (bottom - y) as f32],
             uv: [
@@ -113,11 +117,7 @@ pub(super) fn build(
     };
     for (y, row) in terminal.rows.iter().enumerate() {
         for (x, cell) in row.iter().enumerate() {
-            let bg = if cell.style.inverse {
-                cell.style.fg
-            } else {
-                cell.style.bg
-            };
+            let (_, bg) = terminal.colors(cell.style);
             let (left, top) = scene.renderer.cell_origin(x, y);
             scene.solid(left, top, w, h, bg);
         }
@@ -125,19 +125,33 @@ pub(super) fn build(
             let Content::Text { text, wide } = &cell.content else {
                 continue;
             };
-            let fg = if cell.style.inverse {
-                cell.style.bg
-            } else {
-                cell.style.fg
-            };
+            if cell.style.hidden {
+                continue;
+            }
+            let (fg, _) = terminal.colors(cell.style);
             let columns = if *wide { 2 } else { 1 };
             for ch in text.chars().filter(|c| *c != ' ') {
-                scene.glyph(ch, cell.style.bold, (x, y), columns, fg)?;
+                scene.glyph(ch, cell.style.font(), (x, y), columns, fg)?;
             }
-            if cell.style.underline {
-                let (left, top) = scene.renderer.cell_origin(x, y);
-                scene.solid(left, top + h - 2, w * columns, 1, fg);
-            }
+            let (left, top) = scene.renderer.cell_origin(x, y);
+            let underline = cell
+                .style
+                .underline_color
+                .map_or(fg, |color| terminal.color(color));
+            decorations(
+                cell.style,
+                w * columns,
+                h,
+                |x, y, w, h, is_underline| {
+                    scene.solid(
+                        left + x,
+                        top + y,
+                        w,
+                        h,
+                        if is_underline { underline } else { fg },
+                    );
+                },
+            );
         }
     }
     let (mut x, y) = terminal.cursor;
@@ -146,12 +160,36 @@ pub(super) fn build(
             break;
         }
         let columns = ch.width().unwrap_or(1).max(1);
-        scene.glyph(ch, false, (x, y), columns, terminal.theme().palette[6])?;
+        scene.glyph(
+            ch,
+            FontStyle::default(),
+            (x, y),
+            columns,
+            terminal.theme().palette[6],
+        )?;
         x += columns;
     }
-    if terminal.cursor_visible {
-        let (left, top) = scene.renderer.cell_origin(terminal.cursor.0, y);
-        scene.solid(left, top, 2, h, terminal.theme().cursor);
+    if terminal.cursor_drawn() {
+        let (x, y, columns, shape) = cursor_layout(terminal, preedit);
+        let (left, top) = scene.renderer.cell_origin(x, y);
+        let [dx, dy, cw, ch] = cursor_rect(shape, w * columns, h);
+        scene.solid(left + dx, top + dy, cw, ch, terminal.theme().cursor);
+        let cell = &terminal.rows[y][x];
+        if shape == CursorShape::Block
+            && !cell.style.hidden
+            && let Content::Text { text, wide } = &cell.content
+        {
+            let (_, bg) = terminal.colors(cell.style);
+            for ch in text.chars().filter(|c| *c != ' ') {
+                scene.glyph(
+                    ch,
+                    cell.style.font(),
+                    (x, y),
+                    if *wide { 2 } else { 1 },
+                    bg,
+                )?;
+            }
+        }
     }
     Some(scene.quads)
 }

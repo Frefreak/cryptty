@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use crate::terminal::FontStyle;
 use anyhow::{Context, Result};
 use fontdb::{Database, Family, ID, Query, Weight};
 use swash::scale::image::Image;
@@ -36,8 +37,7 @@ impl Font {
 pub struct Rasterizer {
     db: Database,
     fonts: HashMap<ID, Font>,
-    regular: ID,
-    bold: ID,
+    faces: [ID; 4],
     fallback_regular: Option<ID>,
     fallback_bold: Option<ID>,
     scale: ScaleContext,
@@ -77,6 +77,21 @@ impl Rasterizer {
                 ..Query::default()
             })
             .unwrap_or(regular);
+        let italic = db
+            .query(&Query {
+                families: &[Family::Name(&family)],
+                style: fontdb::Style::Italic,
+                ..Query::default()
+            })
+            .unwrap_or(regular);
+        let bold_italic = db
+            .query(&Query {
+                families: &[Family::Name(&family)],
+                style: fontdb::Style::Italic,
+                weight: Weight::BOLD,
+                ..Query::default()
+            })
+            .unwrap_or(bold);
         let fallback_regular = db.query(&Query {
             families: &[Family::Name("LXGW WenKai Mono Screen")],
             ..Query::default()
@@ -106,14 +121,15 @@ impl Rasterizer {
         let baseline = metrics.ascent.ceil() as i32 + 1;
         let mut fonts = HashMap::new();
         fonts.insert(regular, font);
-        if let Some(font) = Font::load(&db, bold) {
-            fonts.insert(bold, font);
+        for id in [bold, italic, bold_italic] {
+            if let Some(font) = Font::load(&db, id) {
+                fonts.insert(id, font);
+            }
         }
         Ok(Self {
             db,
             fonts,
-            regular,
-            bold,
+            faces: [regular, bold, italic, bold_italic],
             fallback_regular,
             fallback_bold,
             scale: ScaleContext::new(),
@@ -125,15 +141,15 @@ impl Rasterizer {
         })
     }
 
-    pub fn rasterize(&mut self, ch: char, bold: bool) -> Option<Image> {
-        let preferred = if bold { self.bold } else { self.regular };
+    pub fn rasterize(&mut self, ch: char, style: FontStyle) -> Option<Image> {
+        let preferred = self.faces[style.index()];
         let mut id = preferred;
         let supported = self
             .fonts
             .get(&id)
             .is_some_and(|font| font.as_ref().charmap().map(ch) != 0);
         if !supported {
-            let preferred_fallback = if bold {
+            let preferred_fallback = if style.bold {
                 self.fallback_bold
             } else {
                 self.fallback_regular
@@ -190,7 +206,7 @@ mod tests {
         )
         .unwrap();
         let default_family =
-            &default.db.face(default.regular).unwrap().families[0].0;
+            &default.db.face(default.faces[0]).unwrap().families[0].0;
         let family = default
             .db
             .faces()
@@ -204,7 +220,7 @@ mod tests {
             .0
             .clone();
         let selected = Rasterizer::new(19.0, false, &family).unwrap();
-        for id in [selected.regular, selected.bold] {
+        for id in selected.faces {
             assert!(
                 selected
                     .db

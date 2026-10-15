@@ -20,6 +20,12 @@ softbuffer = { version = "0.4", default-features = false, features = [
 ] }
 swash = "0.2"
 unicode-width = "0.2"
+vte = { version = "0.15", default-features = false }
+base64 = "0.22"
+memchr = "2"
+arboard = { version = "3.6", default-features = false, features = [
+    "wayland-data-control",
+] }
 winit = { version = "0.30", default-features = false, features = [
     "rwh_06", "wayland", "wayland-dlopen", "wayland-csd-adwaita",
 ] }

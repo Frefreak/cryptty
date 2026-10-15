@@ -1,3 +1,4 @@
+use crate::terminal::FontStyle;
 use anyhow::{Context, Result};
 use crossfont::{
     BitmapBuffer, FontDesc, FontKey, GlyphKey, Rasterize, Size, Slant, Style,
@@ -8,8 +9,7 @@ use swash::zeno::Placement;
 
 pub struct Rasterizer {
     inner: crossfont::Rasterizer,
-    regular: FontKey,
-    bold: FontKey,
+    faces: [FontKey; 4],
     size: Size,
     pub cell_width: usize,
     pub cell_height: usize,
@@ -21,26 +21,25 @@ impl Rasterizer {
         // CoreText takes the scaled macOS point size directly.
         let size = Size::new(size);
         let mut inner = crossfont::Rasterizer::new()?;
-        let desc = |weight| {
-            FontDesc::new(
-                family,
-                Style::Description {
-                    slant: Slant::Normal,
-                    weight,
-                },
-            )
+        let desc = |weight, slant| {
+            FontDesc::new(family, Style::Description { slant, weight })
         };
         let regular = inner
-            .load_font(&desc(Weight::Normal), size)
+            .load_font(&desc(Weight::Normal, Slant::Normal), size)
             .context("Cannot load native monospace font")?;
         let bold = inner
-            .load_font(&desc(Weight::Bold), size)
+            .load_font(&desc(Weight::Bold, Slant::Normal), size)
             .unwrap_or(regular);
+        let italic = inner
+            .load_font(&desc(Weight::Normal, Slant::Italic), size)
+            .unwrap_or(regular);
+        let bold_italic = inner
+            .load_font(&desc(Weight::Bold, Slant::Italic), size)
+            .unwrap_or(bold);
         let metrics = inner.metrics(regular, size)?;
         Ok(Self {
             inner,
-            regular,
-            bold,
+            faces: [regular, bold, italic, bold_italic],
             size,
             cell_width: metrics.average_advance.floor().max(1.0) as usize,
             cell_height: metrics.line_height.ceil().max(size.as_pt() as f64)
@@ -52,10 +51,10 @@ impl Rasterizer {
         })
     }
 
-    pub fn rasterize(&mut self, ch: char, bold: bool) -> Option<Image> {
+    pub fn rasterize(&mut self, ch: char, style: FontStyle) -> Option<Image> {
         let glyph = match self.inner.get_glyph(GlyphKey {
             character: ch,
-            font_key: if bold { self.bold } else { self.regular },
+            font_key: self.faces[style.index()],
             size: self.size,
         }) {
             Ok(glyph) | Err(crossfont::Error::MissingGlyph(glyph)) => glyph,
@@ -110,7 +109,7 @@ mod tests {
             "Cryptty deliberately nonexistent font family",
         )
         .unwrap();
-        let image = native.rasterize('M', false).unwrap();
+        let image = native.rasterize('M', FontStyle::default()).unwrap();
         assert!(image.placement.width > 0 && image.placement.height > 0);
     }
 
@@ -119,15 +118,17 @@ mod tests {
         let mut native = Rasterizer::new(38.0, false, "Menlo").unwrap();
         let mut reference = crossfont::Rasterizer::new().unwrap();
         let size = Size::new(38.0);
-        for (bold, weight) in [(false, Weight::Normal), (true, Weight::Bold)] {
+        for (bold, italic, weight, slant) in [
+            (false, false, Weight::Normal, Slant::Normal),
+            (true, false, Weight::Bold, Slant::Normal),
+            (false, true, Weight::Normal, Slant::Italic),
+            (true, true, Weight::Bold, Slant::Italic),
+        ] {
             let key = reference
                 .load_font(
                     &FontDesc::new(
                         "Menlo",
-                        Style::Description {
-                            slant: Slant::Normal,
-                            weight,
-                        },
+                        Style::Description { slant, weight },
                     ),
                     size,
                 )
@@ -139,7 +140,8 @@ mod tests {
                     size,
                 })
                 .unwrap();
-            let actual = native.rasterize('M', bold).unwrap();
+            let actual =
+                native.rasterize('M', FontStyle { bold, italic }).unwrap();
             assert_eq!(actual.placement.left, expected.left);
             assert_eq!(actual.placement.top, expected.top);
             assert_eq!(actual.placement.width, expected.width as u32);
@@ -165,11 +167,11 @@ mod tests {
                 .inner
                 .get_glyph(GlyphKey {
                     character: ch,
-                    font_key: native.regular,
+                    font_key: native.faces[0],
                     size: native.size,
                 })
                 .expect("CoreText must find a fallback glyph");
-            let image = native.rasterize(ch, false).unwrap();
+            let image = native.rasterize(ch, FontStyle::default()).unwrap();
             assert!(image.placement.width > 0 && image.placement.height > 0);
             assert_eq!(
                 image.data.len(),

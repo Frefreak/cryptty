@@ -27,6 +27,13 @@ The offscreen rendering comparison requires a working GPU:
 cargo test gpu_pixels_match_software -- --ignored
 ```
 
+Terminal compatibility covers alternate screens, bracketed paste,
+focus/mouse reporting, richer text styles, and common OSC commands.
+See [supported sequences and checks](docs/terminal-compatibility.md).
+Paste with Cmd-V on macOS, Ctrl-Shift-V on Linux, or Shift-Insert.
+Open OSC 8 hyperlinks with Cmd-click on macOS or Ctrl-click on Linux.
+Applications can copy text through OSC 52 to the system clipboard.
+
 Configuration lives in `$XDG_CONFIG_HOME/cryptty/cryptty.yaml`, or
 `~/.config/cryptty/cryptty.yaml` when `XDG_CONFIG_HOME` is unset.
 Cryptty creates a missing file with plain commented YAML defaults.
