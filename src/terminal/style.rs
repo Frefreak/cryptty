@@ -17,6 +17,24 @@ pub enum Underline {
     Dashed,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Blink {
+    #[default]
+    None,
+    Slow,
+    Rapid,
+}
+
+impl Blink {
+    pub fn visible(self, phase: u8) -> bool {
+        match self {
+            Self::None => true,
+            Self::Slow => phase % 4 < 2,
+            Self::Rapid => phase % 2 == 0,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub struct FontStyle {
     pub bold: bool,
@@ -36,6 +54,7 @@ pub struct Style {
     pub bold: bool,
     pub italic: bool,
     pub dim: bool,
+    pub blink: Blink,
     pub hidden: bool,
     pub underline: Underline,
     pub underline_color: Option<Color>,
@@ -52,6 +71,7 @@ impl Default for Style {
             bold: false,
             italic: false,
             dim: false,
+            blink: Blink::None,
             hidden: false,
             underline: Underline::None,
             underline_color: None,

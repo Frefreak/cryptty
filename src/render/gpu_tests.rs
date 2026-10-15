@@ -1,5 +1,5 @@
 use super::{Renderer, painter::Painter};
-use crate::terminal::Terminal;
+use crate::terminal::{Position, Terminal, TextRange};
 
 #[test]
 #[ignore = "requires a working Metal or Vulkan adapter"]
@@ -26,7 +26,8 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
             "\x1b[4:3;58:2::255:0:0mCurly\x1b[4:2mDouble\x1b[0m\r\n",
             "\x1b[4:4mDotted\x1b[4:5mDashed\x1b[0m\r\n",
             "\x1b[4;44mUnder\x1b[7mInverse\x1b[0m\r\n",
-            "\x1b[8mHidden\x1b[0m ABC_gjpq\x1b[H",
+            "\x1b[8mHidden\x1b[0m ABC_gjpq\r\n",
+            "\x1b[5mSlow\x1b[6mRapid\x1b[0m\x1b[H",
         )
         .as_bytes(),
     );
@@ -47,6 +48,15 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
             (1, 1, "中", 6),
         ] {
             terminal.feed(format!("\x1b[{shape} q").as_bytes());
+            terminal.text_blink_phase = shape % 4;
+            terminal.selection = Some(TextRange::between(
+                Position { row: 0, col: 0 },
+                Position { row: 1, col: 5 },
+            ));
+            terminal.hovered_link = Some(TextRange::between(
+                Position { row: 2, col: 0 },
+                Position { row: 2, col: 10 },
+            ));
             renderer.draw(&terminal, width, height, preedit);
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("pixel comparison"),

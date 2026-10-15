@@ -2,6 +2,26 @@ use cryptty::input::{encode, focus, keypad, mouse, paste};
 use winit::keyboard::{Key, ModifiersState as M, NamedKey};
 
 #[test]
+fn clipboard_and_new_window_shortcuts_are_platform_independent() {
+    use cryptty::input::{Shortcut, shortcut};
+    let modifiers = M::CONTROL | M::SHIFT;
+    assert_eq!(
+        shortcut(&Key::Character("V".into()), modifiers),
+        Some(Shortcut::Paste)
+    );
+    assert_eq!(
+        shortcut(&Key::Character("n".into()), modifiers),
+        Some(Shortcut::NewWindow)
+    );
+    assert_eq!(shortcut(&Key::Character("c".into()), modifiers), None);
+    assert_eq!(shortcut(&Key::Character("n".into()), M::CONTROL), None);
+    assert_eq!(
+        shortcut(&Key::Character("v".into()), modifiers | M::ALT),
+        None
+    );
+}
+
+#[test]
 fn control_alt_and_unicode_input() {
     assert_eq!(
         encode(&Key::Character("c".into()), Some("c"), M::CONTROL, false),

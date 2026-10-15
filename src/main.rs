@@ -19,12 +19,14 @@ use winit::event_loop::{
     ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy,
 };
 use winit::keyboard::{Key, KeyLocation, ModifiersState, NamedKey};
-use winit::window::{Fullscreen, Window, WindowId};
+use winit::window::{CursorIcon, Fullscreen, Window, WindowId};
 
+mod diagnostics;
 mod display;
 mod interaction;
 #[cfg(target_os = "macos")]
 mod macos_input;
+mod notifications;
 
 struct View {
     display: display::Display,
@@ -38,6 +40,8 @@ struct View {
     font: Font,
     interaction: interaction::Interaction,
     next_blink: Instant,
+    next_text_blink: Instant,
+    notifications: notifications::Notifications,
     displayed_title: String,
     backlog_full: bool,
 }
@@ -63,6 +67,7 @@ impl App {
             )?,
         );
         window.set_ime_allowed(true);
+        window.set_cursor(CursorIcon::Text);
         #[cfg(target_os = "macos")]
         macos_input::install(&window)?;
         let display =
@@ -97,6 +102,8 @@ impl App {
             font: self.config.font.clone(),
             interaction: interaction::Interaction::default(),
             next_blink: Instant::now() + Duration::from_millis(500),
+            next_text_blink: Instant::now() + Duration::from_millis(250),
+            notifications: notifications::Notifications::default(),
             displayed_title: "Cryptty".into(),
             backlog_full: false,
         });
@@ -147,6 +154,8 @@ impl View {
         self.terminal.resize(cols, rows);
         self.pty.resize(pty_size(cols, rows, &self.renderer))?;
         self.renderer.invalidate();
+        self.clear_selection();
+        self.refresh_pointer();
         self.window.request_redraw();
         Ok(())
     }
@@ -199,6 +208,7 @@ impl View {
             WindowEvent::Occluded(false) => self.window.request_redraw(),
             WindowEvent::ModifiersChanged(modifiers) => {
                 self.modifiers = modifiers.state();
+                self.refresh_pointer();
             }
             WindowEvent::Focused(focused) => {
                 self.send_input(input::focus(
@@ -209,7 +219,10 @@ impl View {
                     self.modifiers = ModifiersState::empty();
                     self.preedit.clear();
                     self.interaction.reset_buttons();
+                } else {
+                    self.window.request_user_attention(None);
                 }
+                self.refresh_pointer();
                 self.reset_blink();
                 self.renderer.invalidate();
                 self.window.request_redraw();
@@ -217,6 +230,7 @@ impl View {
             WindowEvent::CursorMoved { position, .. } => {
                 self.pointer_moved(position.x, position.y)?;
             }
+            WindowEvent::CursorLeft { .. } => self.pointer_left(),
             WindowEvent::MouseInput { state, button, .. } => {
                 self.mouse_button(button, state)?;
             }
@@ -244,21 +258,16 @@ impl View {
                 ..
             } if event.state == ElementState::Pressed => {
                 self.reset_blink();
-                let paste_modifier = if cfg!(target_os = "macos") {
-                    self.modifiers.super_key()
-                } else {
-                    self.modifiers.control_key() && self.modifiers.shift_key()
-                };
-                let paste_key = match &event.logical_key {
-                    Key::Character(text) => text.eq_ignore_ascii_case("v"),
-                    _ => false,
-                };
-                if paste_modifier && paste_key {
-                    self.paste();
-                } else if event.logical_key == Key::Named(NamedKey::Insert)
-                    && self.modifiers.shift_key()
+                if let Some(shortcut) =
+                    input::shortcut(&event.logical_key, self.modifiers)
                 {
-                    self.paste();
+                    match shortcut {
+                        input::Shortcut::Paste => self.paste(),
+                        input::Shortcut::NewWindow if !event.repeat => {
+                            self.new_window()
+                        }
+                        input::Shortcut::NewWindow => (),
+                    }
                 } else if event.logical_key == Key::Named(NamedKey::Enter)
                     && self.modifiers.alt_key()
                     && !self.modifiers.control_key()
@@ -336,6 +345,10 @@ impl ApplicationHandler<()> for App {
         for _ in 0..32 {
             match view.pty.output.try_recv() {
                 Ok(pty::Event::Output(bytes)) => {
+                    view.clear_selection();
+                    if view.terminal.hovered_link.is_some() {
+                        view.renderer.invalidate();
+                    }
                     let replies = view.terminal.feed(&bytes);
                     view.apply_effects();
                     if let Err(error) = view.send_input(replies) {
@@ -364,6 +377,7 @@ impl ApplicationHandler<()> for App {
         }
         view.update_title();
         if changed {
+            view.refresh_pointer();
             view.window.request_redraw();
         }
     }
@@ -387,6 +401,21 @@ impl ApplicationHandler<()> for App {
             }
             wake =
                 Some(wake.map_or(view.next_blink, |t| t.min(view.next_blink)));
+        }
+        if view.terminal.has_blinking_text() {
+            if now >= view.next_text_blink {
+                view.terminal.text_blink_phase =
+                    (view.terminal.text_blink_phase + 1) % 4;
+                view.next_text_blink = now + Duration::from_millis(250);
+                view.window.request_redraw();
+            }
+            wake =
+                Some(wake.map_or(view.next_text_blink, |t| {
+                    t.min(view.next_text_blink)
+                }));
+        } else {
+            view.terminal.text_blink_phase = 0;
+            view.next_text_blink = now + Duration::from_millis(250);
         }
         events.set_control_flow(
             wake.map_or(ControlFlow::Wait, ControlFlow::WaitUntil),

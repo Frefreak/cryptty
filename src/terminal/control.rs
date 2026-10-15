@@ -126,6 +126,7 @@ impl Terminal {
             'P' => {
                 let count = n.min(self.cols() - x);
                 let row = &mut self.rows[y];
+                row.wrapped = None;
                 row[x..].rotate_left(count);
                 let start = row.len() - count;
                 row[start..].fill(Cell::blank(self.style));

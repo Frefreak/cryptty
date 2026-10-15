@@ -30,8 +30,12 @@ cargo test gpu_pixels_match_software -- --ignored
 Terminal compatibility covers alternate screens, bracketed paste,
 focus/mouse reporting, richer text styles, and common OSC commands.
 See [supported sequences and checks](docs/terminal-compatibility.md).
-Paste with Cmd-V on macOS, Ctrl-Shift-V on Linux, or Shift-Insert.
-Open OSC 8 hyperlinks with Cmd-click on macOS or Ctrl-click on Linux.
+Drag to select and copy to the system clipboard. Paste with Ctrl-Shift-V
+on both platforms, or Shift-Insert. Ctrl-Shift-N opens a fresh shell in
+a new window, using the original launch directory and renderer options.
+Ctrl-click opens HTTP/HTTPS links, including OSC 8 targets and plain URLs
+across terminal soft wraps. Hovering underlines the detected link.
+Hold Shift to select or Ctrl-Shift-click links during mouse capture.
 Applications can copy text through OSC 52 to the system clipboard.
 
 Configuration lives in `$XDG_CONFIG_HOME/cryptty/cryptty.yaml`, or

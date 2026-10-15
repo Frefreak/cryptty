@@ -1,6 +1,6 @@
 use vte::Params;
 
-use super::{Color, Style, Terminal, Underline};
+use super::{Blink, Color, Style, Terminal, Underline};
 
 impl Terminal {
     pub(super) fn sgr(&mut self, params: &Params) {
@@ -11,6 +11,9 @@ impl Terminal {
                 1 => self.style.bold = true,
                 2 => self.style.dim = true,
                 3 => self.style.italic = true,
+                5 => self.style.blink = Blink::Slow,
+                6 => self.style.blink = Blink::Rapid,
+                25 => self.style.blink = Blink::None,
                 4 => {
                     self.style.underline = match group.get(1).unwrap_or(&1) {
                         0 => Underline::None,
@@ -72,6 +75,8 @@ impl Terminal {
         for (enabled, value) in [
             (style.bold, "1"),
             (style.dim, "2"),
+            (style.blink == Blink::Slow, "5"),
+            (style.blink == Blink::Rapid, "6"),
             (style.italic, "3"),
             (style.inverse, "7"),
             (style.hidden, "8"),

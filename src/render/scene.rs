@@ -116,8 +116,8 @@ pub(super) fn build(
         quads: Vec::new(),
     };
     for (y, row) in terminal.rows.iter().enumerate() {
-        for (x, cell) in row.iter().enumerate() {
-            let (_, bg) = terminal.colors(cell.style);
+        for x in 0..row.len() {
+            let (_, bg) = terminal.colors(terminal.cell_style(x, y));
             let (left, top) = scene.renderer.cell_origin(x, y);
             scene.solid(left, top, w, h, bg);
         }
@@ -125,33 +125,28 @@ pub(super) fn build(
             let Content::Text { text, wide } = &cell.content else {
                 continue;
             };
-            if cell.style.hidden {
+            let style = terminal.cell_style(x, y);
+            if !terminal.text_visible(style) {
                 continue;
             }
-            let (fg, _) = terminal.colors(cell.style);
+            let (fg, _) = terminal.colors(style);
             let columns = if *wide { 2 } else { 1 };
             for ch in text.chars().filter(|c| *c != ' ') {
                 scene.glyph(ch, cell.style.font(), (x, y), columns, fg)?;
             }
             let (left, top) = scene.renderer.cell_origin(x, y);
-            let underline = cell
-                .style
+            let underline = style
                 .underline_color
                 .map_or(fg, |color| terminal.color(color));
-            decorations(
-                cell.style,
-                w * columns,
-                h,
-                |x, y, w, h, is_underline| {
-                    scene.solid(
-                        left + x,
-                        top + y,
-                        w,
-                        h,
-                        if is_underline { underline } else { fg },
-                    );
-                },
-            );
+            decorations(style, w * columns, h, |x, y, w, h, is_underline| {
+                scene.solid(
+                    left + x,
+                    top + y,
+                    w,
+                    h,
+                    if is_underline { underline } else { fg },
+                );
+            });
         }
     }
     let (mut x, y) = terminal.cursor;
@@ -176,7 +171,7 @@ pub(super) fn build(
         scene.solid(left + dx, top + dy, cw, ch, terminal.theme().cursor);
         let cell = &terminal.rows[y][x];
         if shape == CursorShape::Block
-            && !cell.style.hidden
+            && terminal.text_visible(cell.style)
             && let Content::Text { text, wide } = &cell.content
         {
             let (_, bg) = terminal.colors(cell.style);

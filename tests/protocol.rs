@@ -234,3 +234,62 @@ fn parser_handles_extended_styles_and_strings_at_every_boundary() {
         assert_eq!(actual, reply);
     }
 }
+
+#[test]
+fn notifications_preserve_text_and_distinguish_bell_terminators() {
+    let mut t = Terminal::new(20, 3);
+    t.feed(b"\x07\x07\x1b]9;Task finished; details\x07");
+    assert_eq!(t.effects.len(), 2);
+    assert!(matches!(t.effects[0], Effect::Bell));
+    assert!(matches!(&t.effects[1], Effect::Notification(s)
+        if s == "Task finished; details"));
+    t.effects.clear();
+    t.feed(b"\x1b]9;cancelled\x18\x1b]9;4;1;50\x1b\\");
+    assert!(
+        t.effects
+            .iter()
+            .all(|e| !matches!(e, Effect::Notification(_)))
+    );
+    t.feed(format!("\x1b]9;{}\x1b\\", "x".repeat(2000)).as_bytes());
+    assert!(matches!(t.effects.last(), Some(Effect::Notification(s))
+        if s.len() == 1024));
+}
+
+#[test]
+fn unknown_osc_reports_metadata_at_powers_of_two() {
+    let mut t = Terminal::new(20, 3);
+    for _ in 0..9 {
+        t.feed(b"\x1b]999;private payload\x07");
+    }
+    let counts: Vec<_> = t
+        .effects
+        .iter()
+        .filter_map(|e| match e {
+            Effect::UnknownOsc {
+                command: Some(999),
+                count,
+                ..
+            } => Some(*count),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(counts, [1, 2, 4, 8]);
+}
+
+#[test]
+fn slow_and_rapid_blink_have_distinct_phases_and_reset() {
+    use cryptty::terminal::Blink;
+    let mut t = Terminal::new(20, 3);
+    t.feed(b"\x1b[5ma\x1b[6mb\x1b[25mc");
+    assert_eq!(t.rows[0][0].style.blink, Blink::Slow);
+    assert_eq!(t.rows[0][1].style.blink, Blink::Rapid);
+    assert_eq!(t.rows[0][2].style.blink, Blink::None);
+    assert_eq!(
+        (0..4).map(|p| Blink::Slow.visible(p)).collect::<Vec<_>>(),
+        [true, true, false, false]
+    );
+    assert_eq!(
+        (0..4).map(|p| Blink::Rapid.visible(p)).collect::<Vec<_>>(),
+        [true, false, true, false]
+    );
+}

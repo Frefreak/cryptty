@@ -1,5 +1,32 @@
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Shortcut {
+    Paste,
+    NewWindow,
+}
+
+pub fn shortcut(key: &Key, modifiers: ModifiersState) -> Option<Shortcut> {
+    if modifiers.alt_key() || modifiers.super_key() {
+        return None;
+    }
+    if key == &Key::Named(NamedKey::Insert) && modifiers.shift_key() {
+        return Some(Shortcut::Paste);
+    }
+    if modifiers.control_key()
+        && modifiers.shift_key()
+        && let Key::Character(text) = key
+    {
+        if text.eq_ignore_ascii_case("v") {
+            return Some(Shortcut::Paste);
+        }
+        if text.eq_ignore_ascii_case("n") {
+            return Some(Shortcut::NewWindow);
+        }
+    }
+    None
+}
+
 pub fn paste(text: &str, bracketed: bool) -> Vec<u8> {
     let text = text.replace("\r\n", "\n");
     if bracketed {

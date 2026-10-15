@@ -6,10 +6,29 @@ use super::{Arc, Effect, Terminal, indexed_color};
 impl Terminal {
     pub(super) fn osc(&mut self, params: &[&[u8]], bell: bool) {
         let Some(command) = params.first().and_then(|p| number(p)) else {
+            self.unknown_osc(None, params.iter().map(|p| p.len()).sum());
             return;
         };
         let terminator = if bell { "\x07" } else { "\x1b\\" };
         match command {
+            9 if params.len() >= 2 => {
+                if params.len() >= 3 && params[1] == b"4" {
+                    self.unknown_osc(
+                        Some(9),
+                        params.iter().map(|p| p.len()).sum(),
+                    );
+                    return;
+                }
+                let message: String =
+                    String::from_utf8_lossy(&params[1..].join(&b';'))
+                        .chars()
+                        .filter(|c| !c.is_control())
+                        .take(1024)
+                        .collect();
+                if !message.trim().is_empty() && self.effects.len() < 64 {
+                    self.effects.push(Effect::Notification(message));
+                }
+            }
             0 | 2 if params.len() >= 2 => {
                 self.title = String::from_utf8_lossy(&params[1..].join(&b';'))
                     .chars()
@@ -102,7 +121,10 @@ impl Terminal {
                 self.theme.cursor = self.initial_theme.cursor;
                 self.color_revision = self.color_revision.wrapping_add(1);
             }
-            _ => (),
+            _ => self.unknown_osc(
+                u32::try_from(command).ok(),
+                params.iter().map(|p| p.len()).sum(),
+            ),
         }
     }
 

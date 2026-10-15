@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -8,9 +9,12 @@ mod osc;
 mod parser;
 mod sgr;
 mod style;
+mod text;
 pub use style::{
-    Color, CursorShape, CursorStyle, FontStyle, MouseMode, Style, Underline,
+    Blink, Color, CursorShape, CursorStyle, FontStyle, MouseMode, Style,
+    Underline,
 };
+pub use text::{Link, Position, TextRange, supported_uri};
 
 const OSC_LIMIT: usize = 65536;
 
@@ -60,12 +64,15 @@ impl CellText {
             .chain(self.combining.as_deref().unwrap_or("").chars())
     }
 
+    #[inline(never)]
     fn push_combining(&mut self, ch: char) {
         let suffix = self.combining.as_deref().unwrap_or("");
         if self.base.len_utf8() + suffix.len() < 64 {
-            let mut suffix = suffix.to_owned();
-            suffix.push(ch);
-            self.combining = Some(suffix.into_boxed_str());
+            let mut combined =
+                String::with_capacity(suffix.len() + ch.len_utf8());
+            combined.push_str(suffix);
+            combined.push(ch);
+            self.combining = Some(combined.into_boxed_str());
         }
     }
 }
@@ -93,6 +100,49 @@ impl Cell {
             style: style.erased(),
             hyperlink: None,
         }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Row {
+    cells: Vec<Cell>,
+    pub wrapped: Option<usize>,
+}
+
+impl Row {
+    fn new(cols: usize, style: Style) -> Self {
+        Self {
+            cells: vec![Cell::blank(style); cols],
+            wrapped: None,
+        }
+    }
+
+    fn fill(&mut self, cell: Cell) {
+        self.cells.fill(cell);
+        self.wrapped = None;
+    }
+}
+
+impl std::ops::Deref for Row {
+    type Target = [Cell];
+
+    fn deref(&self) -> &Self::Target {
+        &self.cells
+    }
+}
+
+impl std::ops::DerefMut for Row {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.cells
+    }
+}
+
+impl<'a> IntoIterator for &'a Row {
+    type Item = &'a Cell;
+    type IntoIter = std::slice::Iter<'a, Cell>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.cells.iter()
     }
 }
 
@@ -124,13 +174,20 @@ impl Default for SavedCursor {
 }
 
 struct InactiveScreen {
-    rows: Vec<Vec<Cell>>,
+    rows: Vec<Row>,
     cursor: (usize, usize),
     saved: SavedCursor,
 }
 
 pub enum Effect {
     Clipboard(String),
+    Bell,
+    Notification(String),
+    UnknownOsc {
+        command: Option<u32>,
+        bytes: usize,
+        count: u64,
+    },
 }
 
 pub struct Terminal {
@@ -138,7 +195,10 @@ pub struct Terminal {
     initial_theme: Theme,
     palette: [u32; 256],
     pub color_revision: u64,
-    pub rows: Vec<Vec<Cell>>,
+    pub rows: Vec<Row>,
+    pub selection: Option<TextRange>,
+    pub hovered_link: Option<TextRange>,
+    pub text_blink_phase: u8,
     pub cursor: (usize, usize),
     pub cursor_visible: bool,
     pub cursor_style: CursorStyle,
@@ -172,6 +232,7 @@ pub struct Terminal {
     alternate: bool,
     hyperlink: Option<Arc<str>>,
     preceding: Option<char>,
+    unknown_osc: BTreeMap<Option<u32>, u64>,
     sync_deadline: Option<Instant>,
 }
 
@@ -183,7 +244,7 @@ impl Terminal {
     pub fn with_theme(cols: usize, rows: usize, theme: Theme) -> Self {
         let (cols, rows) = (cols.max(1), rows.max(1));
         let style = Style::default();
-        let rows = vec![vec![Cell::blank(style); cols]; rows];
+        let rows = vec![Row::new(cols, style); rows];
         let inactive = InactiveScreen {
             rows: rows.clone(),
             cursor: (0, 0),
@@ -202,6 +263,9 @@ impl Terminal {
             }),
             color_revision: 0,
             rows,
+            selection: None,
+            hovered_link: None,
+            text_blink_phase: 0,
             cursor: (0, 0),
             cursor_visible: true,
             cursor_style: CursorStyle::default(),
@@ -235,6 +299,7 @@ impl Terminal {
             alternate: false,
             hyperlink: None,
             preceding: None,
+            unknown_osc: BTreeMap::new(),
             sync_deadline: None,
         }
     }
@@ -285,6 +350,8 @@ impl Terminal {
     }
 
     pub fn resize(&mut self, cols: usize, rows: usize) {
+        self.selection = None;
+        self.hovered_link = None;
         let (cols, rows) = (cols.max(1), rows.max(1));
         if cols == self.cols() && rows == self.rows.len() {
             return;
@@ -307,7 +374,7 @@ impl Terminal {
     }
 
     fn resize_screen(
-        screen: &mut Vec<Vec<Cell>>,
+        screen: &mut Vec<Row>,
         cursor: &mut (usize, usize),
         cols: usize,
         rows: usize,
@@ -318,9 +385,15 @@ impl Terminal {
             cursor.1 -= remove;
         }
         let blank = Cell::blank(Style::default());
-        screen.resize_with(rows, || vec![blank.clone(); cols]);
+        if screen.len() > rows {
+            screen[rows - 1].wrapped = None;
+        }
+        screen.resize_with(rows, || Row::new(cols, Style::default()));
         for row in screen {
-            row.resize(cols, blank.clone());
+            if row.len() != cols {
+                row.wrapped = None;
+            }
+            row.cells.resize(cols, blank.clone());
             Self::repair_row(row);
         }
         cursor.0 = cursor.0.min(cols - 1);
@@ -328,6 +401,10 @@ impl Terminal {
     }
 
     pub fn feed(&mut self, bytes: &[u8]) -> Vec<u8> {
+        if !bytes.is_empty() {
+            self.selection = None;
+            self.hovered_link = None;
+        }
         // Detach the parser while it calls back into the terminal model.
         let mut parser = self.parser.take().expect("parser outside feed");
         let mut bytes = bytes;
@@ -341,6 +418,45 @@ impl Terminal {
         parser.advance(self, bytes);
         self.parser = Some(parser);
         std::mem::take(&mut self.replies)
+    }
+
+    pub fn has_blinking_text(&self) -> bool {
+        self.rows
+            .iter()
+            .flatten()
+            .any(|cell| cell.style.blink != Blink::None)
+    }
+
+    pub fn text_visible(&self, style: Style) -> bool {
+        !style.hidden && style.blink.visible(self.text_blink_phase)
+    }
+
+    fn bell(&mut self) {
+        if self.effects.len() < 64
+            && !self
+                .effects
+                .iter()
+                .any(|effect| matches!(effect, Effect::Bell))
+        {
+            self.effects.push(Effect::Bell);
+        }
+    }
+
+    fn unknown_osc(&mut self, command: Option<u32>, bytes: usize) {
+        if self.unknown_osc.len() >= 32
+            && !self.unknown_osc.contains_key(&command)
+        {
+            return;
+        }
+        let count = self.unknown_osc.entry(command).or_default();
+        *count = count.saturating_add(1);
+        if count.is_power_of_two() && self.effects.len() < 64 {
+            self.effects.push(Effect::UnknownOsc {
+                command,
+                bytes,
+                count: *count,
+            });
+        }
     }
 
     fn put(&mut self, ch: char) {
@@ -364,8 +480,22 @@ impl Terminal {
         if self.pending_wrap || (width == 2 && self.cursor.0 + 1 == self.cols())
         {
             if self.auto_wrap {
+                let end = if self.pending_wrap {
+                    self.cols()
+                } else {
+                    self.cursor.0
+                };
+                let row = self.cursor.1;
+                let wrapped_row = if row == self.scroll_bottom {
+                    (row > self.scroll_top).then(|| row - 1)
+                } else {
+                    Some(row)
+                };
                 self.cursor.0 = 0;
                 self.linefeed();
+                if let Some(row) = wrapped_row {
+                    self.rows[row].wrapped = Some(end);
+                }
             }
             self.pending_wrap = false;
         }
@@ -408,6 +538,9 @@ impl Terminal {
     }
 
     fn clear_cell(&mut self, x: usize, y: usize) {
+        if x + 1 == self.cols() {
+            self.rows[y].wrapped = None;
+        }
         match self.rows[y][x].content {
             Content::Continuation if x > 0 => {
                 self.rows[y][x - 1] = Cell::blank(self.style);
@@ -461,19 +594,29 @@ impl Terminal {
     }
 
     fn scroll_up(&mut self, top: usize, count: usize) {
+        if top > 0 {
+            self.rows[top - 1].wrapped = None;
+        }
         let region = &mut self.rows[top..=self.scroll_bottom];
         let count = count.min(region.len());
         region.rotate_left(count);
         let start = region.len() - count;
+        if start > 0 {
+            region[start - 1].wrapped = None;
+        }
         for row in &mut region[start..] {
             row.fill(Cell::blank(self.style));
         }
     }
 
     fn scroll_down(&mut self, top: usize, count: usize) {
+        if top > 0 {
+            self.rows[top - 1].wrapped = None;
+        }
         let region = &mut self.rows[top..=self.scroll_bottom];
         let count = count.min(region.len());
         region.rotate_right(count);
+        region.last_mut().unwrap().wrapped = None;
         for row in &mut region[..count] {
             row.fill(Cell::blank(self.style));
         }
@@ -526,6 +669,7 @@ impl Terminal {
         let (x, y) = self.cursor;
         let count = count.min(self.cols() - x);
         let row = &mut self.rows[y];
+        row.wrapped = None;
         row[x..].rotate_right(count);
         row[x..x + count].fill(Cell::blank(self.style));
         Self::repair_row(row);

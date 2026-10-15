@@ -15,11 +15,13 @@ impl Perform for Terminal {
 
     fn execute(&mut self, byte: u8) {
         match byte {
+            7 => self.bell(),
             b'\r' => {
                 self.cursor.0 = 0;
                 self.pending_wrap = false;
             }
             b'\n' | 0x0b | 0x0c | 0x84 => {
+                self.rows[self.cursor.1].wrapped = None;
                 self.linefeed();
                 if self.newline_mode {
                     self.cursor.0 = 0;
@@ -33,6 +35,7 @@ impl Perform for Terminal {
             0x0e => self.active_charset = 1,
             0x0f => self.active_charset = 0,
             0x85 => {
+                self.rows[self.cursor.1].wrapped = None;
                 self.cursor.0 = 0;
                 self.linefeed();
             }
@@ -49,8 +52,12 @@ impl Perform for Terminal {
         match (intermediates, byte) {
             ([], b'7') => self.save_cursor(),
             ([], b'8') => self.restore_cursor(),
-            ([], b'D') => self.linefeed(),
+            ([], b'D') => {
+                self.rows[self.cursor.1].wrapped = None;
+                self.linefeed();
+            }
             ([], b'E') => {
+                self.rows[self.cursor.1].wrapped = None;
                 self.cursor.0 = 0;
                 self.linefeed();
             }

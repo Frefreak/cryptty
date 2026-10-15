@@ -34,8 +34,9 @@ pub struct Renderer {
     width: usize,
     height: usize,
     pub pixels: Vec<u32>,
-    previous: Vec<Vec<crate::terminal::Cell>>,
+    previous: Vec<crate::terminal::Row>,
     color_revision: u64,
+    text_blink_phase: u8,
     old_cursor: Option<(usize, usize)>,
     old_preedit_row: Option<usize>,
 }
@@ -69,6 +70,7 @@ impl Renderer {
             pixels: Vec::new(),
             previous: Vec::new(),
             color_revision: 0,
+            text_blink_phase: 0,
             old_cursor: None,
             old_preedit_row: None,
         })
@@ -117,8 +119,11 @@ impl Renderer {
             self.pixels = vec![terminal.theme().background; width * height];
             self.invalidate();
         }
-        if self.color_revision != terminal.color_revision {
+        if self.color_revision != terminal.color_revision
+            || self.text_blink_phase != terminal.text_blink_phase
+        {
             self.color_revision = terminal.color_revision;
+            self.text_blink_phase = terminal.text_blink_phase;
             self.invalidate();
         }
         if self.previous.is_empty() {
@@ -162,7 +167,7 @@ impl Renderer {
             self.solid(left + dx, top + dy, w, h, terminal.theme().cursor);
             let cell = &terminal.rows[y][x];
             if shape == CursorShape::Block
-                && !cell.style.hidden
+                && terminal.text_visible(cell.style)
                 && let Content::Text { text, wide } = &cell.content
             {
                 let (_, bg) = terminal.colors(cell.style);
@@ -195,28 +200,28 @@ impl Renderer {
     fn draw_row(&mut self, y: usize, terminal: &Terminal) {
         let row = &terminal.rows[y];
         let (_, top) = self.cell_origin(0, y);
-        for (x, cell) in row.iter().enumerate() {
-            let (_, bg) = terminal.colors(cell.style);
+        for x in 0..row.len() {
+            let (_, bg) = terminal.colors(terminal.cell_style(x, y));
             let (left, _) = self.cell_origin(x, y);
             self.solid(left, top, self.cell_width, self.cell_height, bg);
         }
         for (x, cell) in row.iter().enumerate() {
-            if cell.style.hidden {
+            let style = terminal.cell_style(x, y);
+            if !terminal.text_visible(style) {
                 continue;
             }
             if let Content::Text { text, wide } = &cell.content {
-                let (fg, _) = terminal.colors(cell.style);
+                let (fg, _) = terminal.colors(style);
                 let columns = if *wide { 2 } else { 1 };
                 for ch in text.chars().filter(|c| *c != ' ') {
                     self.paint_char(ch, cell.style.font(), x, y, columns, fg);
                 }
                 let (left, _) = self.cell_origin(x, y);
-                let underline = cell
-                    .style
+                let underline = style
                     .underline_color
                     .map_or(fg, |color| terminal.color(color));
                 decorations(
-                    cell.style,
+                    style,
                     self.cell_width * columns,
                     self.cell_height,
                     |x, y, w, h, is_underline| {

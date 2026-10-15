@@ -23,7 +23,10 @@ is performed by the user.
 - DCS status queries for SGR, scrolling margins, and cursor style.
   Terminfo queries recognize terminal name, color count, and truecolor.
 
-Paste uses Cmd-V on macOS, Ctrl-Shift-V on Linux, or Shift-Insert.
+Paste uses Ctrl-Shift-V on both platforms, or Shift-Insert.
+Dragging selects text and copies it to the system clipboard on release.
+Shift bypasses application mouse capture. Ctrl-Shift-N opens a new window
+with a fresh shell and the original launch directory and renderer options.
 Multiline paste is bracketed when requested by the application. Escape
 characters that could close a bracketed paste are removed from its text.
 
@@ -33,6 +36,7 @@ Both GPU and software rendering support bold, italic, bold-italic, dim,
 inverse, conceal, strikethrough, overline, and single/double/curly/dotted/
 dashed underlines. Underlines can have their own color. Font styles use
 the selected family's faces, with fallback when a face is unavailable.
+SGR 5 and 6 blink text at slow and rapid rates; SGR 25 disables blinking.
 
 SGR colors support the 16-color palette, 256 indexed colors, and RGB,
 including semicolon and colon forms. Palette/default-color changes also
@@ -45,20 +49,38 @@ affect cells that were written before the change.
 | 0, 2 | Window title |
 | 4, 104 | Set/query/reset palette entries |
 | 8 | Hyperlink metadata and modifier-click activation |
+| 9 | Desktop notification text when the window lacks focus |
 | 10, 11, 12 | Set/query foreground, background, and cursor colors |
 | 110, 111, 112 | Restore configured default colors |
 | 52 | Base64 text writes to the system clipboard (`c` or empty target) |
 
 OSC accepts BEL and ST termination. Colors accept `rgb:r/g/b` and
-hexadecimal forms, plus `black` and `white`. Hyperlinks open HTTP, HTTPS,
-and mailto URLs through the platform opener. Clipboard reads through OSC
+hexadecimal forms, plus `black` and `white`. Ctrl-click opens HTTP/HTTPS
+through the platform opener. Plain URLs follow soft wraps; explicit line
+breaks end detection. OSC 8 supplies the full target independently of its
+label. Hovering underlines links; Ctrl-Shift-click bypasses mouse capture.
+Clipboard reads through OSC
 52 are ignored; pasting reads the clipboard on a user shortcut.
+
+BEL requests window attention while unfocused. OSC 9 additionally sends
+its text through macOS `osascript` or Linux `notify-send` (which must be
+installed). Desktop presentation follows OS notification settings;
+macOS attributes AppleScript notifications to Script Editor. Attention
+and message requests each have a one-second rate limit. OSC 9;4 progress
+updates are logged as unsupported. Notification text is limited to 1,024
+characters with control characters removed.
+
+Unsupported OSC logs contain command IDs, byte counts, and occurrence
+counts, excluding payloads. Logs live at
+`$XDG_STATE_HOME/cryptty/unsupported-osc.log`, defaulting to
+`~/.local/state/cryptty/unsupported-osc.log`. Logging samples occurrences
+at powers of two, tracks up to 32 command IDs, and rotates at 128 KiB.
 
 ## Boundaries
 
 This covers a practical subset of xterm behavior. Image protocols,
-extended keyboard protocols, shell-integration markers, text blinking,
-and native text selection are outside this milestone. Scrollback remains
+extended keyboard protocols and shell-integration markers remain outside
+this milestone. Scrollback remains
 the responsibility of tmux.
 
 The parser accepts up to 32 CSI parameters/subparameters. Excessive CSI
