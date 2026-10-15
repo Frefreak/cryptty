@@ -11,6 +11,11 @@ is performed by the user.
   margins, origin mode, insertion/deletion, and erasure.
 - Primary and alternate screens: DEC modes 47, 1047, 1048, and 1049.
   Both grids resize; alternate-screen use preserves the primary screen.
+- Primary-screen text and retained history reflow across soft wraps on
+  width changes. Hard line breaks, styles, hyperlinks, and wide/combining
+  characters survive reflow. Up to 10,000 history rows support recovery
+  when widening or growing taller. Alternate screens resize as fixed grids.
+  The minimum grid width is two columns to accommodate wide characters.
 - Programmable tab stops and DEC line-drawing character sets G0/G1.
 - Application cursor keys and application keypad.
 - Bracketed paste (2004), focus reporting (1004), mouse click/drag/motion
@@ -25,6 +30,11 @@ is performed by the user.
 
 Paste uses Ctrl-Shift-V on both platforms, or Shift-Insert.
 Dragging selects text and copies it to the system clipboard on release.
+Double-click selects a whitespace-delimited run, preserving punctuation
+within paths and URLs. Clicking whitespace selects its run. Triple-click
+selects a logical line across soft wraps, including its final newline.
+Dragging extends these selections by whole words or logical lines.
+Successive clicks must land in the same cell within 400 ms of each other.
 Shift bypasses application mouse capture. Ctrl-Shift-N opens a new window
 with a fresh shell and the original launch directory and renderer options.
 Multiline paste is bracketed when requested by the application. Escape
@@ -59,6 +69,8 @@ hexadecimal forms, plus `black` and `white`. Ctrl-click opens HTTP/HTTPS
 through the platform opener. Plain URLs follow soft wraps; explicit line
 breaks end detection. OSC 8 supplies the full target independently of its
 label. Hovering underlines links; Ctrl-Shift-click bypasses mouse capture.
+Trailing echoed `^C` is excluded from plain-URL detection and double-click
+selection of URL-containing text. OSC 8 targets remain unchanged.
 Clipboard reads through OSC
 52 are ignored; pasting reads the clipboard on a user shortcut.
 
@@ -80,8 +92,8 @@ at powers of two, tracks up to 32 command IDs, and rotates at 128 KiB.
 
 This covers a practical subset of xterm behavior. Image protocols,
 extended keyboard protocols and shell-integration markers remain outside
-this milestone. Scrollback remains
-the responsibility of tmux.
+this milestone. Scrollback navigation remains the responsibility of tmux;
+the internal history buffer supports resize recovery. CSI 3 J clears it.
 
 The parser accepts up to 32 CSI parameters/subparameters. Excessive CSI
 parameter lists are ignored. OSC storage is capped at 64 KiB, and full

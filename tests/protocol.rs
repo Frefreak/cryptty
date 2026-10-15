@@ -37,7 +37,7 @@ fn alternate_and_primary_grids_both_resize() {
     t.feed(b"one\r\ntwo\r\nthree\r\nfour\x1b[?1049h\x1b[Halt");
     t.resize(4, 2);
     t.feed(b"\x1b[?1049l");
-    assert_eq!(row(&t, 0), "thre");
+    assert_eq!(row(&t, 0), "e   ");
     assert_eq!(row(&t, 1), "four");
     assert_eq!(t.cursor, (3, 1));
     t.feed(b"\x1b[?47h");

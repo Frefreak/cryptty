@@ -145,7 +145,7 @@ fn wide_characters_remain_consistent_after_overwrite_and_resize() {
     valid(&t);
     t.resize(3, 2);
     valid(&t);
-    assert_eq!(row(&t, 0), " A ");
+    assert_eq!(row(&t, 0), "文x");
     t.feed("\x1b[2;1H中\x1b[1P".as_bytes());
     valid(&t);
 }

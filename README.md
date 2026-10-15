@@ -31,12 +31,20 @@ Terminal compatibility covers alternate screens, bracketed paste,
 focus/mouse reporting, richer text styles, and common OSC commands.
 See [supported sequences and checks](docs/terminal-compatibility.md).
 Drag to select and copy to the system clipboard. Paste with Ctrl-Shift-V
-on both platforms, or Shift-Insert. Ctrl-Shift-N opens a fresh shell in
+on both platforms, or Shift-Insert. Double-click selects a whitespace-delimited
+word; triple-click selects a logical line, including soft-wrapped rows.
+Dragging after either click extends the selection by words or lines.
+Ctrl-Shift-N opens a fresh shell in
 a new window, using the original launch directory and renderer options.
 Ctrl-click opens HTTP/HTTPS links, including OSC 8 targets and plain URLs
 across terminal soft wraps. Hovering underlines the detected link.
 Hold Shift to select or Ctrl-Shift-click links during mouse capture.
+Trailing echoed `^C` is excluded from plain URLs and their word selection.
 Applications can copy text through OSC 52 to the system clipboard.
+
+Resizing reflows primary-screen text and retains up to 10,000 history rows
+for resize recovery. Alternate-screen applications retain a fixed grid and
+receive the new size to redraw. Scrollback navigation remains with tmux.
 
 Configuration lives in `$XDG_CONFIG_HOME/cryptty/cryptty.yaml`, or
 `~/.config/cryptty/cryptty.yaml` when `XDG_CONFIG_HOME` is unset.

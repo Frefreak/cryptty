@@ -1,9 +1,10 @@
 use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use anyhow::Result;
 use cryptty::{
     input,
-    terminal::{Effect, MouseMode, Position, supported_uri},
+    terminal::{Effect, MouseMode, Position, TextRange, supported_uri},
 };
 use winit::event::{ElementState, MouseButton, MouseScrollDelta};
 use winit::window::CursorIcon;
@@ -17,8 +18,37 @@ pub(super) struct Interaction {
     buttons: [bool; 3],
     last_motion: Option<(usize, usize)>,
     scroll: (f64, f64),
-    selection_anchor: Option<Position>,
+    selection_anchor: Option<SelectionAnchor>,
+    clicks: Clicks,
     pointer_inside: bool,
+}
+
+#[derive(Clone, Copy)]
+enum SelectionAnchor {
+    Character(Position),
+    Word(TextRange),
+    Line(TextRange),
+}
+
+#[derive(Default)]
+struct Clicks {
+    last: Option<(Instant, Position)>,
+    count: u8,
+}
+
+impl Clicks {
+    fn press(&mut self, now: Instant, position: Position) -> u8 {
+        self.count = if self.last.is_some_and(|(time, cell)| {
+            cell == position
+                && now.duration_since(time) < Duration::from_millis(400)
+        }) {
+            self.count % 3 + 1
+        } else {
+            1
+        };
+        self.last = Some((now, position));
+        self.count
+    }
 }
 
 impl Interaction {
@@ -26,6 +56,7 @@ impl Interaction {
         self.buttons = [false; 3];
         self.last_motion = None;
         self.selection_anchor = None;
+        self.clicks = Clicks::default();
     }
 
     fn clipboard(&mut self) -> Result<&mut arboard::Clipboard> {
@@ -58,6 +89,7 @@ impl View {
             self.renderer.invalidate();
         }
         self.interaction.selection_anchor = None;
+        self.interaction.clicks = Clicks::default();
     }
 
     pub(super) fn pointer_left(&mut self) {
@@ -99,10 +131,28 @@ impl View {
         }
     }
 
-    fn update_selection(&mut self, anchor: Position) {
-        let range = self
-            .terminal
-            .selection_between(anchor, self.selection_position());
+    fn update_selection(&mut self, anchor: SelectionAnchor) {
+        let (col, row) = self.pointer_cell();
+        let position = Position { row, col };
+        let range = match anchor {
+            SelectionAnchor::Character(start) => self
+                .terminal
+                .selection_between(start, self.selection_position()),
+            SelectionAnchor::Word(start) => {
+                let end = self.terminal.word_selection(position);
+                TextRange::between(
+                    start.start.min(end.start),
+                    start.end.max(end.end),
+                )
+            }
+            SelectionAnchor::Line(start) => {
+                let end = self.terminal.line_selection(position);
+                TextRange::between(
+                    start.start.min(end.start),
+                    start.end.max(end.end),
+                )
+            }
+        };
         self.terminal.selection = (range.start != range.end).then_some(range);
         self.renderer.invalidate();
         self.window.request_redraw();
@@ -181,6 +231,15 @@ impl View {
         self.interaction.pointer_inside = true;
         self.refresh_pointer();
         if let Some(anchor) = self.interaction.selection_anchor {
+            let (col, row) = self.pointer_cell();
+            if self
+                .interaction
+                .clicks
+                .last
+                .is_some_and(|(_, cell)| cell != Position { row, col })
+            {
+                self.interaction.clicks = Clicks::default();
+            }
             self.update_selection(anchor);
             return Ok(());
         }
@@ -229,14 +288,26 @@ impl View {
             if let Some(link) =
                 self.terminal.link_at(Position { row: y, col: x })
             {
+                self.interaction.clicks = Clicks::default();
                 open_link(&link.uri);
                 return Ok(());
             }
         }
         if !released && index == 0 && available {
-            self.clear_selection();
-            self.interaction.selection_anchor = Some(self.selection_position());
-            self.window.request_redraw();
+            let (col, row) = self.pointer_cell();
+            let position = Position { row, col };
+            let count = self.interaction.clicks.press(Instant::now(), position);
+            let anchor = match count {
+                2 => SelectionAnchor::Word(
+                    self.terminal.word_selection(position),
+                ),
+                3 => SelectionAnchor::Line(
+                    self.terminal.line_selection(position),
+                ),
+                _ => SelectionAnchor::Character(self.selection_position()),
+            };
+            self.interaction.selection_anchor = Some(anchor);
+            self.update_selection(anchor);
             return Ok(());
         }
         if !released && available {
@@ -312,5 +383,29 @@ fn open_link(uri: &str) {
             });
         }
         Err(error) => eprintln!("Cryptty: cannot open hyperlink: {error}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn multiple_clicks_require_the_same_cell_and_a_short_interval() {
+        let mut clicks = Clicks::default();
+        let now = Instant::now();
+        let cell = Position { row: 1, col: 2 };
+        assert_eq!(clicks.press(now, cell), 1);
+        assert_eq!(clicks.press(now + Duration::from_millis(100), cell), 2);
+        assert_eq!(clicks.press(now + Duration::from_millis(200), cell), 3);
+        assert_eq!(clicks.press(now + Duration::from_millis(300), cell), 1);
+        assert_eq!(clicks.press(now + Duration::from_secs(1), cell), 1);
+        assert_eq!(
+            clicks.press(
+                now + Duration::from_millis(1100),
+                Position { row: 1, col: 3 }
+            ),
+            1
+        );
     }
 }

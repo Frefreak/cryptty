@@ -136,3 +136,67 @@ fn shrinking_then_growing_does_not_join_unrelated_rows() {
     terminal.feed(b"\x1b[2;1Hsuffix");
     assert_eq!(terminal.link_at(p(0, 3)).unwrap().uri, "https://a/");
 }
+
+#[test]
+fn double_click_uses_whitespace_boundaries() {
+    let mut t = Terminal::new(80, 3);
+    t.feed("foo.bar-baz /usr/local/bin  变量_name2 cafe\u{301}".as_bytes());
+    for (col, expected) in [
+        (4, "foo.bar-baz"),
+        (13, "/usr/local/bin"),
+        (26, "  "),
+        (28, "变量_name2"),
+        (40, "cafe\u{301}"),
+    ] {
+        assert_eq!(t.selected_text(t.word_selection(p(0, col))), expected);
+    }
+}
+
+#[test]
+fn double_click_crosses_soft_wraps_and_skips_wide_padding() {
+    let mut t = Terminal::new(4, 5);
+    t.feed("abc中e\u{301}文".as_bytes());
+    assert_eq!(
+        t.selected_text(t.word_selection(p(1, 1))),
+        "abc中e\u{301}文"
+    );
+}
+
+#[test]
+fn triple_click_selects_one_logical_line_and_its_newline() {
+    let mut t = Terminal::new(6, 5);
+    t.feed(b"first logical line\r\nnext");
+    let range = t.line_selection(p(1, 2));
+    assert_eq!(t.selected_text(range), "first logical line\n");
+    assert_eq!(t.selected_text(t.line_selection(p(3, 2))), "next\n");
+}
+
+#[test]
+fn echoed_interrupt_suffix_is_excluded_from_plain_urls_and_word_selection() {
+    let uri = "https://asdf/asdfasdfasdf/adfasdf";
+    let mut t = Terminal::new(12, 5);
+    t.feed(format!("{uri}^C^C").as_bytes());
+    let position = p(1, 3);
+    assert_eq!(t.link_at(position).unwrap().uri, uri);
+    assert_eq!(t.selected_text(t.word_selection(position)), uri);
+    let suffix = p(uri.len() / 12, uri.len() % 12);
+    assert!(t.link_at(suffix).is_none());
+    assert_eq!(t.selected_text(t.word_selection(suffix)), "^C^C");
+}
+
+#[test]
+fn literal_interrupt_text_in_osc8_targets_remains_intact() {
+    let mut t = Terminal::new(40, 3);
+    t.feed(b"\x1b]8;;https://example.com/^C\x07label\x1b]8;;\x07");
+    assert_eq!(t.link_at(p(0, 2)).unwrap().uri, "https://example.com/^C");
+}
+
+#[test]
+fn echoed_interrupt_is_excluded_when_a_url_has_a_label_or_brackets() {
+    for token in ["URL=https://example.com/x", "(https://example.com/x)"] {
+        let mut t = Terminal::new(80, 3);
+        t.feed(format!("{token}^C").as_bytes());
+        assert_eq!(t.selected_text(t.word_selection(p(0, 10))), token);
+        assert_eq!(t.link_at(p(0, 15)).unwrap().uri, "https://example.com/x");
+    }
+}

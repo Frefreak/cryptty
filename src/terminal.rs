@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -7,6 +7,7 @@ use unicode_width::UnicodeWidthChar;
 mod control;
 mod osc;
 mod parser;
+mod reflow;
 mod sgr;
 mod style;
 mod text;
@@ -177,6 +178,7 @@ struct InactiveScreen {
     rows: Vec<Row>,
     cursor: (usize, usize),
     saved: SavedCursor,
+    pending_wrap: bool,
 }
 
 pub enum Effect {
@@ -196,6 +198,7 @@ pub struct Terminal {
     palette: [u32; 256],
     pub color_revision: u64,
     pub rows: Vec<Row>,
+    history: VecDeque<Row>,
     pub selection: Option<TextRange>,
     pub hovered_link: Option<TextRange>,
     pub text_blink_phase: u8,
@@ -242,13 +245,14 @@ impl Terminal {
     }
 
     pub fn with_theme(cols: usize, rows: usize, theme: Theme) -> Self {
-        let (cols, rows) = (cols.max(1), rows.max(1));
+        let (cols, rows) = (cols.max(2), rows.max(1));
         let style = Style::default();
         let rows = vec![Row::new(cols, style); rows];
         let inactive = InactiveScreen {
             rows: rows.clone(),
             cursor: (0, 0),
             saved: SavedCursor::default(),
+            pending_wrap: false,
         };
         let scroll_bottom = rows.len() - 1;
         Self {
@@ -263,6 +267,7 @@ impl Terminal {
             }),
             color_revision: 0,
             rows,
+            history: VecDeque::new(),
             selection: None,
             hovered_link: None,
             text_blink_phase: 0,
@@ -352,17 +357,48 @@ impl Terminal {
     pub fn resize(&mut self, cols: usize, rows: usize) {
         self.selection = None;
         self.hovered_link = None;
-        let (cols, rows) = (cols.max(1), rows.max(1));
+        let (cols, rows) = (cols.max(2), rows.max(1));
         if cols == self.cols() && rows == self.rows.len() {
             return;
         }
-        Self::resize_screen(&mut self.rows, &mut self.cursor, cols, rows);
-        Self::resize_screen(
-            &mut self.inactive.rows,
-            &mut self.inactive.cursor,
-            cols,
-            rows,
-        );
+        if self.alternate {
+            Self::resize_screen(&mut self.rows, &mut self.cursor, cols, rows);
+            self.pending_wrap = false;
+            self.saved.position.0 = self.saved.position.0.min(cols - 1);
+            self.saved.position.1 = self.saved.position.1.min(rows - 1);
+            self.saved.pending_wrap = false;
+            reflow::resize_primary(
+                &mut self.inactive.rows,
+                &mut self.history,
+                &mut self.inactive.cursor,
+                &mut self.inactive.pending_wrap,
+                &mut self.inactive.saved,
+                cols,
+                rows,
+            );
+        } else {
+            reflow::resize_primary(
+                &mut self.rows,
+                &mut self.history,
+                &mut self.cursor,
+                &mut self.pending_wrap,
+                &mut self.saved,
+                cols,
+                rows,
+            );
+            Self::resize_screen(
+                &mut self.inactive.rows,
+                &mut self.inactive.cursor,
+                cols,
+                rows,
+            );
+            self.inactive.pending_wrap = false;
+            self.inactive.saved.position.0 =
+                self.inactive.saved.position.0.min(cols - 1);
+            self.inactive.saved.position.1 =
+                self.inactive.saved.position.1.min(rows - 1);
+            self.inactive.saved.pending_wrap = false;
+        }
         let old_cols = self.tabs.len();
         self.tabs.resize(cols, false);
         for col in old_cols..cols {
@@ -370,7 +406,6 @@ impl Terminal {
         }
         self.scroll_top = 0;
         self.scroll_bottom = rows - 1;
-        self.pending_wrap = false;
     }
 
     fn resize_screen(
@@ -495,6 +530,11 @@ impl Terminal {
                 self.linefeed();
                 if let Some(row) = wrapped_row {
                     self.rows[row].wrapped = Some(end);
+                } else if !self.alternate
+                    && row == 0
+                    && let Some(row) = self.history.back_mut()
+                {
+                    row.wrapped = Some(end);
                 }
             }
             self.pending_wrap = false;
@@ -605,11 +645,26 @@ impl Terminal {
             region[start - 1].wrapped = None;
         }
         for row in &mut region[start..] {
-            row.fill(Cell::blank(self.style));
+            if top == 0 && !self.alternate {
+                self.history.push_back(std::mem::replace(
+                    row,
+                    Row::new(row.len(), self.style),
+                ));
+            } else {
+                row.fill(Cell::blank(self.style));
+            }
         }
+        let excess = self.history.len().saturating_sub(reflow::HISTORY_LIMIT);
+        self.history.drain(..excess);
     }
 
     fn scroll_down(&mut self, top: usize, count: usize) {
+        if top == 0
+            && !self.alternate
+            && let Some(row) = self.history.back_mut()
+        {
+            row.wrapped = None;
+        }
         if top > 0 {
             self.rows[top - 1].wrapped = None;
         }
@@ -656,9 +711,10 @@ impl Terminal {
         std::mem::swap(&mut self.rows, &mut self.inactive.rows);
         std::mem::swap(&mut self.cursor, &mut self.inactive.cursor);
         std::mem::swap(&mut self.saved, &mut self.inactive.saved);
+        std::mem::swap(&mut self.pending_wrap, &mut self.inactive.pending_wrap);
         self.alternate = alternate;
-        self.pending_wrap = false;
         if clear {
+            self.pending_wrap = false;
             for row in &mut self.rows {
                 row.fill(Cell::blank(Style::default()));
             }
@@ -676,6 +732,16 @@ impl Terminal {
     }
 
     fn erase_display(&mut self, mode: usize) {
+        if mode == 3 {
+            self.history.clear();
+            return;
+        }
+        if mode == 2
+            && !self.alternate
+            && let Some(row) = self.history.back_mut()
+        {
+            row.wrapped = None;
+        }
         let (x, y) = self.cursor;
         for row in 0..self.rows.len() {
             let range = match mode {

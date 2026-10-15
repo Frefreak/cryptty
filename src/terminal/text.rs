@@ -32,6 +32,78 @@ pub struct Link {
 }
 
 impl Terminal {
+    fn logical_rows(&self, row: usize) -> (usize, usize) {
+        let mut first = row;
+        while first > 0 && self.rows[first - 1].wrapped.is_some() {
+            first -= 1;
+        }
+        let mut last = row;
+        while last + 1 < self.rows.len() && self.rows[last].wrapped.is_some() {
+            last += 1;
+        }
+        (first, last)
+    }
+
+    pub fn line_selection(&self, position: Position) -> TextRange {
+        let (first, last) = self.logical_rows(position.row);
+        TextRange::between(
+            Position { row: first, col: 0 },
+            Position {
+                row: last + 1,
+                col: 0,
+            },
+        )
+    }
+
+    pub fn word_selection(&self, position: Position) -> TextRange {
+        let (first, last) = self.logical_rows(position.row);
+        let mut cells = Vec::new();
+        for y in first..=last {
+            let row = &self.rows[y];
+            for x in 0..row.wrapped.unwrap_or(row.len()) {
+                if let Content::Text { text, wide } = &row[x].content {
+                    cells.push((
+                        Position { row: y, col: x },
+                        Position {
+                            row: y,
+                            col: x + if *wide { 2 } else { 1 },
+                        },
+                        text,
+                    ));
+                }
+            }
+        }
+        let Some(index) = cells
+            .iter()
+            .position(|(start, end, _)| *start <= position && position < *end)
+        else {
+            return TextRange::between(position, position);
+        };
+        let whitespace = |i: usize| cells[i].2.base.is_whitespace();
+        let mut start = index;
+        while start > 0 && whitespace(start - 1) == whitespace(index) {
+            start -= 1;
+        }
+        let mut end = index + 1;
+        while end < cells.len() && whitespace(end) == whitespace(index) {
+            end += 1;
+        }
+        let text: String = cells[start..end]
+            .iter()
+            .flat_map(|(_, _, text)| text.chars())
+            .collect();
+        if text.char_indices().any(|(i, _)| supported_uri(&text[i..])) {
+            let suffix = text.len() - text.trim_end_matches("^C").len();
+            let boundary = end - suffix;
+            if index < boundary {
+                end = boundary;
+            } else {
+                start = boundary;
+            }
+        }
+        TextRange::between(cells[start].0, cells[end - 1].1)
+    }
+
     pub fn selection_between(&self, a: Position, b: Position) -> TextRange {
         let mut range = TextRange::between(a, b);
         if a == b {
@@ -144,14 +216,7 @@ impl Terminal {
                 },
             });
         }
-        let mut first = position.row;
-        while first > 0 && self.rows[first - 1].wrapped.is_some() {
-            first -= 1;
-        }
-        let mut last = position.row;
-        while last + 1 < self.rows.len() && self.rows[last].wrapped.is_some() {
-            last += 1;
-        }
+        let (first, last) = self.logical_rows(position.row);
         let mut text = String::new();
         let mut cells = Vec::new();
         for y in first..=last {
@@ -223,6 +288,7 @@ pub fn supported_uri(uri: &str) -> bool {
 }
 
 fn trim_url(mut uri: &str) -> &str {
+    uri = uri.trim_end_matches("^C");
     loop {
         let Some(last) = uri.chars().last() else {
             return uri;

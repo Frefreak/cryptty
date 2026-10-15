@@ -80,7 +80,7 @@ impl Renderer {
         (
             ((width as usize).saturating_sub(2 * self.padding.0)
                 / self.cell_width)
-                .max(1),
+                .max(2),
             ((height as usize).saturating_sub(2 * self.padding.1)
                 / self.cell_height)
                 .max(1),
@@ -510,7 +510,7 @@ colors:
         }
         assert!(padded.pixels.contains(&theme.cursor));
         assert!(padded.pixels.contains(&0x6272a4));
-        assert_eq!(padded.grid_size(1, 1), (1, 1));
+        assert_eq!(padded.grid_size(1, 1), (2, 1));
         padded.draw(&terminal, 1, 1, "中");
         assert_eq!(padded.pixels, vec![theme.background]);
     }
