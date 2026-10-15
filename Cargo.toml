@@ -8,7 +8,6 @@ description = "A small software-rendered terminal for macOS and Linux"
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
 serde_yaml_ng = "0.10"
-fontdb = "0.23"
 portable-pty = "0.9"
 nix = { version = "0.29", features = ["signal", "process"] }
 softbuffer = { version = "0.4", default-features = false, features = [
@@ -23,3 +22,14 @@ winit = { version = "0.30", default-features = false, features = [
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+[target.'cfg(target_os = "macos")'.dependencies]
+crossfont = "0.9.0"
+objc2 = "0.5.3"
+objc2-app-kit = { version = "0.2.2", features = ["NSApplication", "NSEvent"] }
+objc2-foundation = { version = "0.2.2", features = [
+    "NSAttributedString", "NSRange", "NSString",
+] }
+
+[target.'cfg(not(target_os = "macos"))'.dependencies]
+fontdb = "0.23"

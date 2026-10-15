@@ -2,6 +2,7 @@ font:
   family: Alacritty Fantasque WenKai Mono
   # Font size in points.
   size: 19
+  # Swash hinting on Linux; macOS uses native font rendering.
   hinting: false
 window:
   padding:

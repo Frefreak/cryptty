@@ -20,6 +20,9 @@ use winit::event_loop::{
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 use winit::window::{Fullscreen, Window, WindowId};
 
+#[cfg(target_os = "macos")]
+mod macos_input;
+
 struct View {
     surface: Surface<Rc<Window>, Rc<Window>>,
     window: Rc<Window>,
@@ -52,6 +55,8 @@ impl App {
             )?,
         );
         window.set_ime_allowed(true);
+        #[cfg(target_os = "macos")]
+        macos_input::install(&window)?;
         let context = Context::new(window.clone())
             .map_err(|e| anyhow::anyhow!("software display: {e}"))?;
         let surface = Surface::new(&context, window.clone())

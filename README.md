@@ -17,3 +17,7 @@ Font size uses points. On startup, Cryptty appends default comments for
 missing fields. A matching latest comment under the same keys prevents a
 repeat notice. Existing values and comments stay intact. No block markers
 or version metadata are required.
+
+On macOS, fonts use CoreText through crossfont and follow the system's
+font-smoothing setting. On Linux, fonts use Swash; `font.hinting` applies
+to that renderer.
