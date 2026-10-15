@@ -98,7 +98,7 @@ fn wrap_metadata_follows_scrolling_and_alternate_screen() {
 
 #[test]
 fn editing_rows_breaks_links_at_the_changed_boundary() {
-    for edit in [b'L', b'M'] {
+    for edit in *b"LM" {
         let mut terminal = Terminal::new(20, 4);
         terminal.feed(b"https://example.com/a-long-url\r\nunrelated");
         terminal.feed(&[27, b'[', b'2', b';', b'1', b'H', 27, b'[', edit]);

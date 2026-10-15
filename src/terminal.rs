@@ -10,6 +10,8 @@ mod parser;
 mod reflow;
 mod sgr;
 mod style;
+#[cfg(test)]
+mod tests;
 mod text;
 pub use style::{
     Blink, Color, CursorShape, CursorStyle, FontStyle, MouseMode, Style,
@@ -49,7 +51,9 @@ impl Default for Theme {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CellText {
     base: char,
-    combining: Option<Box<str>>,
+    // Keep optional string metadata out of every cell.
+    #[allow(clippy::box_collection)]
+    combining: Option<Box<String>>,
 }
 
 impl CellText {
@@ -62,18 +66,16 @@ impl CellText {
 
     pub fn chars(&self) -> impl Iterator<Item = char> + '_ {
         std::iter::once(self.base)
-            .chain(self.combining.as_deref().unwrap_or("").chars())
+            .chain(self.combining.as_deref().map_or("", String::as_str).chars())
     }
 
     #[inline(never)]
     fn push_combining(&mut self, ch: char) {
-        let suffix = self.combining.as_deref().unwrap_or("");
-        if self.base.len_utf8() + suffix.len() < 64 {
-            let mut combined =
-                String::with_capacity(suffix.len() + ch.len_utf8());
-            combined.push_str(suffix);
-            combined.push(ch);
-            self.combining = Some(combined.into_boxed_str());
+        let len = self.combining.as_ref().map_or(0, |text| text.len());
+        if self.base.len_utf8() + len < 64 {
+            self.combining
+                .get_or_insert_with(|| Box::new(String::new()))
+                .push(ch);
         }
     }
 }
@@ -88,7 +90,7 @@ pub enum Content {
 pub struct Cell {
     pub content: Content,
     pub style: Style,
-    pub hyperlink: Option<Arc<str>>,
+    pub hyperlink: Option<Arc<String>>,
 }
 
 impl Cell {
@@ -116,6 +118,13 @@ impl Row {
             cells: vec![Cell::blank(style); cols],
             wrapped: None,
         }
+    }
+
+    fn clear(&mut self, style: Style) {
+        for cell in &mut self.cells {
+            *cell = Cell::blank(style);
+        }
+        self.wrapped = None;
     }
 
     fn fill(&mut self, cell: Cell) {
@@ -156,7 +165,7 @@ struct SavedCursor {
     pending_wrap: bool,
     charsets: [bool; 2],
     active_charset: usize,
-    hyperlink: Option<Arc<str>>,
+    hyperlink: Option<Arc<String>>,
 }
 
 impl Default for SavedCursor {
@@ -233,7 +242,7 @@ pub struct Terminal {
     scroll_bottom: usize,
     inactive: InactiveScreen,
     alternate: bool,
-    hyperlink: Option<Arc<str>>,
+    hyperlink: Option<Arc<String>>,
     preceding: Option<char>,
     unknown_osc: BTreeMap<Option<u32>, u64>,
     sync_deadline: Option<Instant>,
@@ -322,7 +331,9 @@ impl Terminal {
             Color::Foreground => self.theme.foreground,
             Color::Background => self.theme.background,
             Color::Indexed(index) => self.palette[index as usize],
-            Color::Rgb(rgb) => rgb,
+            Color::Rgb(r, g, b) => {
+                (u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b)
+            }
         }
     }
 
@@ -494,7 +505,26 @@ impl Terminal {
         }
     }
 
+    #[inline(always)]
     fn put(&mut self, ch: char) {
+        let (x, y) = self.cursor;
+        if (' '..='~').contains(&ch)
+            && !self.pending_wrap
+            && !self.insert_mode
+            && x + 1 < self.cols()
+            && let Content::Text { text, wide: false } =
+                &mut self.rows[y][x].content
+        {
+            *text = CellText::new(ch);
+            self.rows[y][x].style = self.style;
+            self.rows[y][x].hyperlink = self.hyperlink.clone();
+            self.cursor.0 += 1;
+            return;
+        }
+        self.put_slow(ch);
+    }
+
+    fn put_slow(&mut self, ch: char) {
         let width = ch.width().unwrap_or(0);
         if width == 0 {
             let (mut x, y) = self.cursor;
@@ -646,16 +676,18 @@ impl Terminal {
         }
         for row in &mut region[start..] {
             if top == 0 && !self.alternate {
-                self.history.push_back(std::mem::replace(
-                    row,
-                    Row::new(row.len(), self.style),
-                ));
+                let blank = if self.history.len() == reflow::HISTORY_LIMIT {
+                    let mut oldest = self.history.pop_front().unwrap();
+                    oldest.clear(self.style);
+                    oldest
+                } else {
+                    Row::new(row.len(), self.style)
+                };
+                self.history.push_back(std::mem::replace(row, blank));
             } else {
                 row.fill(Cell::blank(self.style));
             }
         }
-        let excess = self.history.len().saturating_sub(reflow::HISTORY_LIMIT);
-        self.history.drain(..excess);
     }
 
     fn scroll_down(&mut self, top: usize, count: usize) {

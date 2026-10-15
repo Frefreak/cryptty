@@ -118,9 +118,9 @@ fn sgr_colon_colors_and_independent_attribute_resets() {
     let a = t.rows[0][0].style;
     assert!(a.bold && a.dim && a.italic && a.strike && a.overline);
     assert_eq!(a.underline, Underline::Curly);
-    assert_eq!(a.fg, Color::Rgb(0x010203));
+    assert_eq!(a.fg, Color::Rgb(1, 2, 3));
     assert_eq!(a.bg, Color::Indexed(4));
-    assert_eq!(a.underline_color, Some(Color::Rgb(0x040506)));
+    assert_eq!(a.underline_color, Some(Color::Rgb(4, 5, 6)));
     t.feed(b"\x1b[22;23;24;29;55;59mB");
     let b = t.rows[0][1].style;
     assert!(!b.bold && !b.dim && !b.italic && !b.strike && !b.overline);
@@ -171,7 +171,7 @@ fn titles_hyperlinks_and_clipboard_survive_chunk_boundaries() {
         t.feed(&bytes[split..]);
         assert_eq!(t.title, "project;name");
         assert_eq!(
-            t.rows[0][0].hyperlink.as_deref(),
+            t.rows[0][0].hyperlink.as_deref().map(String::as_str),
             Some("https://example.org/a;b")
         );
         assert!(t.rows[0][4].hyperlink.is_none());

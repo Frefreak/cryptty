@@ -3,7 +3,7 @@ pub enum Color {
     Foreground,
     Background,
     Indexed(u8),
-    Rgb(u32),
+    Rgb(u8, u8, u8),
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -30,7 +30,7 @@ impl Blink {
         match self {
             Self::None => true,
             Self::Slow => phase % 4 < 2,
-            Self::Rapid => phase % 2 == 0,
+            Self::Rapid => phase.is_multiple_of(2),
         }
     }
 }

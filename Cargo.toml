@@ -6,6 +6,7 @@ description = "A small terminal for macOS and Linux"
 
 [dependencies]
 anyhow = "1"
+tempfile = "3"
 wgpu = { version = "30", default-features = false, features = [
     "std", "metal", "vulkan", "wgsl",
 ] }

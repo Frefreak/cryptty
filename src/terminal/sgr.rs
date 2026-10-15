@@ -107,12 +107,9 @@ impl Terminal {
                 Some(Color::Indexed(index)) => {
                     params.push(format!("{which};5;{index}"));
                 }
-                Some(Color::Rgb(rgb)) => params.push(format!(
-                    "{which};2;{};{};{}",
-                    rgb >> 16,
-                    (rgb >> 8) & 255,
-                    rgb & 255,
-                )),
+                Some(Color::Rgb(r, g, b)) => {
+                    params.push(format!("{which};2;{r};{g};{b}"));
+                }
                 _ => (),
             }
         }
@@ -152,7 +149,9 @@ fn single(group: &[u16]) -> Option<u16> {
 }
 
 fn rgb(r: u16, g: u16, b: u16) -> Option<Color> {
-    (r <= 255 && g <= 255 && b <= 255).then_some(Color::Rgb(
-        (u32::from(r) << 16) | (u32::from(g) << 8) | u32::from(b),
+    Some(Color::Rgb(
+        r.try_into().ok()?,
+        g.try_into().ok()?,
+        b.try_into().ok()?,
     ))
 }

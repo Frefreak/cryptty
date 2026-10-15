@@ -52,12 +52,12 @@ impl Terminal {
             }
             8 if params.len() >= 3 => {
                 let uri = params[2..].join(&b';');
-                self.hyperlink = std::str::from_utf8(&uri)
+                self.hyperlink = String::from_utf8(uri)
                     .ok()
                     .filter(|s| {
                         !s.is_empty() && !s.chars().any(char::is_control)
                     })
-                    .map(Arc::from);
+                    .map(Arc::new);
             }
             10..=12 => {
                 for (offset, value) in params[1..].iter().enumerate() {

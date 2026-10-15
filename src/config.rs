@@ -1,5 +1,5 @@
 use std::ffi::OsString;
-use std::io::{Read, Write};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
@@ -53,37 +53,9 @@ impl Config {
                         )
                     })?;
                 }
-                match std::fs::OpenOptions::new()
-                    .read(true)
-                    .append(true)
-                    .create_new(true)
-                    .open(path)
-                {
-                    Ok(mut file) => {
-                        return Self::append_defaults(&mut file).with_context(
-                            || {
-                                format!(
-                                    "Cannot initialize config {}",
-                                    path.display()
-                                )
-                            },
-                        );
-                    }
-                    Err(error)
-                        if error.kind()
-                            == std::io::ErrorKind::AlreadyExists =>
-                    {
-                        let text = std::fs::read_to_string(path).with_context(
-                            || format!("Cannot read config {}", path.display()),
-                        )?;
-                        return Self::read_existing(path, &text);
-                    }
-                    Err(error) => {
-                        return Err(error).with_context(|| {
-                            format!("Cannot create config {}", path.display())
-                        });
-                    }
-                }
+                return Self::update_defaults(path).with_context(|| {
+                    format!("Cannot initialize config {}", path.display())
+                });
             }
             Err(error) => {
                 return Err(error).with_context(|| {
@@ -97,18 +69,12 @@ impl Config {
     fn read_existing(path: &Path, text: &str) -> Result<Self> {
         let config = Self::parse(text)
             .with_context(|| format!("Invalid config {}", path.display()))?;
-        if !defaults::additions(text)?.is_empty() {
-            let result = (|| -> Result<Self> {
-                let mut file = std::fs::OpenOptions::new()
-                    .read(true)
-                    .append(true)
-                    .open(path)?;
-                Self::append_defaults(&mut file)
-            })();
+        if defaults::updated(text)? != text {
+            let result = Self::update_defaults(path);
             match result {
                 Ok(config) => return Ok(config),
                 Err(error) => eprintln!(
-                    "Warning: cannot append default comments to {}: {error}",
+                    "Warning: cannot update default comments to {}: {error}",
                     path.display()
                 ),
             }
@@ -116,13 +82,49 @@ impl Config {
         Ok(config)
     }
 
-    fn append_defaults(file: &mut std::fs::File) -> Result<Self> {
-        file.lock()?;
-        let mut text = String::new();
-        file.read_to_string(&mut text)?;
+    fn update_defaults(path: &Path) -> Result<Self> {
+        let path = match std::fs::canonicalize(path) {
+            Ok(path) => path,
+            Err(error)
+                if error.kind() == std::io::ErrorKind::NotFound
+                    && !path.is_symlink() =>
+            {
+                path.to_path_buf()
+            }
+            Err(error) => return Err(error.into()),
+        };
+        let lock = std::fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path.with_extension("yaml.lock"))?;
+        lock.lock()?;
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                String::new()
+            }
+            Err(error) => return Err(error.into()),
+        };
         let config = Self::parse(&text)?;
-        let additions = defaults::additions(&text)?;
-        file.write_all(additions.as_bytes())?;
+        let updated = defaults::updated(&text)?;
+        if updated != text {
+            let parent = path
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or_else(|| Path::new("."));
+            let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
+            temporary.write_all(updated.as_bytes())?;
+            if let Ok(metadata) = std::fs::metadata(&path) {
+                let permissions = metadata.permissions();
+                if permissions.readonly() {
+                    bail!("Config file is read-only");
+                }
+                temporary.as_file().set_permissions(permissions)?;
+            }
+            temporary.persist(&path)?;
+        }
         Ok(config)
     }
 }
