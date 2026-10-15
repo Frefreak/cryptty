@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 use std::ffi::OsString;
 use std::io::{Read, Write};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
 use std::thread;
 
@@ -21,6 +22,7 @@ pub struct Pty {
     child: Box<dyn Child + Send + Sync>,
     input: SyncSender<Vec<u8>>,
     pub output: Receiver<Event>,
+    output_pending: Arc<AtomicBool>,
     pending: VecDeque<Vec<u8>>,
     pending_bytes: usize,
 }
@@ -53,6 +55,8 @@ impl Pty {
         let (input, input_rx) = mpsc::sync_channel::<Vec<u8>>(64);
         let wake = Arc::new(wake);
         let reader_wake = wake.clone();
+        let output_pending = Arc::new(AtomicBool::new(false));
+        let reader_pending = output_pending.clone();
         let errors = output_tx.clone();
         thread::spawn(move || {
             let mut bytes = [0; 8192];
@@ -71,7 +75,9 @@ impl Pty {
                 if output_tx.send(event).is_err() {
                     break;
                 }
-                reader_wake();
+                if !reader_pending.swap(true, Ordering::AcqRel) {
+                    reader_wake();
+                }
                 if finished {
                     break;
                 }
@@ -92,9 +98,15 @@ impl Pty {
             child,
             input,
             output,
+            output_pending,
             pending: VecDeque::new(),
             pending_bytes: 0,
         })
+    }
+
+    // The consumer must schedule another batch if it stops before draining.
+    pub fn begin_output_batch(&self) {
+        self.output_pending.store(false, Ordering::Release);
     }
 
     // False means the bounded backlog rejected this input without closing.

@@ -171,7 +171,8 @@ fn combining_mark_does_not_advance_cursor() {
 fn scrolling_reuses_rows_and_clears_combining_marks() {
     let mut t = Terminal::new(4, 4);
     t.feed("AAAA\r\ne\u{301}bbb\r\nCCCC\r\nDDDD".as_bytes());
-    let mut allocations: Vec<_> = t.rows.iter().map(|r| r.as_ptr()).collect();
+    let mut allocations: Vec<_> =
+        t.rows.iter().map(|r| r.storage_id()).collect();
     allocations.sort();
     t.feed(b"\x1b[2;3r\x1b[31m\x1b[99T");
     assert_eq!(row(&t, 0), "AAAA");
@@ -179,13 +180,15 @@ fn scrolling_reuses_rows_and_clears_combining_marks() {
     assert_eq!(row(&t, 2), "    ");
     assert_eq!(row(&t, 3), "DDDD");
     assert!(
-        t.rows[1..3]
+        t.rows
             .iter()
+            .skip(1)
+            .take(2)
             .flatten()
             .all(|c| t.color(c.style.fg) == PALETTE[1])
     );
     t.feed(b"\x1b[99S");
-    let mut reused: Vec<_> = t.rows.iter().map(|r| r.as_ptr()).collect();
+    let mut reused: Vec<_> = t.rows.iter().map(|r| r.storage_id()).collect();
     reused.sort();
     assert_eq!(allocations, reused);
     valid(&t);

@@ -91,6 +91,7 @@ fn blocked_input_is_retained_and_retried() {
         assert!(Instant::now() < deadline, "{output}");
         let _ = wake_rx.recv_timeout(Duration::from_millis(50));
         pty.flush_input().unwrap();
+        pty.begin_output_batch();
         while let Ok(event) = pty.output.try_recv() {
             match event {
                 Event::Output(bytes) => {
@@ -138,4 +139,89 @@ fn output_keeps_flowing_while_input_waits() {
         }
     }
     assert_eq!(output.len(), 5 + 8192 * 100 + 4);
+}
+
+#[test]
+fn coalesced_output_wakes_resume_after_each_bounded_batch() {
+    let command: Vec<OsString> = [
+        "/bin/sh",
+        "-c",
+        "stty raw -echo; head -c 1048576 /dev/zero; printf DONE",
+    ]
+    .into_iter()
+    .map(Into::into)
+    .collect();
+    let (wake_tx, wake_rx) = std::sync::mpsc::channel();
+    let pty = Pty::spawn(&command, PtySize::default(), move || {
+        let _ = wake_tx.send(());
+    })
+    .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut output = Vec::new();
+    let mut scheduled = false;
+    'receive: loop {
+        if !scheduled {
+            wake_rx
+                .recv_timeout(
+                    deadline.saturating_duration_since(Instant::now()),
+                )
+                .unwrap();
+        }
+        assert!(Instant::now() < deadline);
+        pty.begin_output_batch();
+        scheduled = false;
+        for index in 0..32 {
+            match pty.output.try_recv() {
+                Ok(Event::Output(bytes)) => {
+                    output.extend_from_slice(&bytes);
+                    scheduled = index == 31;
+                }
+                Ok(Event::Closed) => break 'receive,
+                Ok(Event::Error(error)) => panic!("{error}"),
+                Err(_) => break,
+            }
+        }
+    }
+    assert_eq!(output.len(), 1048580);
+    assert!(output[..1048576].iter().all(|byte| *byte == 0));
+    assert_eq!(&output[1048576..], b"DONE");
+}
+
+#[test]
+fn output_notifies_again_after_an_idle_interval() {
+    let directory = tempfile::tempdir().unwrap();
+    let gate = directory.path().join("continue");
+    let command: Vec<OsString> = vec![
+        "/bin/sh".into(),
+        "-c".into(),
+        "printf FIRST; while ! test -e \"$1\"; do sleep 0.01; done; printf SECOND".into(),
+        "test".into(),
+        gate.as_os_str().into(),
+    ];
+    let (wake_tx, wake_rx) = std::sync::mpsc::channel();
+    let pty = Pty::spawn(&command, PtySize::default(), move || {
+        let _ = wake_tx.send(());
+    })
+    .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut output = Vec::new();
+    for expected in [b"FIRST".as_slice(), b"FIRSTSECOND".as_slice()] {
+        while output.len() < expected.len() {
+            wake_rx
+                .recv_timeout(
+                    deadline.saturating_duration_since(Instant::now()),
+                )
+                .unwrap();
+            pty.begin_output_batch();
+            while let Ok(event) = pty.output.try_recv() {
+                match event {
+                    Event::Output(bytes) => output.extend_from_slice(&bytes),
+                    Event::Error(error) => panic!("{error}"),
+                    Event::Closed => (),
+                }
+            }
+        }
+        assert_eq!(output, expected);
+        std::fs::write(&gate, []).unwrap();
+    }
 }

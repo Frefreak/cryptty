@@ -127,10 +127,10 @@ impl Terminal {
                 let count = n.min(self.cols() - x);
                 let row = &mut self.rows[y];
                 row.wrapped = None;
-                row[x..].rotate_left(count);
+                row.materialized_mut()[x..].rotate_left(count);
                 let start = row.len() - count;
-                row[start..].fill(Cell::blank(self.style));
-                Self::repair_row(row);
+                row.materialized_mut()[start..].fill(Cell::blank(self.style));
+                Self::repair_row(row.materialized_mut());
             }
             '@' => self.insert_characters(n),
             'L' | 'M'

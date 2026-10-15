@@ -340,11 +340,14 @@ impl ApplicationHandler<()> for App {
                 return;
             }
         }
+        view.pty.begin_output_batch();
         // Bound each batch so keyboard and window events can run under load.
         let mut changed = false;
+        let mut processed = 0;
         for _ in 0..32 {
             match view.pty.output.try_recv() {
                 Ok(pty::Event::Output(bytes)) => {
+                    processed += 1;
                     view.clear_selection();
                     if view.terminal.hovered_link.is_some() {
                         view.renderer.invalidate();
@@ -374,6 +377,9 @@ impl ApplicationHandler<()> for App {
                 }
                 Err(_) => break,
             }
+        }
+        if processed == 32 {
+            let _ = self.proxy.send_event(());
         }
         view.update_title();
         if changed {

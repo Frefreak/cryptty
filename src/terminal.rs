@@ -106,53 +106,211 @@ impl Cell {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct Row {
     cells: Vec<Cell>,
+    // Only this prefix is visible; the suffix reads as `blank`.
+    occupied: usize,
+    blank: Cell,
     pub wrapped: Option<usize>,
 }
 
 impl Row {
     fn new(cols: usize, style: Style) -> Self {
+        let blank = Cell::blank(style);
         Self {
-            cells: vec![Cell::blank(style); cols],
+            cells: vec![blank.clone(); cols],
+            occupied: 0,
+            blank,
             wrapped: None,
         }
     }
 
     fn clear(&mut self, style: Style) {
-        for cell in &mut self.cells {
-            *cell = Cell::blank(style);
-        }
+        self.occupied = 0;
+        self.blank = Cell::blank(style);
         self.wrapped = None;
+    }
+
+    #[inline(always)]
+    fn prepare(&mut self, col: usize) {
+        if col > self.occupied {
+            self.cells[self.occupied..col].fill(self.blank.clone());
+        }
+    }
+
+    #[inline(always)]
+    fn set(&mut self, col: usize, cell: Cell) {
+        self.prepare(col);
+        self.cells[col] = cell;
+        self.occupied = self.occupied.max(col + 1);
+    }
+
+    #[inline(always)]
+    fn write_text(
+        &mut self,
+        col: usize,
+        ch: char,
+        wide: bool,
+        style: &Style,
+        hyperlink: &Option<Arc<String>>,
+    ) {
+        self.prepare(col);
+        let cell = &mut self.cells[col];
+        cell.content = Content::Text {
+            text: CellText::new(ch),
+            wide,
+        };
+        cell.style = *style;
+        cell.hyperlink.clone_from(hyperlink);
+        self.occupied = self.occupied.max(col + 1);
+    }
+
+    #[inline(always)]
+    fn write_continuation(
+        &mut self,
+        col: usize,
+        style: &Style,
+        hyperlink: &Option<Arc<String>>,
+    ) {
+        self.prepare(col);
+        let cell = &mut self.cells[col];
+        cell.content = Content::Continuation;
+        cell.style = *style;
+        cell.hyperlink.clone_from(hyperlink);
+        self.occupied = self.occupied.max(col + 1);
+    }
+
+    fn cell_mut(&mut self, col: usize) -> &mut Cell {
+        if col >= self.occupied {
+            self.prepare(col + 1);
+            self.occupied = col + 1;
+        }
+        &mut self.cells[col]
+    }
+
+    fn materialized_mut(&mut self) -> &mut [Cell] {
+        self.prepare(self.len());
+        self.occupied = self.len();
+        &mut self.cells
     }
 
     fn fill(&mut self, cell: Cell) {
         self.cells.fill(cell);
+        self.occupied = self.len();
         self.wrapped = None;
     }
-}
 
-impl std::ops::Deref for Row {
-    type Target = [Cell];
+    pub fn len(&self) -> usize {
+        self.cells.len()
+    }
 
-    fn deref(&self) -> &Self::Target {
-        &self.cells
+    pub fn is_empty(&self) -> bool {
+        self.cells.is_empty()
+    }
+
+    pub fn get(&self, col: usize) -> Option<&Cell> {
+        (col < self.len()).then(|| &self[col])
+    }
+
+    /// Identifies the allocation, independently of its logical contents.
+    pub fn storage_id(&self) -> usize {
+        self.cells.as_ptr() as usize
+    }
+
+    pub fn iter(&self) -> RowIter<'_> {
+        RowIter {
+            row: self,
+            indices: 0..self.len(),
+        }
     }
 }
 
-impl std::ops::DerefMut for Row {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.cells
+impl Clone for Row {
+    fn clone(&self) -> Self {
+        let mut cells = self.cells[..self.occupied].to_vec();
+        cells.resize(self.len(), self.blank.clone());
+        Self {
+            cells,
+            occupied: self.occupied,
+            blank: self.blank.clone(),
+            wrapped: self.wrapped,
+        }
+    }
+
+    fn clone_from(&mut self, source: &Self) {
+        self.cells.truncate(source.occupied);
+        for (target, source) in self.cells.iter_mut().zip(&source.cells) {
+            target.clone_from(source);
+        }
+        self.cells.extend_from_slice(
+            &source.cells[self.cells.len()..source.occupied],
+        );
+        self.cells.resize(source.len(), source.blank.clone());
+        self.occupied = source.occupied;
+        self.blank.clone_from(&source.blank);
+        self.wrapped = source.wrapped;
     }
 }
+
+impl PartialEq for Row {
+    fn eq(&self, other: &Self) -> bool {
+        self.wrapped == other.wrapped && self.iter().eq(other.iter())
+    }
+}
+
+impl Eq for Row {}
+
+impl std::ops::Index<usize> for Row {
+    type Output = Cell;
+
+    fn index(&self, col: usize) -> &Cell {
+        assert!(col < self.len());
+        if col < self.occupied {
+            &self.cells[col]
+        } else {
+            &self.blank
+        }
+    }
+}
+
+impl std::ops::IndexMut<usize> for Row {
+    fn index_mut(&mut self, col: usize) -> &mut Cell {
+        self.cell_mut(col)
+    }
+}
+
+pub struct RowIter<'a> {
+    row: &'a Row,
+    indices: std::ops::Range<usize>,
+}
+
+impl<'a> Iterator for RowIter<'a> {
+    type Item = &'a Cell;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.indices.next().map(|col| &self.row[col])
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.indices.size_hint()
+    }
+}
+
+impl DoubleEndedIterator for RowIter<'_> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.indices.next_back().map(|col| &self.row[col])
+    }
+}
+
+impl ExactSizeIterator for RowIter<'_> {}
 
 impl<'a> IntoIterator for &'a Row {
     type Item = &'a Cell;
-    type IntoIter = std::slice::Iter<'a, Cell>;
+    type IntoIter = RowIter<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.cells.iter()
+        self.iter()
     }
 }
 
@@ -184,7 +342,7 @@ impl Default for SavedCursor {
 }
 
 struct InactiveScreen {
-    rows: Vec<Row>,
+    rows: VecDeque<Row>,
     cursor: (usize, usize),
     saved: SavedCursor,
     pending_wrap: bool,
@@ -206,7 +364,7 @@ pub struct Terminal {
     initial_theme: Theme,
     palette: [u32; 256],
     pub color_revision: u64,
-    pub rows: Vec<Row>,
+    pub rows: VecDeque<Row>,
     history: VecDeque<Row>,
     pub selection: Option<TextRange>,
     pub hovered_link: Option<TextRange>,
@@ -256,7 +414,8 @@ impl Terminal {
     pub fn with_theme(cols: usize, rows: usize, theme: Theme) -> Self {
         let (cols, rows) = (cols.max(2), rows.max(1));
         let style = Style::default();
-        let rows = vec![Row::new(cols, style); rows];
+        let rows: VecDeque<_> =
+            (0..rows).map(|_| Row::new(cols, style)).collect();
         let inactive = InactiveScreen {
             rows: rows.clone(),
             cursor: (0, 0),
@@ -323,7 +482,7 @@ impl Terminal {
     }
 
     pub fn cols(&self) -> usize {
-        self.rows[0].len()
+        self.tabs.len()
     }
 
     pub fn color(&self, color: Color) -> u32 {
@@ -420,7 +579,7 @@ impl Terminal {
     }
 
     fn resize_screen(
-        screen: &mut Vec<Row>,
+        screen: &mut VecDeque<Row>,
         cursor: &mut (usize, usize),
         cols: usize,
         rows: usize,
@@ -439,8 +598,10 @@ impl Terminal {
             if row.len() != cols {
                 row.wrapped = None;
             }
+            row.materialized_mut();
             row.cells.resize(cols, blank.clone());
-            Self::repair_row(row);
+            row.occupied = cols;
+            Self::repair_row(row.materialized_mut());
         }
         cursor.0 = cursor.0.min(cols - 1);
         cursor.1 = cursor.1.min(rows - 1);
@@ -453,15 +614,18 @@ impl Terminal {
         }
         // Detach the parser while it calls back into the terminal model.
         let mut parser = self.parser.take().expect("parser outside feed");
+        let mut performer = parser::Buffered::new(self);
         let mut bytes = bytes;
         while let Some(index) = memchr::memchr2(0x18, 0x1a, bytes) {
-            parser.advance(self, &bytes[..index]);
-            self.cancelling = true;
-            parser.advance(self, &bytes[index..index + 1]);
-            self.cancelling = false;
+            parser.advance(&mut performer, &bytes[..index]);
+            performer.flush();
+            performer.terminal.cancelling = true;
+            parser.advance(&mut performer, &bytes[index..index + 1]);
+            performer.terminal.cancelling = false;
             bytes = &bytes[index + 1..];
         }
-        parser.advance(self, bytes);
+        parser.advance(&mut performer, bytes);
+        performer.flush();
         self.parser = Some(parser);
         std::mem::take(&mut self.replies)
     }
@@ -505,19 +669,84 @@ impl Terminal {
         }
     }
 
+    fn print_ascii(&mut self, mut bytes: &[u8]) {
+        while let Some(&first) = bytes.first() {
+            let (x, y) = self.cursor;
+            if self.pending_wrap
+                || self.insert_mode
+                || self.charsets[self.active_charset]
+                || x + 1 == self.cols()
+                || !matches!(
+                    self.rows[y][x].content,
+                    Content::Text { wide: false, .. }
+                )
+            {
+                vte::Perform::print(self, char::from(first));
+                bytes = &bytes[1..];
+                continue;
+            }
+            let end = (x + bytes.len()).min(self.cols() - 1);
+            let row = &mut self.rows[y];
+            let end = if x >= row.occupied {
+                end
+            } else {
+                row.cells[x..end.min(row.occupied)]
+                    .iter()
+                    .position(|cell| {
+                        !matches!(
+                            cell.content,
+                            Content::Text { wide: false, .. }
+                        )
+                    })
+                    .map_or(end, |offset| x + offset)
+            };
+            row.prepare(x);
+            let len = end - x;
+            for (cell, &byte) in row.cells[x..end].iter_mut().zip(&bytes[..len])
+            {
+                cell.content = Content::Text {
+                    text: CellText::new(char::from(byte)),
+                    wide: false,
+                };
+                cell.style = self.style;
+                cell.hyperlink.clone_from(&self.hyperlink);
+            }
+            row.occupied = row.occupied.max(end);
+            self.cursor.0 = end;
+            self.preceding = Some(char::from(bytes[len - 1]));
+            bytes = &bytes[len..];
+        }
+    }
+
     #[inline(always)]
     fn put(&mut self, ch: char) {
         let (x, y) = self.cursor;
+        let width = ch.width().unwrap_or(0);
+        if width > 0
+            && !self.pending_wrap
+            && !self.insert_mode
+            && x + width < self.cols()
+            && x >= self.rows[y].occupied
+        {
+            let row = &mut self.rows[y];
+            row.write_text(x, ch, width == 2, &self.style, &self.hyperlink);
+            if width == 2 {
+                row.write_continuation(x + 1, &self.style, &self.hyperlink);
+            }
+            self.cursor.0 += width;
+            return;
+        }
+
         if (' '..='~').contains(&ch)
             && !self.pending_wrap
             && !self.insert_mode
             && x + 1 < self.cols()
-            && let Content::Text { text, wide: false } =
-                &mut self.rows[y][x].content
+            && matches!(
+                self.rows[y][x].content,
+                Content::Text { wide: false, .. }
+            )
         {
-            *text = CellText::new(ch);
-            self.rows[y][x].style = self.style;
-            self.rows[y][x].hyperlink = self.hyperlink.clone();
+            self.rows[y].write_text(x, ch, false, &self.style, &self.hyperlink);
             self.cursor.0 += 1;
             return;
         }
@@ -537,7 +766,9 @@ impl Terminal {
             if matches!(self.rows[y][x].content, Content::Continuation) {
                 x = x.saturating_sub(1);
             }
-            if let Content::Text { text, .. } = &mut self.rows[y][x].content {
+            if let Content::Text { text, .. } =
+                &mut self.rows[y].cell_mut(x).content
+            {
                 text.push_combining(ch);
             }
             return;
@@ -584,20 +815,10 @@ impl Terminal {
                 self.clear_cell(col, y);
             }
         }
-        self.rows[y][x] = Cell {
-            content: Content::Text {
-                text: CellText::new(ch),
-                wide: width == 2,
-            },
-            style: self.style,
-            hyperlink: self.hyperlink.clone(),
-        };
+        let row = &mut self.rows[y];
+        row.write_text(x, ch, width == 2, &self.style, &self.hyperlink);
         if width == 2 {
-            self.rows[y][x + 1] = Cell {
-                content: Content::Continuation,
-                style: self.style,
-                hyperlink: self.hyperlink.clone(),
-            };
+            row.write_continuation(x + 1, &self.style, &self.hyperlink);
         }
         if x + width >= self.cols() {
             self.cursor.0 = self.cols() - 1;
@@ -613,14 +834,14 @@ impl Terminal {
         }
         match self.rows[y][x].content {
             Content::Continuation if x > 0 => {
-                self.rows[y][x - 1] = Cell::blank(self.style);
+                self.rows[y].set(x - 1, Cell::blank(self.style));
             }
             Content::Text { wide: true, .. } if x + 1 < self.cols() => {
-                self.rows[y][x + 1] = Cell::blank(self.style);
+                self.rows[y].set(x + 1, Cell::blank(self.style));
             }
             _ => (),
         }
-        self.rows[y][x] = Cell::blank(self.style);
+        self.rows[y].set(x, Cell::blank(self.style));
     }
 
     fn repair_row(row: &mut [Cell]) {
@@ -663,18 +884,35 @@ impl Terminal {
         }
     }
 
+    fn rotate_rows(&mut self, top: usize, count: usize, up: bool) {
+        if top == 0 && self.scroll_bottom + 1 == self.rows.len() {
+            if up {
+                self.rows.rotate_left(count);
+            } else {
+                self.rows.rotate_right(count);
+            }
+        } else {
+            let region =
+                &mut self.rows.make_contiguous()[top..=self.scroll_bottom];
+            if up {
+                region.rotate_left(count);
+            } else {
+                region.rotate_right(count);
+            }
+        }
+    }
+
     fn scroll_up(&mut self, top: usize, count: usize) {
         if top > 0 {
             self.rows[top - 1].wrapped = None;
         }
-        let region = &mut self.rows[top..=self.scroll_bottom];
-        let count = count.min(region.len());
-        region.rotate_left(count);
-        let start = region.len() - count;
-        if start > 0 {
-            region[start - 1].wrapped = None;
+        let count = count.min(self.scroll_bottom + 1 - top);
+        self.rotate_rows(top, count, true);
+        let start = self.scroll_bottom + 1 - count;
+        if start > top {
+            self.rows[start - 1].wrapped = None;
         }
-        for row in &mut region[start..] {
+        for row in self.rows.range_mut(start..=self.scroll_bottom) {
             if top == 0 && !self.alternate {
                 let blank = if self.history.len() == reflow::HISTORY_LIMIT {
                     let mut oldest = self.history.pop_front().unwrap();
@@ -700,11 +938,10 @@ impl Terminal {
         if top > 0 {
             self.rows[top - 1].wrapped = None;
         }
-        let region = &mut self.rows[top..=self.scroll_bottom];
-        let count = count.min(region.len());
-        region.rotate_right(count);
-        region.last_mut().unwrap().wrapped = None;
-        for row in &mut region[..count] {
+        let count = count.min(self.scroll_bottom + 1 - top);
+        self.rotate_rows(top, count, false);
+        self.rows[self.scroll_bottom].wrapped = None;
+        for row in self.rows.range_mut(top..top + count) {
             row.fill(Cell::blank(self.style));
         }
     }
@@ -758,9 +995,9 @@ impl Terminal {
         let count = count.min(self.cols() - x);
         let row = &mut self.rows[y];
         row.wrapped = None;
-        row[x..].rotate_right(count);
-        row[x..x + count].fill(Cell::blank(self.style));
-        Self::repair_row(row);
+        row.materialized_mut()[x..].rotate_right(count);
+        row.materialized_mut()[x..x + count].fill(Cell::blank(self.style));
+        Self::repair_row(row.materialized_mut());
     }
 
     fn erase_display(&mut self, mode: usize) {

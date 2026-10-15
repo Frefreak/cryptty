@@ -7,7 +7,7 @@ pub(super) const HISTORY_LIMIT: usize = 10_000;
 type Point = (usize, usize);
 
 pub(super) fn resize_primary(
-    screen: &mut Vec<Row>,
+    screen: &mut VecDeque<Row>,
     history: &mut VecDeque<Row>,
     cursor: &mut Point,
     pending_wrap: &mut bool,
@@ -27,7 +27,7 @@ pub(super) fn resize_primary(
         screen.truncate(rows);
     } else {
         let pulled = (rows - screen.len()).min(history.len());
-        let mut prefix: Vec<_> =
+        let mut prefix: VecDeque<_> =
             history.drain(history.len() - pulled..).collect();
         prefix.append(screen);
         *screen = prefix;
@@ -64,7 +64,7 @@ pub(super) fn resize_primary(
         }
         let visible = output.split_off(start);
         history.extend(output);
-        *screen = visible;
+        *screen = visible.into();
         screen.resize_with(rows, || Row::new(cols, Style::default()));
         (*cursor, *pending_wrap) =
             cursor_position(mapped[0], start, cols, rows);

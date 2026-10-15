@@ -194,3 +194,92 @@ fn graphics(ch: char) -> char {
         _ => ch,
     }
 }
+
+pub(super) struct Buffered<'a> {
+    pub(super) terminal: &'a mut Terminal,
+    ascii: [u8; 256],
+    len: usize,
+}
+
+impl<'a> Buffered<'a> {
+    pub(super) fn new(terminal: &'a mut Terminal) -> Self {
+        Self {
+            terminal,
+            ascii: [0; 256],
+            len: 0,
+        }
+    }
+
+    #[inline]
+    pub(super) fn flush(&mut self) {
+        if self.len == 0 {
+            return;
+        }
+        self.terminal.print_ascii(&self.ascii[..self.len]);
+        self.len = 0;
+    }
+}
+
+impl Perform for Buffered<'_> {
+    #[inline(always)]
+    fn print(&mut self, ch: char) {
+        if (' '..='~').contains(&ch) {
+            self.ascii[self.len] = ch as u8;
+            self.len += 1;
+            if self.len == self.ascii.len() {
+                self.flush();
+            }
+        } else {
+            self.flush();
+            self.terminal.print(ch);
+        }
+    }
+
+    fn execute(&mut self, byte: u8) {
+        self.flush();
+        self.terminal.execute(byte);
+    }
+
+    fn esc_dispatch(&mut self, intermediates: &[u8], ignore: bool, byte: u8) {
+        self.flush();
+        self.terminal.esc_dispatch(intermediates, ignore, byte);
+    }
+
+    fn csi_dispatch(
+        &mut self,
+        params: &Params,
+        intermediates: &[u8],
+        ignore: bool,
+        action: char,
+    ) {
+        self.flush();
+        self.terminal
+            .csi_dispatch(params, intermediates, ignore, action);
+    }
+
+    fn osc_dispatch(&mut self, params: &[&[u8]], bell_terminated: bool) {
+        self.flush();
+        self.terminal.osc_dispatch(params, bell_terminated);
+    }
+
+    fn hook(
+        &mut self,
+        params: &Params,
+        intermediates: &[u8],
+        ignore: bool,
+        action: char,
+    ) {
+        self.flush();
+        self.terminal.hook(params, intermediates, ignore, action);
+    }
+
+    fn put(&mut self, byte: u8) {
+        self.flush();
+        vte::Perform::put(self.terminal, byte);
+    }
+
+    fn unhook(&mut self) {
+        self.flush();
+        self.terminal.unhook();
+    }
+}

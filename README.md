@@ -67,3 +67,5 @@ or version metadata are required.
 On macOS, fonts use CoreText through crossfont and follow the system's
 font-smoothing setting. On Linux, fonts use Swash; `font.hinting` applies
 to that renderer.
+
+See [throughput optimization and measurements](docs/performance.md).
