@@ -32,6 +32,38 @@ pub struct Link {
 }
 
 impl Terminal {
+    pub(super) fn scroll_selection(
+        &mut self,
+        top: usize,
+        count: usize,
+        up: bool,
+    ) {
+        let Some(mut range) = self.selection else {
+            return;
+        };
+        let last = range.end.row - usize::from(range.end.col == 0);
+        let bottom = self.scroll_bottom;
+        if last < top || range.start.row > bottom {
+            return;
+        }
+        if range.start.row < top
+            || last > bottom
+            || (up && range.start.row < top + count)
+            || (!up && last + count > bottom)
+        {
+            self.selection = None;
+        } else {
+            if up {
+                range.start.row -= count;
+                range.end.row -= count;
+            } else {
+                range.start.row += count;
+                range.end.row += count;
+            }
+            self.selection = Some(range);
+        }
+    }
+
     fn logical_rows(&self, row: usize) -> (usize, usize) {
         let mut first = row;
         while first > 0 && self.rows[first - 1].wrapped.is_some() {

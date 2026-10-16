@@ -4,9 +4,21 @@ use anyhow::Result;
 use serde_yaml_ng::{Mapping, Value};
 
 pub(super) fn updated(text: &str) -> Result<String> {
-    let defaults =
+    insert_missing(text, &values()?)
+}
+
+fn values() -> Result<Value> {
+    let mut defaults: Value =
         serde_yaml_ng::from_str(include_str!("../default-config.yaml"))?;
-    insert_missing(text, &defaults)
+    if cfg!(target_os = "macos") {
+        defaults["font"]["codepoint_map"]
+            .as_sequence_mut()
+            .expect("Default font mappings are a list")
+            .push(serde_yaml_ng::from_str(include_str!(
+                "../default-font-macos.yaml"
+            ))?);
+    }
+    Ok(defaults)
 }
 
 fn insert_missing(text: &str, defaults: &Value) -> Result<String> {
@@ -95,10 +107,11 @@ fn block_position(text: &str, target: &[String]) -> Option<(usize, usize)> {
     None
 }
 
-fn commented_fields(text: &str) -> BTreeMap<Vec<String>, Value> {
-    let mut fields = BTreeMap::new();
+fn commented_fields(text: &str) -> BTreeMap<Vec<String>, Vec<Value>> {
+    let mut fields: BTreeMap<Vec<String>, Vec<Value>> = BTreeMap::new();
     let mut parents: Vec<(usize, String)> = Vec::new();
-    for line in text.lines() {
+    let lines: Vec<_> = text.lines().collect();
+    for (index, &line) in lines.iter().enumerate() {
         let (yaml, commented) = match line.trim_start().strip_prefix("# ") {
             Some(comment) => (comment, true),
             None => (line, false),
@@ -120,13 +133,40 @@ fn commented_fields(text: &str) -> BTreeMap<Vec<String>, Value> {
         }
         let (key, value) = mapping.into_iter().next().unwrap();
         let Some(key) = key.as_str() else { continue };
+        if value.is_null() && commented {
+            let mut block = yaml.to_string();
+            for next in &lines[index + 1..] {
+                let Some(child) = next.trim_start().strip_prefix("# ") else {
+                    break;
+                };
+                let child_indent = next.len() - next.trim_start().len()
+                    + child.len()
+                    - child.trim_start().len();
+                if child_indent < indent
+                    || (child_indent == indent
+                        && !child.trim_start().starts_with("- "))
+                {
+                    break;
+                }
+                block.push('\n');
+                block.push_str(child);
+            }
+            if let Ok(parsed) = serde_yaml_ng::from_str::<Mapping>(&block)
+                && let Some(value @ Value::Sequence(_)) = parsed.get(key)
+            {
+                let mut path: Vec<_> =
+                    parents.iter().map(|(_, k)| k.clone()).collect();
+                path.push(key.to_string());
+                fields.entry(path).or_default().push(value.clone());
+            }
+        }
         if value.is_null() {
             parents.push((indent, key.to_string()));
         } else if commented {
             let mut path: Vec<_> =
                 parents.iter().map(|(_, k)| k.clone()).collect();
             path.push(key.to_string());
-            fields.insert(path, value);
+            fields.entry(path).or_default().push(value);
         }
     }
     fields
@@ -136,7 +176,7 @@ fn missing(
     defaults: &Value,
     existing: Option<&Value>,
     path: &[String],
-    comments: &BTreeMap<Vec<String>, Value>,
+    comments: &BTreeMap<Vec<String>, Vec<Value>>,
 ) -> Option<Value> {
     if let Value::Mapping(fields) = defaults {
         let mut result = Mapping::new();
@@ -156,8 +196,11 @@ fn missing(
         }
         (!result.is_empty()).then_some(Value::Mapping(result))
     } else {
-        (existing.is_none() && comments.get(path) != Some(defaults))
-            .then(|| defaults.clone())
+        (existing.is_none()
+            && !comments
+                .get(path)
+                .is_some_and(|values| values.contains(defaults)))
+        .then(|| defaults.clone())
     }
 }
 
@@ -231,10 +274,8 @@ mod tests {
 
     #[test]
     fn documented_defaults_match_runtime_defaults() {
-        let documented = crate::config::Config::parse(include_str!(
-            "../default-config.yaml"
-        ))
-        .unwrap();
+        let documented: crate::config::Config =
+            serde_yaml_ng::from_value(values().unwrap()).unwrap();
         let runtime = crate::config::Config::default();
         assert_eq!(
             documented.font.size.pixels(1.0),
@@ -242,6 +283,7 @@ mod tests {
         );
         assert_eq!(documented.font.hinting, runtime.font.hinting);
         assert_eq!(documented.font.family, runtime.font.family);
+        assert_eq!(documented.font.codepoint_map, runtime.font.codepoint_map);
         assert_eq!(
             documented.window.padding.physical(1.0),
             runtime.window.padding.physical(1.0)

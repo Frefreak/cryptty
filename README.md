@@ -66,10 +66,15 @@ cargo test gpu_pixels_match_software -- --ignored
 Terminal compatibility covers alternate screens, bracketed paste,
 focus/mouse reporting, richer text styles, and common OSC commands.
 See [supported sequences and checks](docs/terminal-compatibility.md).
-Drag to select and copy to the system clipboard. Paste with Ctrl-Shift-V
-on both platforms, or Shift-Insert. Double-click selects a whitespace-delimited
+Drag to select and copy to the system clipboard. Paste with Ctrl-Shift-V,
+Shift-Insert, or middle-click on both platforms. During application mouse
+capture, use Shift-middle-click to paste from the system clipboard.
+Double-click selects a whitespace-delimited
 word; triple-click selects a logical line, including soft-wrapped rows.
 Dragging after either click extends the selection by words or lines.
+Selection survives unrelated output and follows scrolling while its text
+remains visible. Overwriting the selected text, switching screens, resizing,
+starting a new selection, or pasting clears it. Copying retains plain text.
 Ctrl-Shift-N opens a fresh shell in
 a new window, using the original launch directory and renderer options.
 Ctrl-click opens HTTP/HTTPS links, including OSC 8 targets and plain URLs
@@ -91,12 +96,12 @@ the setting under that key:
 
 ```yaml
 font:
-  family: Alacritty Fantasque WenKai Mono
+  family: FantasqueSansM Nerd Font Mono
   size: 19
 ```
 
 Font size uses points. On startup, Cryptty appends default comments for
-missing fields. A matching latest comment under the same keys prevents a
+missing fields. A matching comment under the same keys prevents a
 repeat notice. Existing values and comments stay intact. No block markers
 or version metadata are required.
 
@@ -113,6 +118,19 @@ font:
       family: DejaVu Sans Mono
 ```
 
+The built-in defaults use FantasqueSansM Nerd Font Mono at 19 pt, with
+LXGW WenKai Mono Screen mapped to CJK ideographs, punctuation, and fullwidth
+forms. Install both families to obtain this appearance. The ranges are
+`U+2E80-U+9FFF`, `U+F900-U+FAFF`, `U+FE10-U+FE1F`, `U+FE30-U+FE4F`,
+`U+FF00-U+FFEF`, and `U+20000-U+3FFFF`. An explicit `codepoint_map` replaces
+the default list; use `codepoint_map: []` to disable it.
+
+On macOS, the defaults also map `⏎ ▲ ▼` (`U+23CE`, `U+25B2`, `U+25BC`)
+and box drawing/block elements (`U+2500-U+259F`) to the system Menlo font.
+Keep this entry alongside the CJK entry when supplying an explicit list.
+Shade texture and margins still follow the font; generated block rendering
+remains planned.
+
 Add multiple entries for different families; later entries take priority
 where ranges overlap. Ranges accept Unicode scalar values in `U+HEX` or
 `U+HEX-U+HEX` form. Bold and italic select matching faces when available.
@@ -120,7 +138,8 @@ An unavailable family warns and falls back to the primary family. A missing
 glyph follows the normal fallback path.
 
 Mapped and fallback glyphs fit the primary font's cell dimensions without
-changing Unicode column widths. Block elements share a full-block reference
+changing Unicode column widths. Resized glyphs are vertically centered in
+the cell; ordinary text keeps its baseline. Block elements share a full-block reference
 so half blocks retain their proportions. Shading and outline details still
 follow the selected font. The primary family and size define the grid.
 

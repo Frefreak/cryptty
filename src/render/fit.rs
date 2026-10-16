@@ -16,13 +16,18 @@ pub(super) fn glyph(
         .min(1.0);
     let new_width = (old.width as f32 * scale).round().max(1.0) as u32;
     let new_height = (old.height as f32 * scale).round().max(1.0) as u32;
-    if (new_width, new_height) != (old.width, old.height) {
+    let resized = (new_width, new_height) != (old.width, old.height);
+    if resized {
         image.data = resize(&image, new_width, new_height);
     }
     let offset = (width as f32 - advance * scale).max(0.0) / 2.0;
     image.placement.left = ((old.left as f32 * scale + offset).round() as i32)
         .clamp(0, (width - new_width as usize) as i32);
-    image.placement.top = (old.top as f32 * scale).round() as i32;
+    image.placement.top = if resized {
+        baseline - ((height - new_height as usize) / 2) as i32
+    } else {
+        old.top
+    };
     image.placement.top = image
         .placement
         .top
@@ -189,5 +194,16 @@ mod tests {
         let fitted = glyph(source, 4.0, (6, 10, 8));
         assert_eq!(fitted.placement.top, 5);
         assert_eq!((fitted.placement.width, fitted.placement.height), (3, 4));
+    }
+
+    #[test]
+    fn resized_glyphs_are_vertically_centered() {
+        for top in [2, 10, 20] {
+            let mut source = image(Content::Mask, 8, 12, vec![255; 96]);
+            source.placement.top = top;
+            let fitted = glyph(source, 8.0, (4, 16, 12));
+            assert_eq!(fitted.placement.height, 6);
+            assert_eq!(12 - fitted.placement.top, 5);
+        }
     }
 }

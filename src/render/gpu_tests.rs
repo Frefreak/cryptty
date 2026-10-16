@@ -40,6 +40,7 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
     let config = crate::config::Config::parse(&format!(
         "font: {{codepoint_map: [{{ranges: ['U+23CE', 'U+2580-U+25FF'], family: {mapped_family:?}}}]}}"
     )).unwrap();
+    let defaults = crate::config::Font::default();
     for (font_size, mapped) in
         [(19.0, false), (19.0, true), (38.0, false), (38.0, true)]
     {
@@ -47,11 +48,11 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
             font_size,
             (3, 5),
             false,
-            &crate::config::Font::default().family,
+            &defaults.family,
             if mapped {
                 &config.font.codepoint_map
             } else {
-                &[]
+                &defaults.codepoint_map
             },
         )
         .unwrap();

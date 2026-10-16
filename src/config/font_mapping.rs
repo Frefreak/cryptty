@@ -2,7 +2,7 @@ use std::ops::RangeInclusive;
 
 use serde::Deserialize;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(try_from = "RawMapping")]
 pub struct FontMapping {
     ranges: Vec<CodepointRange>,
@@ -31,6 +31,36 @@ impl TryFrom<RawMapping> for FontMapping {
 }
 
 impl FontMapping {
+    pub(super) fn defaults() -> Vec<Self> {
+        let mut mappings = vec![Self::cjk_default()];
+        if cfg!(target_os = "macos") {
+            mappings.push(
+                serde_yaml_ng::from_str(include_str!(
+                    "../default-font-macos.yaml"
+                ))
+                .expect("Valid built-in macOS font mapping"),
+            );
+        }
+        mappings
+    }
+
+    fn cjk_default() -> Self {
+        Self {
+            ranges: [
+                '\u{2e80}'..='\u{9fff}',
+                '\u{f900}'..='\u{faff}',
+                '\u{fe10}'..='\u{fe1f}',
+                '\u{fe30}'..='\u{fe4f}',
+                '\u{ff00}'..='\u{ffef}',
+                '\u{20000}'..='\u{3ffff}',
+            ]
+            .into_iter()
+            .map(CodepointRange)
+            .collect(),
+            family: "LXGW WenKai Mono Screen".to_string(),
+        }
+    }
+
     pub fn contains(&self, ch: char) -> bool {
         self.ranges.iter().any(|range| range.0.contains(&ch))
     }
@@ -40,7 +70,7 @@ impl FontMapping {
     }
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(try_from = "String")]
 struct CodepointRange(RangeInclusive<char>);
 

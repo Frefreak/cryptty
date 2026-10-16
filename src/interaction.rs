@@ -59,6 +59,39 @@ impl Interaction {
         self.clicks = Clicks::default();
     }
 
+    fn selection_after_output(
+        &mut self,
+        previous: Option<TextRange>,
+        current: Option<TextRange>,
+    ) -> bool {
+        if previous == current {
+            if current.is_none() {
+                self.selection_anchor = None;
+            }
+            return false;
+        }
+        self.clicks = Clicks::default();
+        if let (Some(before), Some(after)) = (previous, current) {
+            let delta = after.start.row as isize - before.start.row as isize;
+            let shift = |position: &mut Position| {
+                position.row = position.row.saturating_add_signed(delta);
+            };
+            match &mut self.selection_anchor {
+                Some(SelectionAnchor::Character(position)) => shift(position),
+                Some(
+                    SelectionAnchor::Word(range) | SelectionAnchor::Line(range),
+                ) => {
+                    shift(&mut range.start);
+                    shift(&mut range.end);
+                }
+                None => (),
+            }
+        } else {
+            self.selection_anchor = None;
+        }
+        true
+    }
+
     fn clipboard(&mut self) -> Result<&mut arboard::Clipboard> {
         if self.clipboard.is_none() {
             self.clipboard = Some(arboard::Clipboard::new()?);
@@ -90,6 +123,18 @@ impl View {
         }
         self.interaction.selection_anchor = None;
         self.interaction.clicks = Clicks::default();
+    }
+
+    pub(super) fn selection_after_output(
+        &mut self,
+        previous: Option<TextRange>,
+    ) {
+        if self
+            .interaction
+            .selection_after_output(previous, self.terminal.selection)
+        {
+            self.renderer.invalidate();
+        }
     }
 
     pub(super) fn pointer_left(&mut self) {
@@ -178,6 +223,8 @@ impl View {
     pub(super) fn paste(&mut self) {
         let result = (|| -> Result<()> {
             let text = self.interaction.clipboard()?.get_text()?;
+            self.clear_selection();
+            self.window.request_redraw();
             self.send_input(input::paste(&text, self.terminal.bracketed_paste))
         })();
         if let Err(error) = result {
@@ -310,6 +357,10 @@ impl View {
             self.update_selection(anchor);
             return Ok(());
         }
+        if !released && index == 1 && available {
+            self.paste();
+            return Ok(());
+        }
         if !released && available {
             return Ok(());
         }
@@ -389,6 +440,47 @@ fn open_link(uri: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn output_clears_pending_drag_without_interrupting_double_clicks() {
+        let mut interaction = Interaction::default();
+        let cell = Position { row: 1, col: 2 };
+        let now = Instant::now();
+        assert_eq!(interaction.clicks.press(now, cell), 1);
+        interaction.selection_anchor = Some(SelectionAnchor::Character(cell));
+        assert!(!interaction.selection_after_output(None, None));
+        assert!(interaction.selection_anchor.is_none());
+        assert_eq!(
+            interaction
+                .clicks
+                .press(now + Duration::from_millis(100), cell),
+            2
+        );
+    }
+
+    #[test]
+    fn output_moves_an_active_word_drag_with_the_selection() {
+        let before = TextRange::between(
+            Position { row: 2, col: 1 },
+            Position { row: 2, col: 5 },
+        );
+        let after = TextRange::between(
+            Position { row: 1, col: 1 },
+            Position { row: 1, col: 5 },
+        );
+        let mut interaction = Interaction {
+            selection_anchor: Some(SelectionAnchor::Word(before)),
+            ..Interaction::default()
+        };
+        assert!(interaction.selection_after_output(Some(before), Some(after)));
+        let Some(SelectionAnchor::Word(anchor)) = interaction.selection_anchor
+        else {
+            panic!("Word drag must remain active");
+        };
+        assert_eq!(anchor, after);
+        assert!(interaction.selection_after_output(Some(after), None));
+        assert!(interaction.selection_anchor.is_none());
+    }
 
     #[test]
     fn multiple_clicks_require_the_same_cell_and_a_short_interval() {

@@ -673,8 +673,8 @@ impl Terminal {
     }
 
     pub fn feed(&mut self, bytes: &[u8]) -> Vec<u8> {
+        let selected = self.selection.map(|range| self.selected_text(range));
         if !bytes.is_empty() {
-            self.selection = None;
             self.hovered_link = None;
         }
         // Detach the parser while it calls back into the terminal model.
@@ -692,6 +692,11 @@ impl Terminal {
         parser.advance(&mut performer, bytes);
         performer.flush();
         self.parser = Some(parser);
+        if let (Some(text), Some(range)) = (selected, self.selection)
+            && self.selected_text(range) != text
+        {
+            self.selection = None;
+        }
         std::mem::take(&mut self.replies)
     }
 
@@ -973,6 +978,7 @@ impl Terminal {
             self.rows[top - 1].wrapped = None;
         }
         let count = count.min(self.scroll_bottom + 1 - top);
+        self.scroll_selection(top, count, true);
         self.rotate_rows(top, count, true);
         let start = self.scroll_bottom + 1 - count;
         if start > top {
@@ -1005,6 +1011,7 @@ impl Terminal {
             self.rows[top - 1].wrapped = None;
         }
         let count = count.min(self.scroll_bottom + 1 - top);
+        self.scroll_selection(top, count, false);
         self.rotate_rows(top, count, false);
         self.rows[self.scroll_bottom].wrapped = None;
         for row in self.rows.range_mut(top..top + count) {
@@ -1043,6 +1050,7 @@ impl Terminal {
         if self.alternate == alternate {
             return;
         }
+        self.selection = None;
         std::mem::swap(&mut self.rows, &mut self.inactive.rows);
         std::mem::swap(&mut self.cursor, &mut self.inactive.cursor);
         std::mem::swap(&mut self.saved, &mut self.inactive.saved);

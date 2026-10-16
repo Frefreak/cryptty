@@ -200,3 +200,96 @@ fn echoed_interrupt_is_excluded_when_a_url_has_a_label_or_brackets() {
         assert_eq!(t.link_at(p(0, 15)).unwrap().uri, "https://example.com/x");
     }
 }
+
+#[test]
+fn selection_survives_queries_and_output_away_from_selected_text() {
+    let mut t = Terminal::new(20, 4);
+    t.feed(b"selected word\r\nother");
+    let range = t.word_selection(p(0, 2));
+    t.selection = Some(range);
+    for bytes in [b"\x1b[6n".as_slice(), b" text", b"\x1b]2;title\x07"] {
+        t.feed(bytes);
+        assert_eq!(t.selection, Some(range));
+        assert_eq!(t.selected_text(range), "selected");
+    }
+    t.feed(b"\x1b[Hselected");
+    assert_eq!(t.selection, Some(range));
+    t.feed(b"\x1b[HX");
+    assert_eq!(t.selection, None);
+}
+
+#[test]
+fn selection_follows_scrolling_until_selected_rows_leave_the_screen() {
+    let mut t = Terminal::new(12, 3);
+    t.feed(b"first\r\nselected\r\nlast");
+    t.selection = Some(t.word_selection(p(1, 1)));
+    t.feed(b"\r\nnew");
+    let range = t.selection.unwrap();
+    assert_eq!(range, TextRange::between(p(0, 0), p(0, 8)));
+    assert_eq!(t.selected_text(range), "selected");
+    t.feed(b"\r\nnext");
+    assert_eq!(t.selection, None);
+}
+
+#[test]
+fn line_selection_tracks_reverse_scroll_with_exclusive_row_endpoint() {
+    let mut t = Terminal::new(12, 4);
+    t.feed(b"first\r\nselected\r\nthird");
+    t.selection = Some(t.line_selection(p(1, 2)));
+    t.feed(b"\x1b[H\x1bM");
+    let range = t.selection.unwrap();
+    assert_eq!(range, TextRange::between(p(2, 0), p(3, 0)));
+    assert_eq!(t.selected_text(range), "selected\n");
+    t.feed(b"\x1bM\x1bM");
+    assert_eq!(t.selection, None);
+}
+
+#[test]
+fn scrolling_region_preserves_outside_selection_and_clears_partial_overlap() {
+    let mut t = Terminal::new(12, 4);
+    t.feed(b"outside\r\nsecond\r\nthird\r\nfourth");
+    t.feed(b"\x1b[2;4r");
+    let range = t.word_selection(p(0, 1));
+    t.selection = Some(range);
+    t.feed(b"\x1b[S");
+    assert_eq!(t.selection, Some(range));
+    t.selection = Some(TextRange::between(p(0, 0), p(1, 3)));
+    t.feed(b"\x1b[S");
+    assert_eq!(t.selection, None);
+}
+
+#[test]
+fn edits_and_screen_switches_invalidate_affected_selection() {
+    for edit in [b"\x1b[H\x1b[K".as_slice(), b"\x1b[H\x1b[@", b"\x1b[?1049h"] {
+        let mut t = Terminal::new(12, 3);
+        t.feed(b"selected");
+        t.selection = Some(t.word_selection(p(0, 1)));
+        t.feed(edit);
+        assert_eq!(t.selection, None, "{edit:?}");
+    }
+    let mut t = Terminal::new(12, 3);
+    t.feed("中文".as_bytes());
+    t.selection = Some(t.word_selection(p(0, 1)));
+    t.feed(b"\x1b[1;2HX");
+    assert_eq!(t.selection, None);
+}
+
+#[test]
+fn copying_styled_selected_text_keeps_only_characters() {
+    let mut source = Terminal::new(20, 3);
+    source.feed(b"\x1b[31;44;4mred\x1b[7m inverse\x1b[0m");
+    let range = TextRange::between(p(0, 0), p(0, 11));
+    source.selection = Some(range);
+    let copied = source.selected_text(range);
+    assert_eq!(copied, "red inverse");
+    assert_eq!(
+        cryptty::input::paste(&copied, true),
+        b"\x1b[200~red inverse\x1b[201~"
+    );
+    let mut destination = Terminal::new(20, 3);
+    destination.feed(&cryptty::input::paste(&copied, false));
+    assert_eq!(destination.selected_text(range), "red inverse");
+    for col in 0..11 {
+        assert_eq!(destination.cell_style(col, 0), Default::default());
+    }
+}

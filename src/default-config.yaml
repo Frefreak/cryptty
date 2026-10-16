@@ -1,11 +1,19 @@
 font:
-  family: Alacritty Fantasque WenKai Mono
+  family: FantasqueSansM Nerd Font Mono
   # Font size in points.
   size: 19
   # Swash hinting on Linux; macOS uses native font rendering.
   hinting: false
   # Per-font lists of Unicode ranges; later mappings take priority.
-  codepoint_map: []
+  codepoint_map:
+    - family: LXGW WenKai Mono Screen
+      ranges:
+        - U+2E80-U+9FFF
+        - U+F900-U+FAFF
+        - U+FE10-U+FE1F
+        - U+FE30-U+FE4F
+        - U+FF00-U+FFEF
+        - U+20000-U+3FFFF
 window:
   padding:
     x: 2

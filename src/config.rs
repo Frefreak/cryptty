@@ -167,10 +167,10 @@ pub struct Font {
 impl Default for Font {
     fn default() -> Self {
         Self {
-            family: "Alacritty Fantasque WenKai Mono".to_string(),
+            family: "FantasqueSansM Nerd Font Mono".to_string(),
             size: FontSize::default(),
             hinting: false,
-            codepoint_map: Vec::new(),
+            codepoint_map: FontMapping::defaults(),
         }
     }
 }

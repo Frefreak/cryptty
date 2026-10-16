@@ -350,11 +350,12 @@ impl ApplicationHandler<()> for App {
             match view.pty.output.try_recv() {
                 Ok(pty::Event::Output(bytes)) => {
                     processed += 1;
-                    view.clear_selection();
+                    let selection = view.terminal.selection;
                     if view.terminal.hovered_link.is_some() {
                         view.renderer.invalidate();
                     }
                     let replies = view.terminal.feed(&bytes);
+                    view.selection_after_output(selection);
                     view.apply_effects();
                     if let Err(error) = view.send_input(replies) {
                         self.fail(events, error);
