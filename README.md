@@ -125,3 +125,4 @@ so half blocks retain their proportions. Shading and outline details still
 follow the selected font. The primary family and size define the grid.
 
 See [performance experiments and measurements](docs/performance.md).
+See [planned rendering and keyboard work](docs/roadmap.md).
