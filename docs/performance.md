@@ -606,3 +606,50 @@ Geometry tests and the expanded Metal/software pixel comparison cover
 all 160 generated characters. The full suite passes 159 regular tests.
 These changes follow the archived throughput runs; their performance
 impact remains unmeasured. See [milestones](roadmap.md) for visual acceptance.
+
+
+## Bounded redraw coalescing
+
+Redraw scheduling waits for 2 ms of output quiet, capped at 5 ms from
+the first pending update. Resize shares this scheduling policy. PTY processing and
+input delivery retain their immediate paths; synchronized updates retain
+precedence. The cap covers intentional scheduling delay, with event-loop,
+GPU, compositor, and display time added separately.
+
+Compared `e9d0cf6` with the local trial on Apple M4 Pro, Metal AutoVsync,
+Fantasque 19 pt, and a 94 by 27 grid. Both use normal release builds.
+[Raw results and harnesses](benchmarks/2026-10-16-coalescing.json) retain
+binary hashes, individual runs, the isolated config, and measurement limits.
+
+Median seconds for 262,144 lines, three alternating trials per build:
+
+| Workload | Before | Coalesced |
+| --- | ---: | ---: |
+| Plain | 0.247 | 0.116 |
+| SGR colors | 0.224 | 0.138 |
+| Unicode | 0.100 | 0.086 |
+| OSC 8 | 0.106 | 0.089 |
+| Truecolor | 0.522 | 0.247 |
+| Cursor edits | 0.303 | 0.173 |
+
+One complete latency trial per build, 300 samples per condition, gives
+these PTY cursor-reply p99 values in milliseconds:
+
+| Condition | Before | Coalesced |
+| --- | ---: | ---: |
+| Idle | 15.565 | 15.992 |
+| 16 MiB/s output | 14.758 | 11.606 |
+| Saturated output | 12.383 | 0.816 |
+
+These exploratory results show lower throughput medians and improved reply
+latency under load. Trial variation was substantial; regular tests and
+Linux compilation overlapped the start of the first throughput run.
+The second latency pair stopped after an unexpected leading space in a
+reply; its incomplete run was excluded. Physical input/display latency,
+quantified flicker reduction, and live resize timing remain unmeasured.
+
+The implementation passes 161 regular tests, Linux all-target compilation,
+a release build, formatting, and fresh independent review. On October 16,
+the user tested the rebuilt application and confirmed that it felt more
+stable. This provides qualitative desktop acceptance of the improvement;
+the exact workload and separate resize result were not recorded.

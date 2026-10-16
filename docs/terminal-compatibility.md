@@ -40,6 +40,12 @@ with a fresh shell and the original launch directory and renderer options.
 Multiline paste is bracketed when requested by the application. Escape
 characters that could close a bracketed paste are removed from its text.
 
+Output and resize redraws wait for 2 ms of quiet, with a 5 ms deadline from
+the first pending update. Continued output cannot extend that deadline.
+PTY parsing, replies, and input delivery continue immediately. Local UI
+redraws can share the pending delay; display scheduling can add further
+latency. Application-requested synchronized updates retain precedence.
+
 ## Keyboard reporting
 
 Kitty keyboard negotiation supports active-flag queries (`CSI ? u`), push
@@ -175,7 +181,7 @@ mode queries report unsupported modes as such.
 
 ## Verification
 
-The October 16 local checkpoint passed 159 regular tests and Linux
+The October 16 local checkpoint passed 161 regular tests and Linux
 all-target compilation. The isolated tmux keyboard test also passed.
 Default tests skip interactive application and GPU checks; invoke those
 explicitly as shown below. Archived performance runs retain their own

@@ -14,8 +14,9 @@ desktop acceptance have separate status below.
 | Configurable text bindings | Implemented, tmux tested | Codex physical input |
 | Generated boxes and blocks | Implemented, pixel tested | Desktop comparison |
 | Cursor height | Extra top pixel removed | Desktop appearance check |
+| Output/resize coalescing | User confirmed improvement | Display latency measurement |
 
-The latest local checkpoint passed 159 regular tests, Linux compilation of
+The latest local checkpoint passed 161 regular tests, Linux compilation of
 all targets, formatting, and a release build. The isolated tmux keyboard
 test also passed, including the configured Shift+Enter binding with
 `extended-keys off`. These checks exercise configuration and PTY bytes;
@@ -140,6 +141,22 @@ symbols, blocks, combining text, and emoji on both desktops. Inspect
 baselines, clipping, fallback order, and GPU/software appearance at
 multiple display scales. Glyphs retain native placement after family
 normalization; the earlier per-glyph bitmap fitting has been removed.
+
+## Output and resize redraw coalescing
+
+Status: implemented; user confirmed improved stability on October 16.
+
+Output and resize events use a 2 ms quiet period capped at 5 ms from the
+first pending update. Input delivery and PTY processing remain immediate;
+visual echo may share the presentation delay. Synchronized updates retain
+precedence. Timing tests cover split writes and continuous-output bounds.
+
+The user tested the rebuilt application and reported greater stability.
+The affected application and precise reproduction remain unspecified, so
+the report supports the improvement without establishing a unique cause.
+Native throughput and PTY reply measurements appear in the performance
+follow-up. Physical display latency and a separate resize comparison remain
+open.
 
 ## Investigate macOS performance regressions
 

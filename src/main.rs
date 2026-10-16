@@ -27,6 +27,7 @@ mod keyboard_input;
 #[cfg(target_os = "macos")]
 mod macos_input;
 mod notifications;
+mod redraw;
 
 struct View {
     display: display::Display,
@@ -41,6 +42,7 @@ struct View {
     padding: Padding,
     font: Font,
     interaction: interaction::Interaction,
+    redraw: redraw::Redraw,
     next_blink: Instant,
     next_text_blink: Instant,
     notifications: notifications::Notifications,
@@ -106,6 +108,7 @@ impl App {
             padding: self.config.window.padding,
             font: self.config.font.clone(),
             interaction: interaction::Interaction::default(),
+            redraw: redraw::Redraw::default(),
             next_blink: Instant::now() + Duration::from_millis(500),
             next_text_blink: Instant::now() + Duration::from_millis(250),
             notifications: notifications::Notifications::default(),
@@ -161,15 +164,22 @@ impl View {
         self.renderer.invalidate();
         self.clear_selection();
         self.refresh_pointer();
-        self.window.request_redraw();
+        self.defer_redraw();
         Ok(())
     }
 
+    fn defer_redraw(&mut self) {
+        let now = Instant::now();
+        self.redraw.defer(now);
+        if self.redraw.deadline().is_some_and(|t| t <= now) {
+            self.window.request_redraw();
+        }
+    }
+
     fn draw(&mut self) -> Result<()> {
-        if self
-            .terminal
-            .synchronized_until()
-            .is_some_and(|t| t > Instant::now())
+        let now = Instant::now();
+        if self.terminal.synchronized_until().is_some_and(|t| t > now)
+            || self.redraw.deadline().is_some_and(|t| t > now)
         {
             return Ok(());
         }
@@ -179,6 +189,7 @@ impl View {
             &self.terminal,
             &self.preedit,
         )?;
+        self.redraw.presented();
         let (x, y) = self.terminal.cursor;
         let (left, top) = self.renderer.cell_origin(x, y);
         self.window.set_ime_cursor_area(
@@ -349,7 +360,7 @@ impl ApplicationHandler<()> for App {
         view.update_title();
         if changed {
             view.refresh_pointer();
-            view.window.request_redraw();
+            view.defer_redraw();
         }
     }
 
@@ -363,6 +374,14 @@ impl ApplicationHandler<()> for App {
             view.terminal.finish_synchronized_update();
             view.window.request_redraw();
             wake = None;
+        }
+        if let Some(deadline) = view.redraw.deadline() {
+            let deadline = wake.map_or(deadline, |sync| sync.max(deadline));
+            if deadline <= now {
+                view.window.request_redraw();
+            } else {
+                wake = Some(wake.map_or(deadline, |t| t.min(deadline)));
+            }
         }
         if view.terminal.cursor_style.blinking && view.terminal.cursor_visible {
             if now >= view.next_blink {

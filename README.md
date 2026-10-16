@@ -66,6 +66,9 @@ cargo test gpu_pixels_match_software -- --ignored
 Terminal compatibility covers alternate screens, bracketed paste,
 focus/mouse reporting, richer text styles, and common OSC commands.
 See [supported sequences and checks](docs/terminal-compatibility.md).
+Output and resize redraws use a 2 ms quiet period, capped at 5 ms from the
+first pending update, to combine closely spaced changes. PTY processing
+and input delivery remain immediate; visible updates can share this delay.
 Drag to select and copy to the system clipboard. Paste with Ctrl-Shift-V,
 Shift-Insert, or middle-click on both platforms. During application mouse
 capture, use Shift-middle-click to paste from the system clipboard.
