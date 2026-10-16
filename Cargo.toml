@@ -28,7 +28,7 @@ arboard = { version = "3.6", default-features = false, features = [
     "wayland-data-control",
 ] }
 winit = { version = "0.30", default-features = false, features = [
-    "rwh_06", "wayland", "wayland-dlopen", "wayland-csd-adwaita",
+    "rwh_06", "wayland", "wayland-dlopen", "wayland-csd-adwaita", "serde",
 ] }
 
 [profile.release]
@@ -36,6 +36,9 @@ lto = "thin"
 codegen-units = 1
 
 [target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"
+core-graphics = "0.24"
+core-text = "21"
 crossfont = "0.9.0"
 objc2 = "0.5.3"
 objc2-app-kit = { version = "0.2.2", features = ["NSApplication", "NSEvent"] }
@@ -44,4 +47,7 @@ objc2-foundation = { version = "0.2.2", features = [
 ] }
 
 [target.'cfg(not(target_os = "macos"))'.dependencies]
+fontdb = "0.23"
+
+[dev-dependencies]
 fontdb = "0.23"

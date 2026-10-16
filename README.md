@@ -127,9 +127,10 @@ the default list; use `codepoint_map: []` to disable it.
 
 On macOS, the defaults also map `⏎ ▲ ▼` (`U+23CE`, `U+25B2`, `U+25BC`)
 and box drawing/block elements (`U+2500-U+259F`) to the system Menlo font.
-Keep this entry alongside the CJK entry when supplying an explicit list.
-Shade texture and margins still follow the font; generated block rendering
-remains planned.
+The renderer generates U+2500–U+259F directly from cell geometry, taking
+priority over font mappings. Existing mappings for these ranges may remain
+in the config. Shades fill the whole cell with uniform 25%, 50%, or 75%
+coverage; ordinary symbols such as `⏎ ▲ ▼` still use font mappings.
 
 Add multiple entries for different families; later entries take priority
 where ranges overlap. Ranges accept Unicode scalar values in `U+HEX` or
@@ -137,11 +138,40 @@ where ranges overlap. Ranges accept Unicode scalar values in `U+HEX` or
 An unavailable family warns and falls back to the primary family. A missing
 glyph follows the normal fallback path.
 
-Mapped and fallback glyphs fit the primary font's cell dimensions without
-changing Unicode column widths. Resized glyphs are vertically centered in
-the cell; ordinary text keeps its baseline. Block elements share a full-block reference
-so half blocks retain their proportions. Shading and outline details still
-follow the selected font. The primary family and size define the grid.
+The primary family and size define the grid, with one bottom pixel
+reserved for rasterized descenders. Block and beam cursors cover the cell height. Other families receive a shared
+font size measured from their regular face: CJK and emoji references target
+two cells, Latin and symbol references target one. All styles share that
+size. Families without a supported reference retain the configured size.
+Glyphs retain the rasterizer's baseline-relative placement, with no bitmap
+resizing or centering. Drawing is clipped to the allocated cells. Use font
+mappings for mixed-width designs, such as one-cell triangles in a CJK font.
+
+## Keyboard bindings
+
+Bindings send text directly to the application, ahead of built-in shortcuts
+and negotiated keyboard encoding. For Shift+Enter to send legacy Alt+Enter:
+
+```yaml
+keyboard:
+  bindings:
+    - key: Enter
+      modifiers: [Shift]
+      text: "\u001b\r"
+```
+
+Keys accept names such as `Enter`, `Tab`, `Escape`, `ArrowUp`, and `F1`, or
+one character from the unmodified keyboard layout, such as `v`. Modifiers
+accept `Shift`, `Control`, `Alt`, and `Super` (Command on macOS). Matching
+requires exactly the listed modifiers; an omitted list means none. Later
+bindings take priority. Empty text consumes the key without sending bytes.
+YAML double-quoted strings support escapes such as `\u001b`, `\r`, and `\n`.
+Bindings repeat while held and retain their initial match until release.
+Text composition takes priority. Restart Cryptty after changing bindings.
+The example sends `ESC` plus Return and works through tmux with
+`extended-keys off`; the isolated PTY test verifies the emitted bytes.
+Bindings currently send text; action bindings and live reload remain
+outside this implementation.
 
 See [performance experiments and measurements](docs/performance.md).
-See [planned rendering and keyboard work](docs/roadmap.md).
+See [milestone status and remaining work](docs/roadmap.md).

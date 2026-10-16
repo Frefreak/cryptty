@@ -17,7 +17,7 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
     )
     .unwrap();
     let mut painter = Painter::new(&device, wgpu::TextureFormat::Rgba8Unorm);
-    let mut terminal = Terminal::new(26, 9);
+    let mut terminal = Terminal::new(26, 16);
     terminal.feed(
         concat!(
             "中文😀e\u{301}\x1b[1;31mBold\x1b[0m\r\n",
@@ -28,10 +28,18 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
             "\x1b[4;44mUnder\x1b[7mInverse\x1b[0m\r\n",
             "\x1b[8mHidden\x1b[0m ABC_gjpq\r\n",
             "\x1b[5mSlow\x1b[6mRapid\x1b[0m\r\n",
-            "⏎▲▼ ██░▒▓\x1b[H",
+            "⏎▲▼ ██░▒▓ \u{0526}\u{08ab}\u{0afe}\u{324e}\r\n",
         )
         .as_bytes(),
     );
+    for start in (0x2500..=0x259f).step_by(26) {
+        let row: String = (start..(start + 26).min(0x25a0))
+            .map(|code| char::from_u32(code).unwrap())
+            .collect();
+        terminal.feed(row.as_bytes());
+        terminal.feed(b"\r\n");
+    }
+    terminal.feed(b"\x1b[H");
     let mapped_family = if cfg!(target_os = "macos") {
         "Menlo"
     } else {
@@ -42,7 +50,7 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
     )).unwrap();
     let defaults = crate::config::Font::default();
     for (font_size, mapped) in
-        [(19.0, false), (19.0, true), (38.0, false), (38.0, true)]
+        [(19.0, false), (23.75, true), (38.0, false), (38.0, true)]
     {
         let mut renderer = Renderer::with_options(
             font_size,
@@ -58,7 +66,7 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
         .unwrap();
         painter.clear_glyphs();
         for (width, height, preedit, shape) in [
-            (640, 640, "", 2),
+            (1024, 1024, "", 2),
             (640, 640, "", 4),
             (384, 160, "测试", 2),
             (256, 90, "", 6),

@@ -7,7 +7,6 @@ use fontdb::{Database, Family, ID, Query, Weight};
 use swash::scale::image::Image;
 use swash::scale::{Render, ScaleContext, Source, StrikeWith};
 use swash::{CacheKey, FontRef};
-use unicode_width::UnicodeWidthChar;
 
 struct Font {
     bytes: Vec<u8>,
@@ -45,7 +44,7 @@ pub struct Rasterizer {
     fallback_bold: Option<ID>,
     scale: ScaleContext,
     size: f32,
-    advance: f32,
+    family_sizes: HashMap<String, f32>,
     hinting: bool,
     pub cell_width: usize,
     pub cell_height: usize,
@@ -116,12 +115,17 @@ impl Rasterizer {
             .scale(size)
             .advance_width(face.charmap().map('M'));
         let cell_width = advance.floor().max(1.0) as usize;
+        // Keep bottom coverage for descenders beyond rounded metrics.
         let cell_height = (metrics.ascent + metrics.descent + metrics.leading)
             .ceil()
             .max(size)
             .max(1.0) as usize
-            + 2;
-        let baseline = metrics.ascent.ceil() as i32 + 1;
+            + 1;
+        let baseline = metrics.ascent.ceil() as i32;
+        let family_sizes = HashMap::from([(
+            db.face(regular).unwrap().families[0].0.clone(),
+            size,
+        )]);
         let mut fonts = HashMap::new();
         fonts.insert(regular, font);
         for id in faces.into_iter().skip(1) {
@@ -138,7 +142,7 @@ impl Rasterizer {
             fallback_bold,
             scale: ScaleContext::new(),
             size,
-            advance,
+            family_sizes,
             hinting,
             cell_width,
             cell_height,
@@ -147,8 +151,8 @@ impl Rasterizer {
     }
 
     pub fn rasterize(&mut self, ch: char, style: FontStyle) -> Option<Image> {
-        let preferred = self.faces[style.index()];
         let id = self.face_for(ch, style);
+        let size = self.font_size(id)?;
         if let std::collections::hash_map::Entry::Vacant(entry) =
             self.fonts.entry(id)
         {
@@ -159,51 +163,44 @@ impl Rasterizer {
         let mut scaler = self
             .scale
             .builder(font)
-            .size(self.size)
+            .size(size)
             .hint(self.hinting)
             .build();
-        let mut render = |glyph| {
-            Render::new(&[
-                Source::ColorOutline(0),
-                Source::ColorBitmap(StrikeWith::BestFit),
-                Source::Outline,
-            ])
-            .format(swash::zeno::Format::Alpha)
-            .render(&mut scaler, glyph)
-        };
-        let image = render(glyph)?;
-        let Some(columns) = ch.width().filter(|width| *width > 0) else {
-            return Some(image);
-        };
-        let advance = font
-            .glyph_metrics(&[])
-            .scale(self.size)
-            .advance_width(glyph);
-        if id == preferred && advance <= self.advance * columns as f32 + 1.0 {
-            return Some(image);
+        Render::new(&[
+            Source::ColorOutline(0),
+            Source::ColorBitmap(StrikeWith::BestFit),
+            Source::Outline,
+        ])
+        .format(swash::zeno::Format::Alpha)
+        .render(&mut scaler, glyph)
+    }
+
+    fn font_size(&mut self, id: ID) -> Option<f32> {
+        let family = self.db.face(id)?.families[0].0.clone();
+        if let Some(&size) = self.family_sizes.get(&family) {
+            return Some(size);
         }
-        if ('\u{2580}'..='\u{259f}').contains(&ch) {
-            let full = font.charmap().map('█');
-            if full != 0
-                && let Some(reference) = render(full)
-            {
-                return Some(super::fit::block(
-                    image,
-                    advance,
-                    reference.placement,
-                    (
-                        self.cell_width * columns,
-                        self.cell_height,
-                        self.baseline,
-                    ),
-                ));
-            }
+        let regular = self
+            .db
+            .query(&Query {
+                families: &[Family::Name(&family)],
+                ..Query::default()
+            })
+            .unwrap_or(id);
+        if let std::collections::hash_map::Entry::Vacant(entry) =
+            self.fonts.entry(regular)
+        {
+            entry.insert(Font::load(&self.db, regular)?);
         }
-        Some(super::fit::glyph(
-            image,
-            advance,
-            (self.cell_width * columns, self.cell_height, self.baseline),
-        ))
+        let font = self.fonts.get(&regular)?.as_ref();
+        let metrics = font.glyph_metrics(&[]).scale(self.size);
+        let size =
+            super::normalization::font_size(self.size, self.cell_width, |ch| {
+                let glyph = font.charmap().map(ch);
+                (glyph != 0).then(|| metrics.advance_width(glyph))
+            });
+        self.family_sizes.insert(family, size);
+        Some(size)
     }
 
     fn face_for(&self, ch: char, style: FontStyle) -> ID {
@@ -258,6 +255,67 @@ fn styled_faces(db: &Database, regular: ID) -> [ID; 4] {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn family_size_is_shared_across_styles_and_request_order() {
+        let mut first = Rasterizer::new(38.0, false, "monospace", &[]).unwrap();
+        let primary = first.faces[0];
+        assert_eq!(first.font_size(primary), Some(38.0));
+        let alternate = first
+            .db
+            .faces()
+            .find(|face| {
+                face.families[0].0
+                    != first.db.face(primary).unwrap().families[0].0
+                    && face.style == fontdb::Style::Normal
+                    && face.weight == Weight::NORMAL
+                    && first.supports(face.id, 'M')
+                    && first.supports(face.id, 'g')
+            })
+            .unwrap()
+            .id;
+        let faces = styled_faces(&first.db, alternate);
+        let family = first.db.face(alternate).unwrap().families[0].0.clone();
+        let config = crate::config::Config::parse(&format!(
+            "font:\n  codepoint_map:\n    - ranges: ['U+0041-U+007A']\n      family: {family:?}\n"
+        )).unwrap();
+        let mut second = Rasterizer::new(
+            38.0,
+            false,
+            "monospace",
+            &config.font.codepoint_map,
+        )
+        .unwrap();
+        let bold_size = first.font_size(faces[1]).unwrap();
+        let second_regular = second
+            .db
+            .query(&Query {
+                families: &[Family::Name(&family)],
+                ..Query::default()
+            })
+            .unwrap();
+        let regular_size = second.font_size(second_regular).unwrap();
+        assert_eq!(bold_size, regular_size);
+        for face in faces {
+            assert_eq!(first.font_size(face), Some(regular_size));
+        }
+        for (ch, style) in [
+            ('g', FontStyle::default()),
+            (
+                'M',
+                FontStyle {
+                    bold: true,
+                    italic: true,
+                },
+            ),
+        ] {
+            let image = second.rasterize(ch, style).unwrap();
+            assert!(image.data.iter().any(|&pixel| pixel != 0));
+        }
+        assert!(second.cell_width > 0);
+        assert!(second.baseline > 0);
+        assert!(second.cell_height >= second.baseline as usize);
+    }
 
     #[test]
     fn configured_family_is_used_for_regular_and_bold() {
@@ -348,38 +406,6 @@ mod tests {
             }
             assert_eq!(r.face_for('B', style), r.faces[style.index()]);
             assert_eq!(r.face_for('d', style), r.faces[style.index()]);
-        }
-    }
-
-    #[test]
-    fn return_and_btop_triangles_fit_narrow_cells_at_multiple_sizes() {
-        for family in ["monospace", "LXGW WenKai Mono Screen"] {
-            for size in [14.0, 28.333334, 38.0] {
-                let mut r = Rasterizer::new(size, false, family, &[]).unwrap();
-                for style in [
-                    FontStyle::default(),
-                    FontStyle {
-                        bold: true,
-                        italic: true,
-                    },
-                ] {
-                    for ch in ['⏎', '▲', '▼'] {
-                        let image = r.rasterize(ch, style).unwrap();
-                        let p = image.placement;
-                        assert!(p.left >= 0, "{family} {ch} {p:?}");
-                        assert!(
-                            p.left as u32 + p.width <= r.cell_width as u32,
-                            "{family} {size} {ch} {p:?}"
-                        );
-                        assert!(p.top <= r.baseline);
-                        assert!(
-                            r.baseline - p.top + p.height as i32
-                                <= r.cell_height as i32
-                        );
-                        assert!(image.data.iter().any(|value| *value > 0));
-                    }
-                }
-            }
         }
     }
 }

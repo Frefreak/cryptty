@@ -465,10 +465,15 @@ For the normal release, run `cargo build --release --locked`, then
 
 The subsequent font changes add `font.codepoint_map` with multiple ranges
 per family and later-entry precedence. Both rendering paths load styled
-mapped faces. Fallback symbols fit the primary cell; block elements share
-a full-block reference to preserve fractional geometry. These changes
+mapped faces. That version fitted fallback symbols to the primary cell and
+used a full-block reference to preserve fractional geometry. These changes
 follow the archived measurements above and have separate rendering checks.
 The historical performance tables retain their original source snapshots.
+
+Current rendering normalizes fallback font sizes per family against the
+primary cell advance. Styles share the regular face's scale. Per-glyph bitmap
+fitting and block transforms have been removed; baseline placement and font
+mappings remain. These changes have no new performance measurements here.
 
 Validation on Linux passed 125 default tests, Clippy with warnings denied,
 and the explicit GPU/software pixel comparison across font sizes, range
@@ -575,5 +580,29 @@ The explicit GPU/software pixel comparison passed. The default test run
 stopped at `render::font::tests::requested_family_and_weight_match_coretext`
 in `src/render/native.rs:238`: the measured left bearing was 0, with -2
 expected. Library results were 29 passed, 1 failed, and 1 ignored; later
-test binaries were skipped after that failure. Full macOS test completion
-and investigation of the CoreText expectation remain outstanding.
+test binaries were skipped after that failure. That result belongs to the
+archived benchmark snapshot.
+
+Subsequent font work removed per-glyph bitmap fitting, preserved native
+baseline-relative placement, normalized sizes per family, and retained
+hidden CoreText fallback descriptors. The current macOS suite passes the
+family/weight and placement checks; the latest full run passed 154 regular
+tests. Linux all-target compilation and the release build also pass.
+These checks supersede the test failure above. Performance measurements
+for the subsequent font and keyboard changes remain pending; the tables
+above retain their original source versions.
+
+
+## Generated geometry and cell metrics follow-up
+
+Generated masks now cover U+2500–U+259F ahead of font mappings. Both
+renderers share the cached masks. The extra top pixel has been removed
+from cell height and baseline together; one bottom pixel remains for
+rasterized descenders. Native Fantasque at 19 pt and 2× scale now uses a
+41-pixel cell height, down from 42 pixels; its font line height measures
+40 pixels. Menlo at size 19 requires the retained bottom pixel.
+
+Geometry tests and the expanded Metal/software pixel comparison cover
+all 160 generated characters. The full suite passes 159 regular tests.
+These changes follow the archived throughput runs; their performance
+impact remains unmeasured. See [milestones](roadmap.md) for visual acceptance.

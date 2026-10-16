@@ -4,8 +4,7 @@ use std::time::{Duration, Instant};
 
 use anyhow::{Context as _, Result};
 use cryptty::{
-    config::{Config, Font, Padding},
-    input,
+    config::{Config, Font, Keyboard, Padding},
     options::{self, Action, RendererChoice},
     pty,
     render::Renderer,
@@ -14,16 +13,17 @@ use cryptty::{
 use portable_pty::PtySize;
 use winit::application::ApplicationHandler;
 use winit::dpi::{LogicalSize, PhysicalPosition, PhysicalSize};
-use winit::event::{ElementState, Ime, WindowEvent};
+use winit::event::{Ime, WindowEvent};
 use winit::event_loop::{
     ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy,
 };
-use winit::keyboard::{Key, KeyLocation, ModifiersState, NamedKey};
-use winit::window::{CursorIcon, Fullscreen, Window, WindowId};
+use winit::keyboard::ModifiersState;
+use winit::window::{CursorIcon, Window, WindowId};
 
 mod diagnostics;
 mod display;
 mod interaction;
+mod keyboard_input;
 #[cfg(target_os = "macos")]
 mod macos_input;
 mod notifications;
@@ -35,6 +35,8 @@ struct View {
     terminal: Terminal,
     pty: pty::Pty,
     modifiers: ModifiersState,
+    keyboard_input: keyboard_input::State,
+    keyboard: Keyboard,
     preedit: String,
     padding: Padding,
     font: Font,
@@ -98,6 +100,8 @@ impl App {
             terminal,
             pty,
             modifiers: ModifiersState::empty(),
+            keyboard_input: keyboard_input::State::default(),
+            keyboard: self.config.keyboard.clone(),
             preedit: String::new(),
             padding: self.config.window.padding,
             font: self.config.font.clone(),
@@ -213,7 +217,7 @@ impl View {
                 self.refresh_pointer();
             }
             WindowEvent::Focused(focused) => {
-                self.send_input(input::focus(
+                self.send_input(cryptty::input::focus(
                     focused,
                     self.terminal.focus_reporting,
                 ))?;
@@ -221,6 +225,7 @@ impl View {
                     self.modifiers = ModifiersState::empty();
                     self.preedit.clear();
                     self.interaction.reset_buttons();
+                    self.keyboard_input.reset();
                 } else {
                     self.window.request_user_attention(None);
                 }
@@ -258,50 +263,7 @@ impl View {
                 event,
                 is_synthetic: false,
                 ..
-            } if event.state == ElementState::Pressed => {
-                self.reset_blink();
-                if let Some(shortcut) =
-                    input::shortcut(&event.logical_key, self.modifiers)
-                {
-                    match shortcut {
-                        input::Shortcut::Paste => self.paste(),
-                        input::Shortcut::NewWindow if !event.repeat => {
-                            self.new_window()
-                        }
-                        input::Shortcut::NewWindow => (),
-                    }
-                } else if event.logical_key == Key::Named(NamedKey::Enter)
-                    && self.modifiers.alt_key()
-                    && !self.modifiers.control_key()
-                    && !self.modifiers.super_key()
-                {
-                    let fullscreen = if self.window.fullscreen().is_some() {
-                        None
-                    } else {
-                        Some(Fullscreen::Borderless(None))
-                    };
-                    self.window.set_fullscreen(fullscreen);
-                } else if self.preedit.is_empty() {
-                    let keypad = (event.location == KeyLocation::Numpad)
-                        .then(|| {
-                            input::keypad(
-                                &event.logical_key,
-                                self.modifiers,
-                                self.terminal.application_keypad,
-                            )
-                        })
-                        .flatten();
-                    self.send_input(keypad.unwrap_or_else(|| {
-                        input::encode(
-                            &event.logical_key,
-                            event.text.as_deref(),
-                            self.modifiers,
-                            self.terminal.application_cursor,
-                        )
-                    }))?;
-                }
-                self.window.request_redraw();
-            }
+            } => self.key_input(event)?,
             _ => (),
         }
         Ok(())

@@ -16,12 +16,20 @@ mod font;
 
 mod atlas;
 mod decoration;
-mod fit;
+mod generated;
 pub mod gpu;
 #[cfg(test)]
 mod gpu_tests;
+#[cfg(target_os = "macos")]
+mod native_fallback;
+#[cfg(target_os = "macos")]
+mod native_family;
+mod normalization;
 mod painter;
 mod scene;
+#[cfg(all(test, target_os = "macos"))]
+#[path = "render/swash.rs"]
+mod swash_tests;
 
 const CACHE_LIMIT: usize = 4096;
 
@@ -310,7 +318,13 @@ impl Renderer {
             if self.glyphs.len() >= CACHE_LIMIT {
                 self.glyphs.clear();
             }
-            let image = self.rasterizer.rasterize(ch, font);
+            let image = generated::rasterize(
+                ch,
+                self.cell_width,
+                self.cell_height,
+                self.baseline,
+            )
+            .or_else(|| self.rasterizer.rasterize(ch, font));
             self.glyphs.insert(key, image);
         }
     }
@@ -334,6 +348,42 @@ fn blend_rgb(bg: u32, fg: u32, alpha: &[u8]) -> u32 {
 mod tests {
     use super::*;
     use crate::terminal::BACKGROUND;
+
+    #[test]
+    fn generated_glyphs_override_mappings_and_font_styles() {
+        let config = crate::config::Config::parse(
+            "font: {codepoint_map: [{ranges: ['U+2500-U+259F'], family: Menlo}]}",
+        ).unwrap();
+        let mut renderer = Renderer::with_options(
+            23.75,
+            (0, 0),
+            false,
+            &config.font.family,
+            &config.font.codepoint_map,
+        )
+        .unwrap();
+        for ch in ['█', '░', '╬', '╭', '▚'] {
+            for style in [
+                FontStyle::default(),
+                FontStyle {
+                    bold: true,
+                    italic: true,
+                },
+            ] {
+                renderer.cache_glyph(ch, style);
+                let actual = renderer.glyphs[&(ch, style)].as_ref().unwrap();
+                let expected = generated::rasterize(
+                    ch,
+                    renderer.cell_width,
+                    renderer.cell_height,
+                    renderer.baseline,
+                )
+                .unwrap();
+                assert_eq!(actual.data, expected.data);
+                assert_eq!(actual.placement.top, renderer.baseline);
+            }
+        }
+    }
 
     #[test]
     fn rgb_masks_blend_each_channel_independently() {
@@ -399,35 +449,45 @@ mod tests {
 
     #[test]
     fn baseline_leaves_room_for_underscores_and_descenders() {
-        for size in [16.0, 20.0, 32.0] {
-            let mut renderer = Renderer::new(size).unwrap();
-            let mut terminal = Terminal::new(6, 2);
-            terminal.cursor_visible = false;
-            terminal.feed(b"_gjpqy");
-            let width = renderer.cell_width * 6;
-            let height = renderer.cell_height * 2;
-            renderer.draw(&terminal, width as u32, height as u32, "");
-            for x in 0..renderer.cell_width {
-                if (renderer.baseline as usize..renderer.cell_height)
-                    .any(|y| renderer.pixels[y * width + x] != BACKGROUND)
-                {
-                    break;
+        let defaults = crate::config::Font::default();
+        let fallback = if cfg!(target_os = "macos") {
+            "Menlo"
+        } else {
+            "monospace"
+        };
+        for family in [defaults.family.as_str(), fallback] {
+            for size in [16.0, 19.0, 20.0, 23.75, 32.0, 38.0] {
+                let mut renderer =
+                    Renderer::with_options(size, (0, 0), false, family, &[])
+                        .unwrap();
+                let mut terminal = Terminal::new(6, 2);
+                terminal.cursor_visible = false;
+                terminal.feed(b"_gjpqy");
+                let width = renderer.cell_width * 6;
+                let height = renderer.cell_height * 2;
+                renderer.draw(&terminal, width as u32, height as u32, "");
+                for x in 0..renderer.cell_width {
+                    if (renderer.baseline as usize..renderer.cell_height)
+                        .any(|y| renderer.pixels[y * width + x] != BACKGROUND)
+                    {
+                        break;
+                    }
+                    assert!(
+                        x + 1 < renderer.cell_width,
+                        "underscore clipped at font size {size}"
+                    );
                 }
-                assert!(
-                    x + 1 < renderer.cell_width,
-                    "underscore clipped at font size {size}"
-                );
-            }
-            for ch in "_gjpqy".chars() {
-                let image = renderer.glyphs[&(ch, FontStyle::default())]
-                    .as_ref()
-                    .unwrap();
-                let bottom = renderer.baseline - image.placement.top
-                    + image.placement.height as i32;
-                assert!(
-                    bottom <= renderer.cell_height as i32,
-                    "descender clipped for {ch} at font size {size}"
-                );
+                for ch in "_gjpqy".chars() {
+                    let image = renderer.glyphs[&(ch, FontStyle::default())]
+                        .as_ref()
+                        .unwrap();
+                    let bottom = renderer.baseline - image.placement.top
+                        + image.placement.height as i32;
+                    assert!(
+                        bottom <= renderer.cell_height as i32,
+                        "descender clipped for {ch} at font size {size}"
+                    );
+                }
             }
         }
     }

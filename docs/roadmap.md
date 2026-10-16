@@ -1,8 +1,27 @@
-# Planned terminal work
+# Terminal milestones and remaining work
 
-The following rendering and keyboard work remains pending as of
-October 16, 2026. Each item records the observed behavior and the checks
-needed before treating a change as complete.
+Status as of October 16, 2026. Implementation, automated validation, and
+desktop acceptance have separate status below.
+
+## Milestone status
+
+| Area | Status | Remaining work |
+| --- | --- | --- |
+| Terminal core and interaction | Implemented, tested | Desktop acceptance |
+| GPU and optimization stages 1–17 | Implemented, measured | macOS regressions |
+| Font mapping and normalization | Implemented, tested | Visual checks, timing |
+| Kitty and Xterm mode 2 | Implemented, PTY tested | Desktop input lifecycle |
+| Configurable text bindings | Implemented, tmux tested | Codex physical input |
+| Generated boxes and blocks | Implemented, pixel tested | Desktop comparison |
+| Cursor height | Extra top pixel removed | Desktop appearance check |
+
+The latest local checkpoint passed 159 regular tests, Linux compilation of
+all targets, formatting, and a release build. The isolated tmux keyboard
+test also passed, including the configured Shift+Enter binding with
+`extended-keys off`. These checks exercise configuration and PTY bytes;
+physical key delivery and the native desktop remain separate checks.
+
+## Completed performance work
 
 Completed optimization work appears in [performance.md](performance.md):
 stages 1–17, compact cell storage, contiguous erasure, GPU presentation,
@@ -12,114 +31,131 @@ The document also covers the resumable PGO build and Cargo installation.
 trial data, build hashes, and measurement metadata. Those measurements
 belong to their recorded source snapshots; font changes followed later.
 
-## Generate box drawing and block glyphs
+## Generated box drawing and block glyphs
 
-Status: planned implementation.
+Status: implemented for U+2500–U+259F, with shared CPU/GPU glyph masks.
 
-Current rendering obtains box drawing and block elements from fonts.
-Range mappings and cell fitting improve font selection and geometry, while
-shading retains the selected font's texture and margins. A probe using
-Liberation Mono at 17 pt and display scale 1.25 produced a 14 by 32 pixel
-full block and a 13 by 31 pixel light shade in a 14 by 32 pixel cell.
-The user also observed the remaining shaded-bar texture and spacing.
+Generated geometry takes priority over `font.codepoint_map` for these
+ranges. Other characters retain normal font selection. The renderer covers
+light, heavy, mixed, double, dashed, rounded, and diagonal lines; fractional
+blocks and quadrants; and full-cell shades at alpha 64, 128, and 192.
+Bold and italic retain the generated geometry. Cell dimensions determine
+line thickness and fractional coverage, including odd pixel dimensions.
 
-Generate glyphs from cell geometry for Box Drawing, U+2500–U+257F, and
-Block Elements, U+2580–U+259F. Cover connected lines, fractional fills,
-quadrants, and full-cell shading. Alacritty and Ghostty provide useful
-reference implementations; their shade glyphs use uniform coverage near
-25%, 50%, and 75% for light, medium, and dark shades.
+Checks cover all 160 characters over small, odd, and even cell sizes,
+block area and complementary fills, uniform shades, connected edges,
+double-line channels, and mapping/style precedence. The expanded Metal
+comparison passes against software rendering across font sizes, clipping,
+colors, decorations, cursors, and fractional sizing.
 
-Before implementation, settle how explicit `font.codepoint_map` entries
-interact with generated glyphs and any enable/disable setting. The current
-user configuration explicitly maps block elements to Liberation Mono;
-account for that mapping when adopting generated rendering. Retain font
-selection for ordinary text and other symbols.
+Desktop comparison against the same status bars and borders in Alacritty
+and Ghostty remains useful. The earlier Liberation Mono measurements in
+performance work describe font-rendered blocks before this change.
 
-Acceptance checks:
+## Cursor height and cell metrics
 
-- Adjacent full blocks and box borders meet at cell boundaries.
-- Half, eighth, and quadrant blocks retain their defined proportions,
-  including odd cell dimensions and fractional display scales.
-- Shades cover the complete cell with consistent density and no seams.
-- Software and GPU rendering agree across colors, text attributes,
-  resizing, clipping, and supported display scales.
-- Compare the same status bar and terminal borders with Alacritty and
-  Ghostty at matching grid dimensions; verify override precedence.
+Status: removed the extra top pixel; native font measurements and rendering
+checks pass. Final desktop appearance remains to be checked.
 
-References:
+Block and beam cursors continue to cover the cell. The rasterizers added
+two pixels to cell height and one pixel to the baseline. The extra top
+pixel has been removed from cell height and baseline together. One bottom
+pixel remains to preserve rasterized descenders beyond rounded font metrics;
+Menlo at size 19 requires this space.
 
-- [Unicode 17 section 22.8.1][u]
-  describes continuous box lines and solid adjacent block patterns.
-- [Alacritty generated glyphs][a]
-- [Ghostty block sprites][g]
+Native macOS measurements for Fantasque at 19 pt:
 
-## Investigate cursor height and cell metrics
+| Display scale | Font line height | Previous cell height | Current height |
+| --- | ---: | ---: | ---: |
+| 1 | 20 px | 22 px | 21 px |
+| 1.25 | 25 px | 27 px | 26 px |
+| 2 | 40 px | 42 px | 41 px |
 
-Status: reported visual issue; cause requires investigation.
-
-The user reports an excessively tall cursor. Current `cursor_rect` in
-`src/render/decoration.rs` gives block and beam cursors the full cell height.
-Primary font metrics and a two-pixel addition determine cell height.
-Their contribution to the reported appearance remains a hypothesis.
-The shaded glyph's margins have separate measured evidence; establish any
-shared cause before linking the two issues.
-
-Reproduce with the configured Fantasque primary font at 17 pt. Record the
-font metrics, baseline, cell rectangle, and cursor rectangle at each scale.
-Compare block, beam, and underline cursors against Alacritty/Ghostty with
-matching settings. Choose any metric or cursor adjustment from those
-comparisons, preserving grid alignment, wide-character coverage, IME
-placement, and GPU/software agreement.
+The 17 pt probe also recorded a one-pixel reduction at each scale.
+Descender and underscore tests cover 16, 19, 20, 23.75, 32, and 38 raster
+sizes with the default and fallback fonts. Wide block cursors, preedit, and GPU/software comparisons pass.
+This establishes the padding contribution; the user's final visual
+assessment remains a desktop check. Linux runtime validation remains open.
 
 ## Negotiate keyboard reporting and distinguish Shift Enter
 
-Status: deferred keyboard work.
+Status: Kitty and Xterm mode-2 negotiation implemented. Codex PTY acceptance
+passed directly and through tmux with extended keys and CSI-u formatting.
+Configurable text bindings support exact modifiers and raw escape sequences.
 
-Current input encoding sends carriage return for both Enter and Shift Enter.
-The user confirmed Ctrl J as a working newline workaround in Codex.
-The planned work includes application-driven keyboard protocol negotiation
-and configurable bindings, with Ghostty as a design reference.
+The implementation follows Ghostty's Kitty reporting behavior: active flags
+can be queried, pushed, popped, or updated, with separate bounded stacks
+for the main and alternate screens. Flags 1, 2, 4, 8, and 16 cover key
+disambiguation, events, alternate keys, all keys, and associated text.
+Legacy encoding remains active when flags are zero.
 
-Follow the [Kitty keyboard protocol][k] for capability detection and mode
-management. `CSI` below denotes the two bytes ESC followed by `[`.
+The installed Codex 0.163.0 requested flags 5. A PTY probe using Cryptty's
+parser and encoder produced `CSI 13;2u` for Shift Enter; two unsent draft
+markers appeared on separate lines. Exit restored flags to zero. Encoder
+checks cover ordinary Enter, nested modes, screen switches, resets,
+repeat/release events, composed text, and keypad keys. Existing fish,
+Neovim, and tmux shell integration checks passed.
 
-- Answer `CSI ? u` with `CSI ? flags u` for the active enhancement flags.
-  Test detection alongside primary device attributes, including replies
-  split across PTY reads. Report flags consistent with implemented behavior.
-- Handle `CSI > flags u` pushes, `CSI < number u` pops, and
-  `CSI = flags ; mode u` updates. Bound the stack and maintain separate
-  main-screen and alternate-screen stacks as specified by the protocol.
-- Encode modifier-sensitive keys according to the active flags. For
-  example, flag value 5 combines disambiguation and alternate-key reporting;
-  verify Shift Enter as `CSI 13 ; 2 u` in the applicable enhanced mode.
-- Preserve legacy input behavior outside enhanced modes. Verify mode
-  restoration after application exit, suspend/resume, and screen switches.
-- Validate the flags actually requested by the installed Codex build,
-  directly and through tmux. Earlier research used a separate Codex source
-  checkout, which probes with `CSI ? u` and pushes enhancement flags;
-  terminal detection and tmux settings can affect its requested modes.
+The tmux 3.6a test enables Xterm mode 2 on the outer terminal. Exact-byte
+tests cover both tmux output formats, ordinary Enter, Ctrl+B detach, and
+mode restoration. For negotiated Shift Enter without a text binding, the tested Codex uses
+`extended-keys on` and
+`extended-keys-format csi-u`; attach from Cryptty with `tmux -T extkeys attach`.
+The verified CSI-u probe retained two adjacent lines in one unsent draft.
+Physical desktop input and suspend/resume remain acceptance work.
 
-Define configurable modifier-sensitive bindings and raw sequence bindings
-alongside protocol handling. Settle binding syntax, supported actions,
-and precedence between explicit bindings and negotiated encoding before
-implementation. An explicit Shift Enter binding and application-negotiated
-reporting need separate tests.
+Keyboard bindings send configured text before built-in shortcuts and
+protocol encoding. A Shift+Enter binding sending `ESC` plus Return works
+through legacy tmux input with `extended-keys off`; the isolated test
+checks exact bytes, ordinary Enter, and Ctrl+B detach. Bindings support
+exact modifier matching, later-entry precedence, and captured repeats
+until release. Active text composition suppresses bound output.
+Configuration changes require a restart. See the README for syntax and
+[terminal compatibility](terminal-compatibility.md) for
+current keyboard boundaries and the [Kitty protocol][k] for the wire format.
 
-Acceptance checks should capture exact PTY bytes, exercise mode stack
-nesting and reset behavior, and run the installed Codex build both directly
-and inside tmux. Confirm Enter submits and Shift Enter inserts a newline
-in the intended Codex mode. Exercise fish and Neovim to verify ordinary
-Enter, existing shortcuts, and restored shell input behavior.
+## Complete desktop keyboard acceptance
+
+Status: PTY and unit coverage complete for the recorded cases; native
+input lifecycle needs acceptance on macOS and Linux.
+
+Exercise Shift+Enter in Codex directly and through tmux, held-key repeats,
+IME composition, focus changes with modifiers held, and suspend/resume.
+Linux lock bits currently track local Caps Lock and Num Lock presses;
+initial state and changes while unfocused require implementation work.
+Xterm modes 1 and 3 remain unsupported. Text bindings currently send bytes;
+action bindings and live configuration reload fall outside their scope.
 
 ## Validate font mappings on macOS
 
-Status: Linux validation complete; macOS runtime checks pending.
+Status: automated macOS font checks pass; desktop visual acceptance pending.
 
-Exercise primary and mapped families, styled faces, unavailable families,
-missing glyphs, symbols, blocks, combining text, and color emoji. Check
-CoreText's internal fallback cascade against the intended mapping order.
-Compare cell fitting, baseline placement, and GPU/software output on a real
-macOS desktop before claiming cross-platform visual parity.
+The current suite covers requested family and weight, native glyph
+placement, missing families, CJK and color emoji, hidden CoreText fallback
+faces, and shared family sizing across styles. Swash family-size checks
+also run on macOS; Linux all-target compilation passes.
+
+Compare primary and mapped families, bold/italic faces, missing glyphs,
+symbols, blocks, combining text, and emoji on both desktops. Inspect
+baselines, clipping, fallback order, and GPU/software appearance at
+multiple display scales. Glyphs retain native placement after family
+normalization; the earlier per-glyph bitmap fitting has been removed.
+
+## Investigate macOS performance regressions
+
+Status: measured on archived source snapshots; cause remains open.
+
+The macOS GPU comparison recorded slower bulk plain text, truecolor, and
+cursor edits. The software control also recorded slower truecolor. Idle
+cursor-reply p99 remained near one display interval. Periodic queries
+changed observed throughput and require investigation. See the
+[macOS measurements](performance.md#macos-follow-up-2026-10-16) for exact
+versions, controls, and scope.
+
+Reproduce on the current source before attributing these results to the
+subsequent font or keyboard changes. Separate parser, glyph/cache, and
+presentation costs. Physical key-to-photon latency needs independent
+measurement. Retrain PGO for any new source/compiler snapshot.
 
 ## Measure font mapping overhead
 

@@ -290,6 +290,7 @@ fn fish_startup_queries_receive_a_primary_attributes_reply() {
     assert_eq!(
         t.feed(query),
         concat!(
+            "\x1b[?0u",
             "\x1bP>|Cryptty(",
             env!("CARGO_PKG_VERSION"),
             ")\x1b\\",

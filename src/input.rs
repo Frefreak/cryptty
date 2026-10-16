@@ -1,5 +1,33 @@
 use winit::keyboard::{Key, ModifiersState, NamedKey};
 
+pub mod kitty;
+mod xterm;
+
+pub fn encode_key(
+    event: &kitty::KeyInput<'_>,
+    flags: crate::keyboard::Flags,
+    modify_other_keys_2: bool,
+    application_cursor: bool,
+    application_keypad: bool,
+) -> Vec<u8> {
+    if flags.bits() != 0 {
+        return kitty::encode(event, flags);
+    }
+    if event.state == winit::event::ElementState::Released {
+        return Vec::new();
+    }
+    if event.location == winit::keyboard::KeyLocation::Numpad
+        && let Some(bytes) =
+            keypad(event.key, event.modifiers, application_keypad)
+    {
+        return bytes;
+    }
+    if modify_other_keys_2 && let Some(bytes) = xterm::encode(event) {
+        return bytes;
+    }
+    encode(event.key, event.text, event.modifiers, application_cursor)
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Shortcut {
     Paste,

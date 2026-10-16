@@ -9,6 +9,72 @@ const DEFAULT_PIXELS_AT_1_5X: f32 = if cfg!(target_os = "macos") {
     38.0
 };
 
+#[test]
+fn keyboard_bindings_match_exact_modifiers_and_preserve_escape_bytes() {
+    use winit::keyboard::{Key, ModifiersState as M, NamedKey};
+    let config = Config::parse(
+        r#"
+keyboard:
+  bindings:
+    - {key: Enter, modifiers: [Shift], text: "old"}
+    - {key: Enter, modifiers: [Shift], text: "\u001b\r"}
+    - {key: v, modifiers: [Control, Shift], text: "paste override"}
+    - {key: F1, text: ""}
+    - {key: 中, text: "文"}
+"#,
+    )
+    .unwrap();
+    let enter = Key::Named(NamedKey::Enter);
+    assert_eq!(config.keyboard.text_for(&enter, M::SHIFT), Some("\x1b\r"));
+    assert_eq!(config.keyboard.text_for(&enter, M::empty()), None);
+    assert_eq!(
+        config.keyboard.text_for(&enter, M::SHIFT | M::CONTROL),
+        None
+    );
+    assert_eq!(
+        config
+            .keyboard
+            .text_for(&Key::Character("v".into()), M::SHIFT | M::CONTROL),
+        Some("paste override")
+    );
+    assert_eq!(
+        config
+            .keyboard
+            .text_for(&Key::Named(NamedKey::F1), M::empty()),
+        Some("")
+    );
+    assert_eq!(
+        config
+            .keyboard
+            .text_for(&Key::Character("中".into()), M::empty()),
+        Some("文")
+    );
+    assert!(
+        Config::default()
+            .keyboard
+            .text_for(&enter, M::SHIFT)
+            .is_none()
+    );
+}
+
+#[test]
+fn keyboard_bindings_reject_unknown_keys_modifiers_and_fields() {
+    for binding in [
+        "{key: Entter, text: x}",
+        "{key: '', text: x}",
+        "{key: Enter, modifiers: [Shfit], text: x}",
+        "{key: Enter, modifiers: Shift, text: x}",
+        "{key: Enter, modifiers: [Shift]}",
+        "{key: Enter, text: x, typo: true}",
+    ] {
+        assert!(
+            Config::parse(&format!("keyboard: {{bindings: [{binding}]}}"))
+                .is_err(),
+            "Accepted invalid binding: {binding}"
+        );
+    }
+}
+
 struct TestDirectory(std::path::PathBuf);
 
 impl TestDirectory {

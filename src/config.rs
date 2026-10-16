@@ -9,8 +9,10 @@ use crate::terminal::Theme;
 
 mod defaults;
 mod font_mapping;
+mod keyboard;
 
 pub use font_mapping::FontMapping;
+pub use keyboard::Keyboard;
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -18,6 +20,7 @@ pub struct Config {
     pub font: Font,
     pub window: Window,
     pub colors: Colors,
+    pub keyboard: Keyboard,
 }
 
 impl Config {

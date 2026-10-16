@@ -411,6 +411,7 @@ struct InactiveScreen {
     cursor: (usize, usize),
     saved: SavedCursor,
     pending_wrap: bool,
+    keyboard: crate::keyboard::ModeStack,
 }
 
 pub enum Effect {
@@ -440,6 +441,8 @@ pub struct Terminal {
     pub cursor_blink_on: bool,
     pub application_cursor: bool,
     pub application_keypad: bool,
+    pub keyboard: crate::keyboard::ModeStack,
+    pub modify_other_keys_2: bool,
     pub bracketed_paste: bool,
     pub focus_reporting: bool,
     pub mouse_mode: MouseMode,
@@ -486,6 +489,7 @@ impl Terminal {
             cursor: (0, 0),
             saved: SavedCursor::default(),
             pending_wrap: false,
+            keyboard: crate::keyboard::ModeStack::default(),
         };
         let scroll_bottom = rows.len() - 1;
         Self {
@@ -510,6 +514,8 @@ impl Terminal {
             cursor_blink_on: true,
             application_cursor: false,
             application_keypad: false,
+            keyboard: crate::keyboard::ModeStack::default(),
+            modify_other_keys_2: false,
             bracketed_paste: false,
             focus_reporting: false,
             mouse_mode: MouseMode::Off,
@@ -1052,6 +1058,7 @@ impl Terminal {
         }
         self.selection = None;
         std::mem::swap(&mut self.rows, &mut self.inactive.rows);
+        std::mem::swap(&mut self.keyboard, &mut self.inactive.keyboard);
         std::mem::swap(&mut self.cursor, &mut self.inactive.cursor);
         std::mem::swap(&mut self.saved, &mut self.inactive.saved);
         std::mem::swap(&mut self.pending_wrap, &mut self.inactive.pending_wrap);

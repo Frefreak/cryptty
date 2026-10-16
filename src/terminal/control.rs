@@ -21,6 +21,44 @@ impl Terminal {
         let first = params[0];
         let n = first.max(1);
         match (prefix, end) {
+            ([b'>'], 'm') if first == 0 && params.len() == 1 => {
+                self.modify_other_keys_2 = false;
+                return;
+            }
+            ([b'>'], 'm') if first == 4 => {
+                match params.get(1).copied().unwrap_or(0) {
+                    0 | 1 => self.modify_other_keys_2 = false,
+                    2 => self.modify_other_keys_2 = true,
+                    _ => (),
+                }
+                return;
+            }
+            ([b'>'], 'n') if first == 4 => {
+                self.modify_other_keys_2 = false;
+                return;
+            }
+            ([b'?'], 'm') if first == 4 => {
+                let mode = if self.modify_other_keys_2 { 2 } else { 0 };
+                self.reply(format!("\x1b[>4;{mode}m"));
+                return;
+            }
+            ([b'?'], 'u') => {
+                self.reply(format!("\x1b[?{}u", self.keyboard.flags().bits()));
+                return;
+            }
+            ([b'>'], 'u') => {
+                self.keyboard.push(first);
+                return;
+            }
+            ([b'<'], 'u') => {
+                self.keyboard.pop(n);
+                return;
+            }
+            ([b'='], 'u') => {
+                self.keyboard
+                    .set(first, params.get(1).copied().unwrap_or(1));
+                return;
+            }
             ([b'?'], 'h' | 'l') => {
                 for &mode in params {
                     self.private_mode(mode, end == 'h');
