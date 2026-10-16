@@ -476,11 +476,104 @@ mappings, styles, and window sizes. A separate fault-injection check covered
 failed optimized builds, unchanged-source retries, Cargo installation,
 successful-build retraining, and source-change invalidation. Raster previews
 used 17 pt at display scale 1.25 with the default fallback, DejaVu Sans Mono,
-and Liberation Mono. macOS runtime validation remains pending; CoreText's
-internal fallback cascade can differ from the Linux fallback order.
+and Liberation Mono. The macOS follow-up below records subsequent runtime
+checks; CoreText's internal fallback cascade can differ from Linux's order.
 
 The end-to-end PGO installation check used an isolated
 `CARGO_INSTALL_ROOT`, exercised Intel UHD Graphics 770 through Vulkan
 Mailbox plus software rendering, and produced identical installed and
 local executables. The active terminal retained its original inode during
 output replacement. Temporary checkpoints and the build lock were removed.
+
+## macOS follow-up, 2026-10-16
+
+The macOS comparison shows improved Unicode and OSC 8 throughput and lower
+cursor-reply latency under load. Bulk plain text, truecolor, and cursor edits
+regressed with GPU rendering. The cause requires further investigation.
+
+[Raw measurements, build hashes, and harnesses][macos-bench]
+preserve the runs, configurations, summaries, and validation outcomes.
+Recorded commands retain historical temporary paths; their binaries have
+been removed.
+
+[macos-bench]: benchmarks/2026-10-16-macos.json
+
+### Setup and measurement scope
+
+Apple M4 Pro, 24 GiB RAM, macOS 26.6 (25G72), Rust 1.100.0-nightly
+(`67eda617e`, LLVM 23.1.1). Both Cryptty versions used standard
+`cargo build --release --locked` builds without PGO. The comparison uses
+`9cec430` (before), `cab36c5` (current), and Alacritty 0.15.1 (`0c405d5`).
+Each terminal used a 94 x 26 grid and 10,000 history rows through a direct
+PTY. Current Cryptty selected Metal AutoVsync. The Linux measurements used
+Vulkan Mailbox and different workloads and Alacritty versions.
+
+Cursor replies delimit PTY/parser completion. Frame presentation and
+physical input latency fall outside these measurements. Runs took place
+in a normal desktop session with other applications running, without CPU
+affinity or compositor instrumentation. Native visual appearance remains
+outside this validation.
+
+### Bulk throughput
+
+Median seconds for 1,048,576 lines per workload, with five trials per
+binary in rotated order and a warmup before each workload. Lower values
+indicate faster completion. All three terminals used GPU rendering.
+
+| Workload | Before | Current | Alacritty |
+| --- | ---: | ---: | ---: |
+| Plain text | 0.853 | 2.005 | 0.495 |
+| Colors | 0.736 | 0.719 | 0.462 |
+| Unicode | 0.803 | 0.271 | 0.485 |
+| OSC 8 links | 0.822 | 0.573 | 0.650 |
+| Truecolor | 0.799 | 2.557 | 0.555 |
+| Cursor edits | 1.832 | 2.217 | 0.682 |
+
+A software-renderer control used three trials per Cryptty binary with the
+same workloads. Median seconds:
+
+| Workload | Before software | Current software |
+| --- | ---: | ---: |
+| Plain text | 0.854 | 0.741 |
+| Colors | 0.741 | 0.443 |
+| Unicode | 0.799 | 0.309 |
+| OSC 8 links | 0.844 | 0.469 |
+| Truecolor | 0.818 | 1.596 |
+| Cursor edits | 1.841 | 0.772 |
+
+Software rendering improved five workloads relative to the prior software
+build. Truecolor took about twice as long in the current software build.
+
+### Cursor-reply latency
+
+Two trials per binary pooled 1,000 measured samples per condition after
+warmup. Each cell gives median / p99 milliseconds, timed from acquisition
+of the producer lock through writing the query and receiving its reply.
+The archive also includes request timings that include lock contention.
+
+| Condition | Before | Current | Alacritty |
+| --- | ---: | ---: | ---: |
+| Idle | 14.150 / 15.298 | 0.104 / 14.607 | 0.119 / 1.484 |
+| 16 MiB/s output | 6.673 / 15.009 | 0.151 / 0.808 | 0.072 / 2.167 |
+| Saturated output | 0.928 / 1.134 | 0.037 / 0.203 | 1.160 / 2.375 |
+
+Idle tail latency remained near one display interval. At 16 MiB/s,
+current request p99 including producer-lock contention measured 2.513 ms,
+compared with 15.033 ms before and 3.421 ms for Alacritty.
+
+The saturated query workload achieved 208-215 MiB/s in current Cryptty,
+compared with 66-72 MiB/s before and 113-114 MiB/s in Alacritty. This
+query-interleaved stream differs from the bulk plain-text test. A separate
+plain-text control reproduced the GPU slowdown with 256-, 1,024-, and
+16,384-line write batches, including a scheduler yield after 1,024-line
+writes: current medians were 1.920-2.052 s versus 0.872-0.882 s before.
+The effect of periodic queries on throughput needs further investigation.
+
+### macOS validation
+
+The explicit GPU/software pixel comparison passed. The default test run
+stopped at `render::font::tests::requested_family_and_weight_match_coretext`
+in `src/render/native.rs:238`: the measured left bearing was 0, with -2
+expected. Library results were 29 passed, 1 failed, and 1 ignored; later
+test binaries were skipped after that failure. Full macOS test completion
+and investigation of the CoreText expectation remain outstanding.
