@@ -1,5 +1,41 @@
 A vibe-coded personal terminal that suits my needs.
 
+Build and run a normal release from the repository root:
+
+```fish
+cargo build --release --locked
+./target/release/cryptty
+```
+
+For profile-guided optimization (PGO), train and build with one command:
+
+```fish
+./scripts/build-pgo
+./target/pgo/cryptty
+```
+
+Fresh training collects data in two short-lived windows:
+automatic rendering, then forced software rendering. Automatic mode uses
+a compatible GPU when available. Run this from an active desktop session.
+Install matching LLVM tools first with `rustup component add llvm-tools`.
+The workload uses `~/.venv/bin/python` when available, or `uv run --offline
+--script` with an installed Python 3.11 or newer. Its dependencies use the
+Python standard library.
+
+The script saves the executable and merged profile under `target/pgo/`,
+with build artifacts under `target/pgo-build/`. All remain local, ignored
+artifacts. Interrupted builds retain a training checkpoint; retrying with
+unchanged source and compiler resumes the optimized build. Successful
+builds remove the checkpoint. To train and install through Cargo, run:
+
+```fish
+./scripts/build-pgo --install
+```
+
+This invokes `cargo install --path .` with the trained profile and the same
+build cache. Cargo uses its normal installation directory.
+See [the PGO workflow](docs/performance.md#one-command-pgo-build).
+
 Rendering uses wgpu with Metal on macOS and Vulkan on Linux. Automatic
 selection prefers an integrated GPU, then discrete and virtual GPUs.
 If initialization or rendering fails, automatic mode switches to the
@@ -68,4 +104,24 @@ On macOS, fonts use CoreText through crossfont and follow the system's
 font-smoothing setting. On Linux, fonts use Swash; `font.hinting` applies
 to that renderer.
 
-See [throughput optimization and measurements](docs/performance.md).
+Choose fonts for one or more separate Unicode ranges with `codepoint_map`:
+
+```yaml
+font:
+  codepoint_map:
+    - ranges: ["U+23CE", "U+25B2", "U+25BC", "U+2580-U+259F"]
+      family: DejaVu Sans Mono
+```
+
+Add multiple entries for different families; later entries take priority
+where ranges overlap. Ranges accept Unicode scalar values in `U+HEX` or
+`U+HEX-U+HEX` form. Bold and italic select matching faces when available.
+An unavailable family warns and falls back to the primary family. A missing
+glyph follows the normal fallback path.
+
+Mapped and fallback glyphs fit the primary font's cell dimensions without
+changing Unicode column widths. Block elements share a full-block reference
+so half blocks retain their proportions. Shading and outline details still
+follow the selected font. The primary family and size define the grid.
+
+See [performance experiments and measurements](docs/performance.md).

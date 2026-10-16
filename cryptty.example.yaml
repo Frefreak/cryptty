@@ -1,6 +1,10 @@
 # User configuration. Restart Cryptty after editing.
 font:
   hinting: false
+  # Optional font selection for separate Unicode ranges:
+  # codepoint_map:
+  #   - ranges: ["U+23CE", "U+25B2", "U+25BC", "U+2580-U+259F"]
+  #     family: DejaVu Sans Mono
 window:
   padding:
     x: 2

@@ -122,7 +122,7 @@ pub(super) fn build(
             scene.solid(left, top, w, h, bg);
         }
         for (x, cell) in row.iter().enumerate() {
-            let Content::Text { text, wide } = &cell.content else {
+            let Content::Text { text } = &cell.content else {
                 continue;
             };
             let style = terminal.cell_style(x, y);
@@ -130,9 +130,9 @@ pub(super) fn build(
                 continue;
             }
             let (fg, _) = terminal.colors(style);
-            let columns = if *wide { 2 } else { 1 };
+            let columns = text.columns();
             for ch in text.chars().filter(|c| *c != ' ') {
-                scene.glyph(ch, cell.style.font(), (x, y), columns, fg)?;
+                scene.glyph(ch, cell.style().font(), (x, y), columns, fg)?;
             }
             let (left, top) = scene.renderer.cell_origin(x, y);
             let underline = style
@@ -171,16 +171,16 @@ pub(super) fn build(
         scene.solid(left + dx, top + dy, cw, ch, terminal.theme().cursor);
         let cell = &terminal.rows[y][x];
         if shape == CursorShape::Block
-            && terminal.text_visible(cell.style)
-            && let Content::Text { text, wide } = &cell.content
+            && terminal.text_visible(cell.style())
+            && let Content::Text { text } = &cell.content
         {
-            let (_, bg) = terminal.colors(cell.style);
+            let (_, bg) = terminal.colors(cell.style());
             for ch in text.chars().filter(|c| *c != ' ') {
                 scene.glyph(
                     ch,
-                    cell.style.font(),
+                    cell.style().font(),
                     (x, y),
-                    if *wide { 2 } else { 1 },
+                    text.columns(),
                     bg,
                 )?;
             }

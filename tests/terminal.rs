@@ -23,11 +23,11 @@ fn valid(t: &Terminal) {
                 Content::Continuation => {
                     assert!(x > 0);
                     assert!(matches!(
-                        row[x - 1].content,
-                        Content::Text { wide: true, .. }
+                        &row[x - 1].content,
+                        Content::Text { text } if text.columns() == 2
                     ));
                 }
-                Content::Text { wide: true, .. } => {
+                Content::Text { text } if text.columns() == 2 => {
                     assert!(x + 1 < row.len());
                     assert_eq!(row[x + 1].content, Content::Continuation);
                 }
@@ -75,7 +75,7 @@ fn sgr_preserves_delayed_wrap() {
     let mut t = Terminal::new(3, 2);
     t.feed(b"abc\x1b[31md");
     assert_eq!(row(&t, 1), "d  ");
-    assert_eq!(t.color(t.rows[1][0].style.fg), PALETTE[1]);
+    assert_eq!(t.color(t.rows[1][0].style().fg), PALETTE[1]);
 }
 
 #[test]
@@ -90,14 +90,14 @@ fn linefeed_preserves_column_and_scrolls_at_bottom() {
 fn colors_and_resets() {
     let mut t = Terminal::new(10, 2);
     t.feed(b"\x1b[1;4;31;44mA\x1b[38;5;196mB\x1b[38;2;1;2;3mC\x1b[0mD");
-    let a = t.rows[0][0].style;
+    let a = t.rows[0][0].style();
     assert!(a.bold && a.underline == Underline::Single);
     assert_eq!(t.color(a.fg), PALETTE[1]);
     assert_eq!(t.color(a.bg), PALETTE[4]);
-    assert_eq!(t.color(t.rows[0][1].style.fg), 0xff0000);
-    assert_eq!(t.color(t.rows[0][2].style.fg), 0x010203);
-    assert_eq!(t.color(t.rows[0][3].style.fg), FOREGROUND);
-    assert!(!t.rows[0][3].style.bold);
+    assert_eq!(t.color(t.rows[0][1].style().fg), 0xff0000);
+    assert_eq!(t.color(t.rows[0][2].style().fg), 0x010203);
+    assert_eq!(t.color(t.rows[0][3].style().fg), FOREGROUND);
+    assert!(!t.rows[0][3].style().bold);
     assert_eq!(indexed_color(232), 0x080808);
     assert_eq!(indexed_color(255), 0xeeeeee);
 }
@@ -185,7 +185,7 @@ fn scrolling_reuses_rows_and_clears_combining_marks() {
             .skip(1)
             .take(2)
             .flatten()
-            .all(|c| t.color(c.style.fg) == PALETTE[1])
+            .all(|c| t.color(c.style().fg) == PALETTE[1])
     );
     t.feed(b"\x1b[99S");
     let mut reused: Vec<_> = t.rows.iter().map(|r| r.storage_id()).collect();
@@ -201,7 +201,7 @@ fn csi_capacity_cancellation_and_restart_preserve_parser_state() {
     t.feed(b"\x1b[");
     t.feed(&[b';'; 128]);
     t.feed(b"mA");
-    assert_eq!(t.color(t.rows[0][0].style.fg), PALETTE[1]);
+    assert_eq!(t.color(t.rows[0][0].style().fg), PALETTE[1]);
     t.feed(b"\x1b[0m");
     t.feed(b"\x1b[");
     t.feed(&[b'1'; 200]);
@@ -209,8 +209,8 @@ fn csi_capacity_cancellation_and_restart_preserve_parser_state() {
     assert_eq!(row(&t, 0), "AB      ");
     t.feed(b"\x1b[31\x18C\x1b[32\x1b[34mD");
     assert_eq!(row(&t, 0), "ABCD    ");
-    assert_eq!(t.color(t.rows[0][2].style.fg), FOREGROUND);
-    assert_eq!(t.color(t.rows[0][3].style.fg), PALETTE[4]);
+    assert_eq!(t.color(t.rows[0][2].style().fg), FOREGROUND);
+    assert_eq!(t.color(t.rows[0][3].style().fg), PALETTE[4]);
 }
 
 #[test]
@@ -335,27 +335,27 @@ colors:
     let theme = config.colors.theme();
     let mut t = Terminal::with_theme(12, 2, theme);
     t.feed(b"\x1b[34mA\x1b[94mB\x1b[38;5;4mC\x1b[48;5;12mD");
-    assert_eq!(t.color(t.rows[0][0].style.fg), 0x102030);
-    assert_eq!(t.color(t.rows[0][1].style.fg), 0x405060);
-    assert_eq!(t.color(t.rows[0][2].style.fg), 0x102030);
-    assert_eq!(t.color(t.rows[0][3].style.bg), 0x405060);
+    assert_eq!(t.color(t.rows[0][0].style().fg), 0x102030);
+    assert_eq!(t.color(t.rows[0][1].style().fg), 0x405060);
+    assert_eq!(t.color(t.rows[0][2].style().fg), 0x102030);
+    assert_eq!(t.color(t.rows[0][3].style().bg), 0x405060);
     t.feed(b"\x1b[39;49mE\x1b[31;44m\x1b[0mF");
     for x in [4, 5] {
-        assert_eq!(t.color(t.rows[0][x].style.fg), theme.foreground);
-        assert_eq!(t.color(t.rows[0][x].style.bg), theme.background);
+        assert_eq!(t.color(t.rows[0][x].style().fg), theme.foreground);
+        assert_eq!(t.color(t.rows[0][x].style().bg), theme.background);
     }
     t.feed(b"\x1b[38;5;196mG\x1b[38;2;1;2;3mH");
-    assert_eq!(t.color(t.rows[0][6].style.fg), 0xff0000);
-    assert_eq!(t.color(t.rows[0][7].style.fg), 0x010203);
+    assert_eq!(t.color(t.rows[0][6].style().fg), 0xff0000);
+    assert_eq!(t.color(t.rows[0][7].style().fg), 0x010203);
     t.resize(14, 3);
-    assert_eq!(t.color(t.rows[0][13].style.bg), theme.background);
-    assert_eq!(t.color(t.rows[2][0].style.fg), theme.foreground);
+    assert_eq!(t.color(t.rows[0][13].style().bg), theme.background);
+    assert_eq!(t.color(t.rows[2][0].style().fg), theme.foreground);
     t.feed(b"\x1bc");
     assert_eq!(t.theme(), &theme);
     for cell in t.rows.iter().flatten() {
-        assert_eq!(t.color(cell.style.fg), theme.foreground);
-        assert_eq!(t.color(cell.style.bg), theme.background);
+        assert_eq!(t.color(cell.style().fg), theme.foreground);
+        assert_eq!(t.color(cell.style().bg), theme.background);
     }
     t.feed(b"\x1b[34mZ");
-    assert_eq!(t.color(t.rows[0][0].style.fg), 0x102030);
+    assert_eq!(t.color(t.rows[0][0].style().fg), 0x102030);
 }

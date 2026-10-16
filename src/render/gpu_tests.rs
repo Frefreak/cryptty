@@ -27,16 +27,32 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
             "\x1b[4:4mDotted\x1b[4:5mDashed\x1b[0m\r\n",
             "\x1b[4;44mUnder\x1b[7mInverse\x1b[0m\r\n",
             "\x1b[8mHidden\x1b[0m ABC_gjpq\r\n",
-            "\x1b[5mSlow\x1b[6mRapid\x1b[0m\x1b[H",
+            "\x1b[5mSlow\x1b[6mRapid\x1b[0m\r\n",
+            "⏎▲▼ ██░▒▓\x1b[H",
         )
         .as_bytes(),
     );
-    for font_size in [19.0, 38.0] {
+    let mapped_family = if cfg!(target_os = "macos") {
+        "Menlo"
+    } else {
+        "DejaVu Sans Mono"
+    };
+    let config = crate::config::Config::parse(&format!(
+        "font: {{codepoint_map: [{{ranges: ['U+23CE', 'U+2580-U+25FF'], family: {mapped_family:?}}}]}}"
+    )).unwrap();
+    for (font_size, mapped) in
+        [(19.0, false), (19.0, true), (38.0, false), (38.0, true)]
+    {
         let mut renderer = Renderer::with_options(
             font_size,
             (3, 5),
             false,
             &crate::config::Font::default().family,
+            if mapped {
+                &config.font.codepoint_map
+            } else {
+                &[]
+            },
         )
         .unwrap();
         painter.clear_glyphs();

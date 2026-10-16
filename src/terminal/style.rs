@@ -89,14 +89,6 @@ impl Style {
             italic: self.italic,
         }
     }
-
-    pub(super) fn erased(self) -> Self {
-        Self {
-            fg: self.fg,
-            bg: self.bg,
-            ..Self::default()
-        }
-    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -149,4 +141,117 @@ pub enum MouseMode {
 pub fn dim(rgb: u32) -> u32 {
     let channel = |shift: u32| (((rgb >> shift) & 255) * 2 / 3) << shift;
     channel(16) | channel(8) | channel(0)
+}
+
+const BOLD: u8 = 1;
+const ITALIC: u8 = 1 << 1;
+const DIM: u8 = 1 << 2;
+const HIDDEN: u8 = 1 << 3;
+const STRIKE: u8 = 1 << 4;
+const OVERLINE: u8 = 1 << 5;
+const INVERSE: u8 = 1 << 6;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct CellStyle {
+    fg: Color,
+    bg: Color,
+    underline_color: Option<Color>,
+    blink: Blink,
+    underline: Underline,
+    flags: u8,
+}
+
+impl CellStyle {
+    pub(super) fn erased(self) -> Self {
+        Style {
+            fg: self.fg,
+            bg: self.bg,
+            ..Style::default()
+        }
+        .into()
+    }
+}
+
+impl From<Style> for CellStyle {
+    fn from(style: Style) -> Self {
+        Self {
+            fg: style.fg,
+            bg: style.bg,
+            underline_color: style.underline_color,
+            blink: style.blink,
+            underline: style.underline,
+            flags: (u8::from(style.bold) * BOLD)
+                | (u8::from(style.italic) * ITALIC)
+                | (u8::from(style.dim) * DIM)
+                | (u8::from(style.hidden) * HIDDEN)
+                | (u8::from(style.strike) * STRIKE)
+                | (u8::from(style.overline) * OVERLINE)
+                | (u8::from(style.inverse) * INVERSE),
+        }
+    }
+}
+
+impl From<CellStyle> for Style {
+    fn from(style: CellStyle) -> Self {
+        Self {
+            fg: style.fg,
+            bg: style.bg,
+            underline_color: style.underline_color,
+            blink: style.blink,
+            underline: style.underline,
+            bold: style.flags & BOLD != 0,
+            italic: style.flags & ITALIC != 0,
+            dim: style.flags & DIM != 0,
+            hidden: style.flags & HIDDEN != 0,
+            strike: style.flags & STRIKE != 0,
+            overline: style.flags & OVERLINE != 0,
+            inverse: style.flags & INVERSE != 0,
+        }
+    }
+}
+
+#[cfg(test)]
+mod packing_tests {
+    use super::*;
+
+    #[test]
+    fn packed_styles_preserve_every_attribute_combination() {
+        for flags in 0..128 {
+            for blink in [Blink::None, Blink::Slow, Blink::Rapid] {
+                for underline in [
+                    Underline::None,
+                    Underline::Single,
+                    Underline::Double,
+                    Underline::Curly,
+                    Underline::Dotted,
+                    Underline::Dashed,
+                ] {
+                    let style = Style {
+                        fg: Color::Indexed(255),
+                        bg: Color::Rgb(0, 127, 255),
+                        underline_color: Some(Color::Foreground),
+                        blink,
+                        underline,
+                        bold: flags & 1 != 0,
+                        italic: flags & 2 != 0,
+                        dim: flags & 4 != 0,
+                        hidden: flags & 8 != 0,
+                        strike: flags & 16 != 0,
+                        overline: flags & 32 != 0,
+                        inverse: flags & 64 != 0,
+                    };
+                    let packed = CellStyle::from(style);
+                    assert_eq!(Style::from(packed), style);
+                    assert_eq!(
+                        Style::from(packed.erased()),
+                        Style {
+                            fg: style.fg,
+                            bg: style.bg,
+                            ..Style::default()
+                        }
+                    );
+                }
+            }
+        }
+    }
 }

@@ -77,6 +77,7 @@ impl App {
             self.config.window.padding.physical(window.scale_factor()),
             self.config.font.hinting,
             &self.config.font.family,
+            &self.config.font.codepoint_map,
         )?;
         let size = window.inner_size();
         let (cols, rows) = renderer.grid_size(size.width, size.height);
@@ -200,6 +201,7 @@ impl View {
                     self.padding.physical(scale_factor),
                     self.font.hinting,
                     &self.font.family,
+                    &self.font.codepoint_map,
                 )?;
                 self.display.clear_glyphs();
                 self.resize()?;

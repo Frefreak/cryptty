@@ -8,6 +8,9 @@ use serde::Deserialize;
 use crate::terminal::Theme;
 
 mod defaults;
+mod font_mapping;
+
+pub use font_mapping::FontMapping;
 
 #[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -158,6 +161,7 @@ pub struct Font {
     pub family: String,
     pub size: FontSize,
     pub hinting: bool,
+    pub codepoint_map: Vec<FontMapping>,
 }
 
 impl Default for Font {
@@ -166,6 +170,7 @@ impl Default for Font {
             family: "Alacritty Fantasque WenKai Mono".to_string(),
             size: FontSize::default(),
             hinting: false,
+            codepoint_map: Vec::new(),
         }
     }
 }

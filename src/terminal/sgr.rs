@@ -4,18 +4,19 @@ use super::{Blink, Color, Style, Terminal, Underline};
 
 impl Terminal {
     pub(super) fn sgr(&mut self, params: &Params) {
+        let mut style: Style = self.style.into();
         let mut groups = params.iter();
         while let Some(group) = groups.next() {
             match group[0] {
-                0 => self.style = Style::default(),
-                1 => self.style.bold = true,
-                2 => self.style.dim = true,
-                3 => self.style.italic = true,
-                5 => self.style.blink = Blink::Slow,
-                6 => self.style.blink = Blink::Rapid,
-                25 => self.style.blink = Blink::None,
+                0 => style = Style::default(),
+                1 => style.bold = true,
+                2 => style.dim = true,
+                3 => style.italic = true,
+                5 => style.blink = Blink::Slow,
+                6 => style.blink = Blink::Rapid,
+                25 => style.blink = Blink::None,
                 4 => {
-                    self.style.underline = match group.get(1).unwrap_or(&1) {
+                    style.underline = match group.get(1).unwrap_or(&1) {
                         0 => Underline::None,
                         1 => Underline::Single,
                         2 => Underline::Double,
@@ -25,52 +26,45 @@ impl Terminal {
                         _ => continue,
                     };
                 }
-                7 => self.style.inverse = true,
-                8 => self.style.hidden = true,
-                9 => self.style.strike = true,
-                21 => self.style.underline = Underline::Double,
+                7 => style.inverse = true,
+                8 => style.hidden = true,
+                9 => style.strike = true,
+                21 => style.underline = Underline::Double,
                 22 => {
-                    self.style.bold = false;
-                    self.style.dim = false;
+                    style.bold = false;
+                    style.dim = false;
                 }
-                23 => self.style.italic = false,
-                24 => self.style.underline = Underline::None,
-                27 => self.style.inverse = false,
-                28 => self.style.hidden = false,
-                29 => self.style.strike = false,
-                30..=37 => {
-                    self.style.fg = Color::Indexed((group[0] - 30) as u8)
-                }
-                40..=47 => {
-                    self.style.bg = Color::Indexed((group[0] - 40) as u8)
-                }
-                90..=97 => {
-                    self.style.fg = Color::Indexed((group[0] - 82) as u8)
-                }
-                100..=107 => {
-                    self.style.bg = Color::Indexed((group[0] - 92) as u8)
-                }
-                39 => self.style.fg = Color::Foreground,
-                49 => self.style.bg = Color::Background,
+                23 => style.italic = false,
+                24 => style.underline = Underline::None,
+                27 => style.inverse = false,
+                28 => style.hidden = false,
+                29 => style.strike = false,
+                30..=37 => style.fg = Color::Indexed((group[0] - 30) as u8),
+                40..=47 => style.bg = Color::Indexed((group[0] - 40) as u8),
+                90..=97 => style.fg = Color::Indexed((group[0] - 82) as u8),
+                100..=107 => style.bg = Color::Indexed((group[0] - 92) as u8),
+                39 => style.fg = Color::Foreground,
+                49 => style.bg = Color::Background,
                 38 | 48 | 58 => {
                     if let Some(color) = extended_color(group, &mut groups) {
                         match group[0] {
-                            38 => self.style.fg = color,
-                            48 => self.style.bg = color,
-                            _ => self.style.underline_color = Some(color),
+                            38 => style.fg = color,
+                            48 => style.bg = color,
+                            _ => style.underline_color = Some(color),
                         }
                     }
                 }
-                53 => self.style.overline = true,
-                55 => self.style.overline = false,
-                59 => self.style.underline_color = None,
+                53 => style.overline = true,
+                55 => style.overline = false,
+                59 => style.underline_color = None,
                 _ => (),
             }
         }
+        self.style = style.into();
     }
 
     pub(super) fn sgr_status(&self) -> String {
-        let style = self.style;
+        let style: Style = self.style.into();
         let mut params = vec!["0".to_owned()];
         for (enabled, value) in [
             (style.bold, "1"),

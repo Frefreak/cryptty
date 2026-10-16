@@ -116,8 +116,7 @@ fn reflow(
         for i in 0..=end {
             let cell = source.get(i).filter(|_| i < end);
             let width = match cell.map(|cell| &cell.content) {
-                Some(Content::Text { wide: true, .. }) => 2,
-                Some(Content::Text { .. }) => 1,
+                Some(Content::Text { text }) => text.columns(),
                 _ => 0,
             };
             if width > 0 && x + width > cols && x > 0 {

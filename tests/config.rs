@@ -272,3 +272,65 @@ fn font_family_is_configurable_and_defaults_to_the_alacritty_family() {
     assert_eq!(config.font.size.pixels(1.5), DEFAULT_PIXELS_AT_1_5X);
     assert!(Config::parse("font: {family: [Menlo]}").is_err());
 }
+
+#[test]
+fn font_mappings_accept_multiple_disjoint_ranges() {
+    let config = Config::parse(
+        r#"
+font:
+  codepoint_map:
+    - ranges: ["U+23CE", "U+25B2-U+25BC", "U+10FFFF"]
+      family: " DejaVu Sans Mono "
+    - ranges: ["U+2580-U+259F"]
+      family: Menlo
+"#,
+    )
+    .unwrap();
+    let maps = &config.font.codepoint_map;
+    assert_eq!(maps.len(), 2);
+    assert_eq!(maps[0].family(), "DejaVu Sans Mono");
+    for ch in ['⏎', '▲', '▼', '\u{10ffff}'] {
+        assert!(maps[0].contains(ch), "{ch:?}");
+    }
+    for ch in ['A', '█', '░'] {
+        assert!(!maps[0].contains(ch), "{ch:?}");
+    }
+    assert!(maps[1].contains('█'));
+    assert!(maps[1].contains('░'));
+    assert!(!maps[1].contains('⏎'));
+    assert!(Config::default().font.codepoint_map.is_empty());
+}
+
+#[test]
+fn invalid_font_mapping_ranges_are_rejected_during_parsing() {
+    for range in [
+        "",
+        "23CE",
+        "U+",
+        "U+-1",
+        "U+nope",
+        "U+110000",
+        "U+D800",
+        "U+DFFF",
+        "U+25BC-U+25B2",
+        "U+0041-U+D800",
+        "U++0041",
+        "U+0041-U+0042-U+0043",
+    ] {
+        let yaml = format!(
+            "font: {{codepoint_map: [{{ranges: [{range:?}], family: Menlo}}]}}"
+        );
+        assert!(Config::parse(&yaml).is_err(), "{range}");
+    }
+    for mapping in [
+        "{ranges: [], family: Menlo}",
+        "{ranges: ['U+0041'], family: '  '}",
+        "{ranges: ['U+0041'], family: [Menlo]}",
+        "{ranges: 'U+0041', family: Menlo}",
+        "{ranges: ['U+0041'], familiy: Menlo}",
+        "{ranges: ['U+0041']}",
+    ] {
+        let yaml = format!("font: {{codepoint_map: [{mapping}]}}");
+        assert!(Config::parse(&yaml).is_err(), "{mapping}");
+    }
+}

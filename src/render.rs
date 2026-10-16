@@ -16,6 +16,7 @@ mod font;
 
 mod atlas;
 mod decoration;
+mod fit;
 pub mod gpu;
 #[cfg(test)]
 mod gpu_tests;
@@ -48,6 +49,7 @@ impl Renderer {
             (0, 0),
             false,
             &crate::config::Font::default().family,
+            &[],
         )
     }
 
@@ -56,8 +58,10 @@ impl Renderer {
         padding: (u32, u32),
         hinting: bool,
         family: &str,
+        mappings: &[crate::config::FontMapping],
     ) -> Result<Self> {
-        let rasterizer = font::Rasterizer::new(size, hinting, family)?;
+        let rasterizer =
+            font::Rasterizer::new(size, hinting, family, mappings)?;
         Ok(Self {
             cell_width: rasterizer.cell_width,
             cell_height: rasterizer.cell_height,
@@ -167,17 +171,17 @@ impl Renderer {
             self.solid(left + dx, top + dy, w, h, terminal.theme().cursor);
             let cell = &terminal.rows[y][x];
             if shape == CursorShape::Block
-                && terminal.text_visible(cell.style)
-                && let Content::Text { text, wide } = &cell.content
+                && terminal.text_visible(cell.style())
+                && let Content::Text { text } = &cell.content
             {
-                let (_, bg) = terminal.colors(cell.style);
+                let (_, bg) = terminal.colors(cell.style());
                 for ch in text.chars().filter(|c| *c != ' ') {
                     self.paint_char(
                         ch,
-                        cell.style.font(),
+                        cell.style().font(),
                         x,
                         y,
-                        if *wide { 2 } else { 1 },
+                        text.columns(),
                         bg,
                     );
                 }
@@ -210,11 +214,11 @@ impl Renderer {
             if !terminal.text_visible(style) {
                 continue;
             }
-            if let Content::Text { text, wide } = &cell.content {
+            if let Content::Text { text } = &cell.content {
                 let (fg, _) = terminal.colors(style);
-                let columns = if *wide { 2 } else { 1 };
+                let columns = text.columns();
                 for ch in text.chars().filter(|c| *c != ' ') {
-                    self.paint_char(ch, cell.style.font(), x, y, columns, fg);
+                    self.paint_char(ch, cell.style().font(), x, y, columns, fg);
                 }
                 let (left, _) = self.cell_origin(x, y);
                 let underline = style
@@ -471,6 +475,7 @@ colors:
             (3, 5),
             false,
             &crate::config::Font::default().family,
+            &[],
         )
         .unwrap();
         let width = plain.cell_width * 8;

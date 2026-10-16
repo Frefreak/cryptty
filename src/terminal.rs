@@ -10,6 +10,7 @@ mod parser;
 mod reflow;
 mod sgr;
 mod style;
+use style::CellStyle;
 #[cfg(test)]
 mod tests;
 mod text;
@@ -50,29 +51,52 @@ impl Default for Theme {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CellText {
-    base: char,
+    base: Character,
     // Keep optional string metadata out of every cell.
     #[allow(clippy::box_collection)]
     combining: Option<Box<String>>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Character {
+    Narrow(char),
+    Wide(char),
+}
+
 impl CellText {
-    fn new(base: char) -> Self {
+    fn new(base: char, wide: bool) -> Self {
         Self {
-            base,
+            base: if wide {
+                Character::Wide(base)
+            } else {
+                Character::Narrow(base)
+            },
             combining: None,
         }
     }
 
+    fn base(&self) -> char {
+        match self.base {
+            Character::Narrow(ch) | Character::Wide(ch) => ch,
+        }
+    }
+
+    pub fn columns(&self) -> usize {
+        match self.base {
+            Character::Narrow(_) => 1,
+            Character::Wide(_) => 2,
+        }
+    }
+
     pub fn chars(&self) -> impl Iterator<Item = char> + '_ {
-        std::iter::once(self.base)
+        std::iter::once(self.base())
             .chain(self.combining.as_deref().map_or("", String::as_str).chars())
     }
 
     #[inline(never)]
     fn push_combining(&mut self, ch: char) {
         let len = self.combining.as_ref().map_or(0, |text| text.len());
-        if self.base.len_utf8() + len < 64 {
+        if self.base().len_utf8() + len < 64 {
             self.combining
                 .get_or_insert_with(|| Box::new(String::new()))
                 .push(ch);
@@ -82,25 +106,28 @@ impl CellText {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Content {
-    Text { text: CellText, wide: bool },
+    Text { text: CellText },
     Continuation,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Cell {
     pub content: Content,
-    pub style: Style,
+    style: CellStyle,
     pub hyperlink: Option<Arc<String>>,
 }
 
 impl Cell {
-    fn blank(style: Style) -> Self {
+    pub fn style(&self) -> Style {
+        self.style.into()
+    }
+
+    fn blank(style: impl Into<CellStyle>) -> Self {
         Self {
             content: Content::Text {
-                text: CellText::new(' '),
-                wide: false,
+                text: CellText::new(' ', false),
             },
-            style: style.erased(),
+            style: style.into().erased(),
             hyperlink: None,
         }
     }
@@ -116,7 +143,7 @@ pub struct Row {
 }
 
 impl Row {
-    fn new(cols: usize, style: Style) -> Self {
+    fn new(cols: usize, style: impl Into<CellStyle>) -> Self {
         let blank = Cell::blank(style);
         Self {
             cells: vec![blank.clone(); cols],
@@ -126,10 +153,49 @@ impl Row {
         }
     }
 
-    fn clear(&mut self, style: Style) {
+    fn clear(&mut self, style: impl Into<CellStyle>) {
         self.occupied = 0;
         self.blank = Cell::blank(style);
         self.wrapped = None;
+    }
+
+    fn erase(
+        &mut self,
+        mut range: std::ops::Range<usize>,
+        style: impl Into<CellStyle>,
+    ) {
+        let style = style.into();
+        if range.is_empty() {
+            return;
+        }
+        if range == (0..self.len()) {
+            self.clear(style);
+            return;
+        }
+        let clears_wrap = range.end == self.len();
+        if range.start > 0
+            && matches!(self[range.start].content, Content::Continuation)
+        {
+            range.start -= 1;
+        }
+        if matches!(
+            &self[range.end - 1].content,
+            Content::Text { text } if text.columns() == 2
+        ) {
+            range.end = (range.end + 1).min(self.len());
+        }
+        if range.end == self.len() {
+            self.prepare(range.start);
+            self.occupied = range.start;
+            self.blank = Cell::blank(style);
+        } else {
+            self.prepare(range.end);
+            self.occupied = self.occupied.max(range.end);
+            self.cells[range].fill(Cell::blank(style));
+        }
+        if clears_wrap {
+            self.wrapped = None;
+        }
     }
 
     #[inline(always)]
@@ -152,14 +218,13 @@ impl Row {
         col: usize,
         ch: char,
         wide: bool,
-        style: &Style,
+        style: &CellStyle,
         hyperlink: &Option<Arc<String>>,
     ) {
         self.prepare(col);
         let cell = &mut self.cells[col];
         cell.content = Content::Text {
-            text: CellText::new(ch),
-            wide,
+            text: CellText::new(ch, wide),
         };
         cell.style = *style;
         cell.hyperlink.clone_from(hyperlink);
@@ -170,7 +235,7 @@ impl Row {
     fn write_continuation(
         &mut self,
         col: usize,
-        style: &Style,
+        style: &CellStyle,
         hyperlink: &Option<Arc<String>>,
     ) {
         self.prepare(col);
@@ -382,7 +447,7 @@ pub struct Terminal {
     pub title: String,
     pub effects: Vec<Effect>,
     pub reverse_video: bool,
-    style: Style,
+    style: CellStyle,
     saved: SavedCursor,
     parser: Option<Box<vte::Parser<OSC_LIMIT>>>,
     cancelling: bool,
@@ -413,7 +478,7 @@ impl Terminal {
 
     pub fn with_theme(cols: usize, rows: usize, theme: Theme) -> Self {
         let (cols, rows) = (cols.max(2), rows.max(1));
-        let style = Style::default();
+        let style = CellStyle::from(Style::default());
         let rows: VecDeque<_> =
             (0..rows).map(|_| Row::new(cols, style)).collect();
         let inactive = InactiveScreen {
@@ -634,7 +699,7 @@ impl Terminal {
         self.rows
             .iter()
             .flatten()
-            .any(|cell| cell.style.blink != Blink::None)
+            .any(|cell| cell.style().blink != Blink::None)
     }
 
     pub fn text_visible(&self, style: Style) -> bool {
@@ -677,8 +742,8 @@ impl Terminal {
                 || self.charsets[self.active_charset]
                 || x + 1 == self.cols()
                 || !matches!(
-                    self.rows[y][x].content,
-                    Content::Text { wide: false, .. }
+                    &self.rows[y][x].content,
+                    Content::Text { text } if text.columns() == 1
                 )
             {
                 vte::Perform::print(self, char::from(first));
@@ -694,8 +759,8 @@ impl Terminal {
                     .iter()
                     .position(|cell| {
                         !matches!(
-                            cell.content,
-                            Content::Text { wide: false, .. }
+                            &cell.content,
+                            Content::Text { text } if text.columns() == 1
                         )
                     })
                     .map_or(end, |offset| x + offset)
@@ -705,8 +770,7 @@ impl Terminal {
             for (cell, &byte) in row.cells[x..end].iter_mut().zip(&bytes[..len])
             {
                 cell.content = Content::Text {
-                    text: CellText::new(char::from(byte)),
-                    wide: false,
+                    text: CellText::new(char::from(byte), false),
                 };
                 cell.style = self.style;
                 cell.hyperlink.clone_from(&self.hyperlink);
@@ -742,8 +806,8 @@ impl Terminal {
             && !self.insert_mode
             && x + 1 < self.cols()
             && matches!(
-                self.rows[y][x].content,
-                Content::Text { wide: false, .. }
+                &self.rows[y][x].content,
+                Content::Text { text } if text.columns() == 1
             )
         {
             self.rows[y].write_text(x, ch, false, &self.style, &self.hyperlink);
@@ -809,8 +873,8 @@ impl Terminal {
         }
         for col in x..x + width {
             if !matches!(
-                self.rows[y][col].content,
-                Content::Text { wide: false, .. }
+                &self.rows[y][col].content,
+                Content::Text { text } if text.columns() == 1
             ) {
                 self.clear_cell(col, y);
             }
@@ -832,11 +896,13 @@ impl Terminal {
         if x + 1 == self.cols() {
             self.rows[y].wrapped = None;
         }
-        match self.rows[y][x].content {
+        match &self.rows[y][x].content {
             Content::Continuation if x > 0 => {
                 self.rows[y].set(x - 1, Cell::blank(self.style));
             }
-            Content::Text { wide: true, .. } if x + 1 < self.cols() => {
+            Content::Text { text }
+                if text.columns() == 2 && x + 1 < self.cols() =>
+            {
                 self.rows[y].set(x + 1, Cell::blank(self.style));
             }
             _ => (),
@@ -846,15 +912,15 @@ impl Terminal {
 
     fn repair_row(row: &mut [Cell]) {
         for x in 0..row.len() {
-            let valid = match row[x].content {
+            let valid = match &row[x].content {
                 Content::Continuation => {
                     x > 0
                         && matches!(
-                            row[x - 1].content,
-                            Content::Text { wide: true, .. }
+                            &row[x - 1].content,
+                            Content::Text { text } if text.columns() == 2
                         )
                 }
-                Content::Text { wide: true, .. } => {
+                Content::Text { text } if text.columns() == 2 => {
                     x + 1 < row.len()
                         && matches!(row[x + 1].content, Content::Continuation)
                 }
@@ -949,7 +1015,7 @@ impl Terminal {
     fn save_cursor(&mut self) {
         self.saved = SavedCursor {
             position: self.cursor,
-            style: self.style,
+            style: self.style.into(),
             origin: self.origin_mode,
             auto_wrap: self.auto_wrap,
             pending_wrap: self.pending_wrap,
@@ -964,7 +1030,7 @@ impl Terminal {
             self.saved.position.0.min(self.cols() - 1),
             self.saved.position.1.min(self.rows.len() - 1),
         );
-        self.style = self.saved.style;
+        self.style = self.saved.style.into();
         self.origin_mode = self.saved.origin;
         self.auto_wrap = self.saved.auto_wrap;
         self.pending_wrap = self.saved.pending_wrap;
@@ -1021,9 +1087,7 @@ impl Terminal {
                 2 => 0..self.cols(),
                 _ => 0..0,
             };
-            for col in range {
-                self.clear_cell(col, row);
-            }
+            self.rows[row].erase(range, self.style);
         }
     }
 

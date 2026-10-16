@@ -72,8 +72,7 @@ impl Perform for Terminal {
             ([b'#'], b'8') => {
                 let mut cell = Cell::blank(Style::default());
                 cell.content = super::Content::Text {
-                    text: super::CellText::new('E'),
-                    wide: false,
+                    text: super::CellText::new('E', false),
                 };
                 for row in &mut self.rows {
                     row.fill(cell.clone());

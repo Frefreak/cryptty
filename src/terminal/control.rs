@@ -114,14 +114,11 @@ impl Terminal {
                     2 => 0..self.cols(),
                     _ => 0..0,
                 };
-                for col in range {
-                    self.clear_cell(col, y);
-                }
+                self.rows[y].erase(range, self.style);
             }
             'X' => {
-                for col in x..(x + n).min(self.cols()) {
-                    self.clear_cell(col, y);
-                }
+                let end = (x + n).min(self.cols());
+                self.rows[y].erase(x..end, self.style);
             }
             'P' => {
                 let count = n.min(self.cols() - x);
@@ -296,7 +293,7 @@ impl Terminal {
     }
 
     fn soft_reset(&mut self) {
-        self.style = Style::default();
+        self.style = Style::default().into();
         self.hyperlink = None;
         self.origin_mode = false;
         self.insert_mode = false;

@@ -26,7 +26,7 @@ fn alternate_screen_restores_shell_cursor_style_and_pending_wrap() {
     assert_eq!(t.cursor, (3, 0));
     t.feed(b"Z");
     assert_eq!(row(&t, 1), "Z   ");
-    assert_eq!(t.rows[1][0].style.fg, Color::Indexed(1));
+    assert_eq!(t.rows[1][0].style().fg, Color::Indexed(1));
     t.feed(b"\x1b[?1049l");
     assert_eq!(t.cursor, (1, 1));
 }
@@ -99,7 +99,7 @@ fn saved_cursor_restores_origin_charset_and_attributes() {
     t.feed(b"\x1b[?6l\x1b(B\x1b[0m\x1b8q");
     assert_eq!(t.cursor, (3, 2));
     assert!(row(&t, 2).starts_with("  ─"));
-    assert!(t.rows[2][2].style.italic);
+    assert!(t.rows[2][2].style().italic);
     assert_eq!(t.feed(b"\x1b[6n"), b"\x1b[2;4R");
 }
 
@@ -115,22 +115,25 @@ fn saved_cursor_restores_autowrap() {
 fn sgr_colon_colors_and_independent_attribute_resets() {
     let mut t = Terminal::new(20, 2);
     t.feed(b"\x1b[1;2;3;4:3;9;53;38:2::1:2:3;48:5:4;58:2::4:5:6mA");
-    let a = t.rows[0][0].style;
+    let a = t.rows[0][0].style();
     assert!(a.bold && a.dim && a.italic && a.strike && a.overline);
     assert_eq!(a.underline, Underline::Curly);
     assert_eq!(a.fg, Color::Rgb(1, 2, 3));
     assert_eq!(a.bg, Color::Indexed(4));
     assert_eq!(a.underline_color, Some(Color::Rgb(4, 5, 6)));
     t.feed(b"\x1b[22;23;24;29;55;59mB");
-    let b = t.rows[0][1].style;
+    let b = t.rows[0][1].style();
     assert!(!b.bold && !b.dim && !b.italic && !b.strike && !b.overline);
     assert_eq!(b.underline, Underline::None);
     assert_eq!(b.underline_color, None);
     assert_eq!(b.fg, a.fg);
     t.feed(b"\x1b[58;5;2;4:2mC\x1b[0mD");
-    assert_eq!(t.rows[0][2].style.underline_color, Some(Color::Indexed(2)));
-    assert_eq!(t.rows[0][2].style.underline, Underline::Double);
-    assert_eq!(t.rows[0][3].style, Default::default());
+    assert_eq!(
+        t.rows[0][2].style().underline_color,
+        Some(Color::Indexed(2))
+    );
+    assert_eq!(t.rows[0][2].style().underline, Underline::Double);
+    assert_eq!(t.rows[0][3].style(), Default::default());
 }
 
 #[test]
@@ -138,9 +141,9 @@ fn erase_uses_colors_without_drawing_current_decorations() {
     let mut t = Terminal::new(5, 2);
     t.feed(b"\x1b[4:3;3;44m\x1b[2J");
     for cell in t.rows.iter().flatten() {
-        assert_eq!(cell.style.underline, Underline::None);
-        assert!(!cell.style.italic);
-        assert_eq!(cell.style.bg, Color::Indexed(4));
+        assert_eq!(cell.style().underline, Underline::None);
+        assert!(!cell.style().italic);
+        assert_eq!(cell.style().bg, Color::Indexed(4));
     }
 }
 
@@ -149,17 +152,17 @@ fn osc_updates_existing_indexed_and_default_colors() {
     let mut t = Terminal::new(8, 2);
     t.feed(b"A\x1b[31mB\x1b[38;2;255;0;0mC");
     t.feed(b"\x1b]4;1;#123456\x07\x1b]10;rgb:ab/cd/ef\x1b\\");
-    assert_eq!(t.color(t.rows[0][0].style.fg), 0xabcdef);
-    assert_eq!(t.color(t.rows[0][1].style.fg), 0x123456);
-    assert_eq!(t.color(t.rows[0][2].style.fg), 0xff0000);
+    assert_eq!(t.color(t.rows[0][0].style().fg), 0xabcdef);
+    assert_eq!(t.color(t.rows[0][1].style().fg), 0x123456);
+    assert_eq!(t.color(t.rows[0][2].style().fg), 0xff0000);
     assert_eq!(
         t.feed(b"\x1b]4;1;?\x1b\\"),
         b"\x1b]4;1;rgb:1212/3434/5656\x1b\\"
     );
     assert_eq!(t.feed(b"\x1b]10;?\x07"), b"\x1b]10;rgb:abab/cdcd/efef\x07");
     t.feed(b"\x1b]104;1\x07\x1b]110\x07");
-    assert_eq!(t.color(t.rows[0][1].style.fg), PALETTE[1]);
-    assert_eq!(t.color(t.rows[0][0].style.fg), t.theme().foreground);
+    assert_eq!(t.color(t.rows[0][1].style().fg), PALETTE[1]);
+    assert_eq!(t.color(t.rows[0][0].style().fg), t.theme().foreground);
 }
 
 #[test]
@@ -281,9 +284,9 @@ fn slow_and_rapid_blink_have_distinct_phases_and_reset() {
     use cryptty::terminal::Blink;
     let mut t = Terminal::new(20, 3);
     t.feed(b"\x1b[5ma\x1b[6mb\x1b[25mc");
-    assert_eq!(t.rows[0][0].style.blink, Blink::Slow);
-    assert_eq!(t.rows[0][1].style.blink, Blink::Rapid);
-    assert_eq!(t.rows[0][2].style.blink, Blink::None);
+    assert_eq!(t.rows[0][0].style().blink, Blink::Slow);
+    assert_eq!(t.rows[0][1].style().blink, Blink::Rapid);
+    assert_eq!(t.rows[0][2].style().blink, Blink::None);
     assert_eq!(
         (0..4).map(|p| Blink::Slow.visible(p)).collect::<Vec<_>>(),
         [true, true, false, false]

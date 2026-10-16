@@ -1,3 +1,4 @@
+use crate::config::FontMapping;
 use crate::terminal::FontStyle;
 use anyhow::{Context, Result};
 use crossfont::{
@@ -6,10 +7,13 @@ use crossfont::{
 };
 use swash::scale::image::{Content, Image};
 use swash::zeno::Placement;
+use unicode_width::UnicodeWidthChar;
 
 pub struct Rasterizer {
     inner: crossfont::Rasterizer,
     faces: [FontKey; 4],
+    mappings: Vec<(FontMapping, [FontKey; 4])>,
+    advance: f32,
     size: Size,
     pub cell_width: usize,
     pub cell_height: usize,
@@ -17,29 +21,36 @@ pub struct Rasterizer {
 }
 
 impl Rasterizer {
-    pub fn new(size: f32, _hinting: bool, family: &str) -> Result<Self> {
+    pub fn new(
+        size: f32,
+        _hinting: bool,
+        family: &str,
+        mappings: &[FontMapping],
+    ) -> Result<Self> {
         // CoreText takes the scaled macOS point size directly.
         let size = Size::new(size);
         let mut inner = crossfont::Rasterizer::new()?;
-        let desc = |weight, slant| {
-            FontDesc::new(family, Style::Description { slant, weight })
-        };
-        let regular = inner
-            .load_font(&desc(Weight::Normal, Slant::Normal), size)
-            .context("Cannot load native monospace font")?;
-        let bold = inner
-            .load_font(&desc(Weight::Bold, Slant::Normal), size)
-            .unwrap_or(regular);
-        let italic = inner
-            .load_font(&desc(Weight::Normal, Slant::Italic), size)
-            .unwrap_or(regular);
-        let bold_italic = inner
-            .load_font(&desc(Weight::Bold, Slant::Italic), size)
-            .unwrap_or(bold);
-        let metrics = inner.metrics(regular, size)?;
+        let faces = load_faces(&mut inner, family, size)?;
+        let mappings = mappings
+            .iter()
+            .map(|mapping| {
+                let mapped = load_faces(&mut inner, mapping.family(), size)
+                    .unwrap_or_else(|error| {
+                        eprintln!(
+                            "Warning: mapped font {:?}: {error}",
+                            mapping.family()
+                        );
+                        faces
+                    });
+                (mapping.clone(), mapped)
+            })
+            .collect();
+        let metrics = inner.metrics(faces[0], size)?;
         Ok(Self {
             inner,
-            faces: [regular, bold, italic, bold_italic],
+            faces,
+            mappings,
+            advance: metrics.average_advance as f32,
             size,
             cell_width: metrics.average_advance.floor().max(1.0) as usize,
             cell_height: metrics.line_height.ceil().max(size.as_pt() as f64)
@@ -52,11 +63,30 @@ impl Rasterizer {
     }
 
     pub fn rasterize(&mut self, ch: char, style: FontStyle) -> Option<Image> {
-        let glyph = match self.inner.get_glyph(GlyphKey {
+        let preferred = self.faces[style.index()];
+        let mut face = self
+            .mappings
+            .iter()
+            .rev()
+            .find_map(|(mapping, faces)| {
+                mapping.contains(ch).then_some(faces[style.index()])
+            })
+            .unwrap_or(preferred);
+        let key = |face| GlyphKey {
             character: ch,
-            font_key: self.faces[style.index()],
+            font_key: face,
             size: self.size,
-        }) {
+        };
+        let glyph = match self.inner.get_glyph(key(face)) {
+            Err(crossfont::Error::MissingGlyph(_)) if face != preferred => {
+                face = preferred;
+                match self.inner.get_glyph(key(face)) {
+                    Ok(glyph) | Err(crossfont::Error::MissingGlyph(glyph)) => {
+                        glyph
+                    }
+                    Err(_) => return None,
+                }
+            }
             Ok(glyph) | Err(crossfont::Error::MissingGlyph(glyph)) => glyph,
             Err(_) => return None,
         };
@@ -83,7 +113,7 @@ impl Rasterizer {
                 (Content::Color, rgba)
             }
         };
-        Some(Image {
+        let image = Image {
             content,
             data,
             placement: Placement {
@@ -93,8 +123,70 @@ impl Rasterizer {
                 height: glyph.height as u32,
             },
             ..Image::default()
-        })
+        };
+        let Some(columns) = ch.width().filter(|width| *width > 0) else {
+            return Some(image);
+        };
+        let width = self.cell_width * columns;
+        if face == preferred
+            && image.placement.width as usize <= width + 1
+            && image.placement.height as usize <= self.cell_height + 1
+        {
+            return Some(image);
+        }
+        let advance = self
+            .inner
+            .metrics(face, self.size)
+            .map_or(self.advance, |metrics| metrics.average_advance as f32)
+            * columns as f32;
+        if ('\u{2580}'..='\u{259f}').contains(&ch)
+            && let Ok(reference) = self.inner.get_glyph(GlyphKey {
+                character: '█',
+                font_key: face,
+                size: self.size,
+            })
+        {
+            return Some(super::fit::block(
+                image,
+                advance,
+                Placement {
+                    left: reference.left,
+                    top: reference.top,
+                    width: reference.width as u32,
+                    height: reference.height as u32,
+                },
+                (width, self.cell_height, self.baseline),
+            ));
+        }
+        Some(super::fit::glyph(
+            image,
+            advance,
+            (self.cell_width * columns, self.cell_height, self.baseline),
+        ))
     }
+}
+
+fn load_faces(
+    inner: &mut crossfont::Rasterizer,
+    family: &str,
+    size: Size,
+) -> Result<[FontKey; 4]> {
+    let desc = |weight, slant| {
+        FontDesc::new(family, Style::Description { slant, weight })
+    };
+    let regular = inner
+        .load_font(&desc(Weight::Normal, Slant::Normal), size)
+        .context("Cannot load native monospace font")?;
+    let bold = inner
+        .load_font(&desc(Weight::Bold, Slant::Normal), size)
+        .unwrap_or(regular);
+    let italic = inner
+        .load_font(&desc(Weight::Normal, Slant::Italic), size)
+        .unwrap_or(regular);
+    let bold_italic = inner
+        .load_font(&desc(Weight::Bold, Slant::Italic), size)
+        .unwrap_or(bold);
+    Ok([regular, bold, italic, bold_italic])
 }
 
 #[cfg(test)]
@@ -107,6 +199,7 @@ mod tests {
             19.0,
             false,
             "Cryptty deliberately nonexistent font family",
+            &[],
         )
         .unwrap();
         let image = native.rasterize('M', FontStyle::default()).unwrap();
@@ -115,7 +208,7 @@ mod tests {
 
     #[test]
     fn requested_family_and_weight_match_coretext() {
-        let mut native = Rasterizer::new(38.0, false, "Menlo").unwrap();
+        let mut native = Rasterizer::new(38.0, false, "Menlo", &[]).unwrap();
         let mut reference = crossfont::Rasterizer::new().unwrap();
         let size = Size::new(38.0);
         for (bold, italic, weight, slant) in [
@@ -161,7 +254,7 @@ mod tests {
 
     #[test]
     fn native_fallback_renders_cjk_and_color_emoji() {
-        let mut native = Rasterizer::new(38.0, false, "Menlo").unwrap();
+        let mut native = Rasterizer::new(38.0, false, "Menlo", &[]).unwrap();
         for ch in ['中', '😀'] {
             let original = native
                 .inner

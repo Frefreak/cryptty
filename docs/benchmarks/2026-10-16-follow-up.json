@@ -1,0 +1,5616 @@
+{
+  "scope": "Follow-up optimization after e5031f9; session measurements",
+  "stages": {
+    "pool-comparison": {
+      "metadata": {
+        "binaries": {
+          "baseline": {
+            "path": "/tmp/cryptty-tuning/cryptty-baseline",
+            "sha256": "006203c6ad762299ca1751bfcb3d87e5c7924de87a17afc09c8da09efae3284c"
+          },
+          "pool": {
+            "path": "/tmp/cryptty-tuning/cryptty-pool",
+            "sha256": "37ffdf852c70873c2ad02d386e89083d4d238b4606484129931cf02bc70a3485"
+          }
+        },
+        "trials": 3,
+        "lines": 4194304,
+        "warmup": 2,
+        "grid": [
+          80,
+          21
+        ]
+      },
+      "summary": {
+        "plain": {
+          "baseline": {
+            "seconds": 1.393710865988396,
+            "terminal_cpu": 1.74,
+            "cpu": 2.233116,
+            "rss_kib": 165904
+          },
+          "pool": {
+            "seconds": 1.4216881039901637,
+            "terminal_cpu": 1.7499999999999998,
+            "cpu": 2.2615079999999996,
+            "rss_kib": 166544
+          }
+        },
+        "unicode": {
+          "baseline": {
+            "seconds": 1.5923727040062658,
+            "terminal_cpu": 1.9500000000000002,
+            "cpu": 2.46711,
+            "rss_kib": 251808
+          },
+          "pool": {
+            "seconds": 1.627655454998603,
+            "terminal_cpu": 1.96,
+            "cpu": 2.46593,
+            "rss_kib": 252516
+          }
+        }
+      }
+    },
+    "shared-comparison": {
+      "metadata": {
+        "binaries": {
+          "baseline": {
+            "path": "/tmp/cryptty-tuning/cryptty-baseline",
+            "sha256": "006203c6ad762299ca1751bfcb3d87e5c7924de87a17afc09c8da09efae3284c"
+          },
+          "shared": {
+            "path": "/tmp/cryptty-tuning/cryptty-shared",
+            "sha256": "02f24b98f9e0a7ec2c122cec5b23fc2fcadc14b6c0d22b102c29b974786a3240"
+          }
+        },
+        "trials": 3,
+        "lines": 4194304,
+        "warmup": 2,
+        "grid": [
+          80,
+          21
+        ]
+      },
+      "summary": {
+        "plain": {
+          "baseline": {
+            "seconds": 1.7348457849875558,
+            "terminal_cpu": 2.11,
+            "cpu": 2.588077,
+            "rss_kib": 153232
+          },
+          "shared": {
+            "seconds": 1.5226118960126769,
+            "terminal_cpu": 1.8900000000000001,
+            "cpu": 2.391264,
+            "rss_kib": 140332
+          }
+        },
+        "color": {
+          "baseline": {
+            "seconds": 2.080698453995865,
+            "terminal_cpu": 2.53,
+            "cpu": 3.018148,
+            "rss_kib": 152880
+          },
+          "shared": {
+            "seconds": 2.5919991960108746,
+            "terminal_cpu": 3.0300000000000002,
+            "cpu": 3.5452969999999997,
+            "rss_kib": 140392
+          }
+        },
+        "unicode": {
+          "baseline": {
+            "seconds": 1.8629374399897642,
+            "terminal_cpu": 2.26,
+            "cpu": 2.750311,
+            "rss_kib": 238680
+          },
+          "shared": {
+            "seconds": 1.9802969000011217,
+            "terminal_cpu": 2.36,
+            "cpu": 2.925051,
+            "rss_kib": 216668
+          }
+        },
+        "links": {
+          "baseline": {
+            "seconds": 1.676310549984919,
+            "terminal_cpu": 1.96,
+            "cpu": 2.415338,
+            "rss_kib": 153620
+          },
+          "shared": {
+            "seconds": 1.7385800480260514,
+            "terminal_cpu": 2.01,
+            "cpu": 2.360719,
+            "rss_kib": 141272
+          }
+        },
+        "rgb": {
+          "baseline": {
+            "seconds": 2.101551733998349,
+            "terminal_cpu": 2.58,
+            "cpu": 3.1253130000000002,
+            "rss_kib": 153572
+          },
+          "shared": {
+            "seconds": 2.7798144859843887,
+            "terminal_cpu": 3.2600000000000002,
+            "cpu": 3.81657,
+            "rss_kib": 141540
+          }
+        }
+      }
+    },
+    "shared-atomic-comparison": {
+      "metadata": {
+        "binaries": {
+          "baseline": {
+            "path": "/tmp/cryptty-tuning/cryptty-baseline",
+            "sha256": "006203c6ad762299ca1751bfcb3d87e5c7924de87a17afc09c8da09efae3284c"
+          },
+          "shared": {
+            "path": "/tmp/cryptty-tuning/cryptty-shared-atomic",
+            "sha256": "03d715e15917d117379e9d75685bbe7be270f027a0bcb226e51977772a553a21"
+          }
+        },
+        "trials": 3,
+        "lines": 4194304,
+        "warmup": 2,
+        "grid": [
+          80,
+          21
+        ]
+      },
+      "summary": {
+        "plain": {
+          "baseline": {
+            "seconds": 2.0053273740049917,
+            "terminal_cpu": 2.37,
+            "cpu": 2.853252,
+            "rss_kib": 153568
+          },
+          "shared": {
+            "seconds": 1.6573709249787498,
+            "terminal_cpu": 2.0300000000000002,
+            "cpu": 2.495336,
+            "rss_kib": 140584
+          }
+        },
+        "color": {
+          "baseline": {
+            "seconds": 2.286019334977027,
+            "terminal_cpu": 2.75,
+            "cpu": 3.275839,
+            "rss_kib": 153696
+          },
+          "shared": {
+            "seconds": 2.4118547689868137,
+            "terminal_cpu": 2.85,
+            "cpu": 3.328729,
+            "rss_kib": 140740
+          }
+        },
+        "rgb": {
+          "baseline": {
+            "seconds": 2.3498604689957574,
+            "terminal_cpu": 2.83,
+            "cpu": 3.3456669999999997,
+            "rss_kib": 153152
+          },
+          "shared": {
+            "seconds": 4.527852061000885,
+            "terminal_cpu": 5.01,
+            "cpu": 5.5999099999999995,
+            "rss_kib": 140928
+          }
+        }
+      }
+    },
+    "pgo-comparison": {
+      "metadata": {
+        "binaries": {
+          "baseline": {
+            "path": "/tmp/cryptty-tuning/cryptty-baseline",
+            "sha256": "006203c6ad762299ca1751bfcb3d87e5c7924de87a17afc09c8da09efae3284c"
+          },
+          "pgo": {
+            "path": "/tmp/cryptty-tuning/cryptty-pgo",
+            "sha256": "96873e62a4ff5fa314f7da42ce176c2f5e0fe24db3b495924d1e8512e3f5a0cb"
+          }
+        },
+        "trials": 3,
+        "lines": 4194304,
+        "warmup": 2,
+        "grid": [
+          80,
+          21
+        ],
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "summary": {
+        "plain": {
+          "baseline": {
+            "seconds": 2.0367126380151603,
+            "terminal_cpu": 2.38,
+            "cpu": 2.871749,
+            "rss_kib": 152368
+          },
+          "pgo": {
+            "seconds": 2.031893395993393,
+            "terminal_cpu": 2.36,
+            "cpu": 2.849744,
+            "rss_kib": 149752
+          }
+        },
+        "color": {
+          "baseline": {
+            "seconds": 2.3127302670036443,
+            "terminal_cpu": 2.71,
+            "cpu": 3.2436380000000002,
+            "rss_kib": 152228
+          },
+          "pgo": {
+            "seconds": 2.275821072020335,
+            "terminal_cpu": 2.69,
+            "cpu": 3.214123,
+            "rss_kib": 150148
+          }
+        },
+        "unicode": {
+          "baseline": {
+            "seconds": 2.1473345680278726,
+            "terminal_cpu": 2.51,
+            "cpu": 2.987247,
+            "rss_kib": 238580
+          },
+          "pgo": {
+            "seconds": 2.215433170000324,
+            "terminal_cpu": 2.56,
+            "cpu": 3.05357,
+            "rss_kib": 225492
+          }
+        },
+        "links": {
+          "baseline": {
+            "seconds": 1.8433649279759265,
+            "terminal_cpu": 2.0999999999999996,
+            "cpu": 2.557087,
+            "rss_kib": 153000
+          },
+          "pgo": {
+            "seconds": 1.7518281300144736,
+            "terminal_cpu": 2.0,
+            "cpu": 2.402715,
+            "rss_kib": 150652
+          }
+        },
+        "rgb": {
+          "baseline": {
+            "seconds": 2.3672096430091187,
+            "terminal_cpu": 2.8099999999999996,
+            "cpu": 3.353441,
+            "rss_kib": 152504
+          },
+          "pgo": {
+            "seconds": 2.367981797986431,
+            "terminal_cpu": 2.81,
+            "cpu": 3.338389,
+            "rss_kib": 149996
+          }
+        },
+        "edits": {
+          "baseline": {
+            "seconds": 7.819572997977957,
+            "terminal_cpu": 8.1,
+            "cpu": 8.619648,
+            "rss_kib": 152376
+          },
+          "pgo": {
+            "seconds": 7.44972992700059,
+            "terminal_cpu": 7.7,
+            "cpu": 8.196005,
+            "rss_kib": 149972
+          }
+        }
+      }
+    },
+    "compact-content-comparison": {
+      "metadata": {
+        "binaries": {
+          "baseline": {
+            "path": "/tmp/cryptty-tuning/cryptty-baseline",
+            "sha256": "006203c6ad762299ca1751bfcb3d87e5c7924de87a17afc09c8da09efae3284c"
+          },
+          "compact": {
+            "path": "/tmp/cryptty-tuning/cryptty-compact-content",
+            "sha256": "9836e3db8deb1ed412df176b55913ca0dbd79b54d254559dc0a2c48d41a6548d"
+          }
+        },
+        "trials": 3,
+        "lines": 4194304,
+        "warmup": 2,
+        "grid": [
+          80,
+          21
+        ],
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "summary": {
+        "plain": {
+          "baseline": {
+            "seconds": 2.0530063820187934,
+            "terminal_cpu": 2.35,
+            "cpu": 2.8747990000000003,
+            "rss_kib": 152244
+          },
+          "compact": {
+            "seconds": 1.77864997801953,
+            "terminal_cpu": 2.11,
+            "cpu": 2.591152,
+            "rss_kib": 146148
+          }
+        },
+        "color": {
+          "baseline": {
+            "seconds": 2.3230628589808475,
+            "terminal_cpu": 2.74,
+            "cpu": 3.252648,
+            "rss_kib": 152176
+          },
+          "compact": {
+            "seconds": 2.0685342779906932,
+            "terminal_cpu": 2.4800000000000004,
+            "cpu": 3.026413,
+            "rss_kib": 145860
+          }
+        },
+        "unicode": {
+          "baseline": {
+            "seconds": 2.1582976689969655,
+            "terminal_cpu": 2.51,
+            "cpu": 3.01713,
+            "rss_kib": 226288
+          },
+          "compact": {
+            "seconds": 2.09518547100015,
+            "terminal_cpu": 2.44,
+            "cpu": 2.938949,
+            "rss_kib": 231972
+          }
+        },
+        "links": {
+          "baseline": {
+            "seconds": 1.7997876869922038,
+            "terminal_cpu": 2.06,
+            "cpu": 2.5068379999999997,
+            "rss_kib": 153012
+          },
+          "compact": {
+            "seconds": 1.6917632999829948,
+            "terminal_cpu": 1.96,
+            "cpu": 2.410451,
+            "rss_kib": 146488
+          }
+        },
+        "rgb": {
+          "baseline": {
+            "seconds": 2.337966201012023,
+            "terminal_cpu": 2.78,
+            "cpu": 3.340962,
+            "rss_kib": 152436
+          },
+          "compact": {
+            "seconds": 2.1666880619886797,
+            "terminal_cpu": 2.6,
+            "cpu": 3.144683,
+            "rss_kib": 146056
+          }
+        },
+        "edits": {
+          "baseline": {
+            "seconds": 7.960235778999049,
+            "terminal_cpu": 8.25,
+            "cpu": 8.714972999999999,
+            "rss_kib": 152444
+          },
+          "compact": {
+            "seconds": 5.670680819981499,
+            "terminal_cpu": 5.92,
+            "cpu": 6.414279,
+            "rss_kib": 145564
+          }
+        }
+      }
+    },
+    "erase-comparison": {
+      "metadata": {
+        "binaries": {
+          "compact": {
+            "path": "/tmp/cryptty-tuning/cryptty-compact-content",
+            "sha256": "9836e3db8deb1ed412df176b55913ca0dbd79b54d254559dc0a2c48d41a6548d"
+          },
+          "erase": {
+            "path": "/tmp/cryptty-tuning/cryptty-compact-erase",
+            "sha256": "49ca03a4a74351656ab4393c768d89bbd3c39106e39bd42ed0011297de8e4b18"
+          }
+        },
+        "trials": 3,
+        "lines": 4194304,
+        "warmup": 2,
+        "grid": [
+          80,
+          21
+        ],
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "summary": {
+        "edits": {
+          "compact": {
+            "seconds": 5.692198574979557,
+            "terminal_cpu": 5.9799999999999995,
+            "cpu": 6.463851,
+            "rss_kib": 145872
+          },
+          "erase": {
+            "seconds": 1.822500656999182,
+            "terminal_cpu": 2.12,
+            "cpu": 2.628148,
+            "rss_kib": 145908
+          }
+        },
+        "plain": {
+          "compact": {
+            "seconds": 1.7833520399872214,
+            "terminal_cpu": 2.12,
+            "cpu": 2.5974239999999997,
+            "rss_kib": 146024
+          },
+          "erase": {
+            "seconds": 1.774585279985331,
+            "terminal_cpu": 2.12,
+            "cpu": 2.618582,
+            "rss_kib": 145976
+          }
+        },
+        "color": {
+          "compact": {
+            "seconds": 2.0725039149983786,
+            "terminal_cpu": 2.48,
+            "cpu": 3.002336,
+            "rss_kib": 145900
+          },
+          "erase": {
+            "seconds": 2.089707164996071,
+            "terminal_cpu": 2.48,
+            "cpu": 3.0098969999999996,
+            "rss_kib": 145656
+          }
+        },
+        "unicode": {
+          "compact": {
+            "seconds": 2.11550454000826,
+            "terminal_cpu": 2.46,
+            "cpu": 2.9767930000000002,
+            "rss_kib": 232436
+          },
+          "erase": {
+            "seconds": 2.119053244998213,
+            "terminal_cpu": 2.46,
+            "cpu": 2.978464,
+            "rss_kib": 223164
+          }
+        },
+        "links": {
+          "compact": {
+            "seconds": 1.7205085860041436,
+            "terminal_cpu": 1.96,
+            "cpu": 2.392131,
+            "rss_kib": 146440
+          },
+          "erase": {
+            "seconds": 1.7812380550021771,
+            "terminal_cpu": 2.02,
+            "cpu": 2.464197,
+            "rss_kib": 146552
+          }
+        },
+        "rgb": {
+          "compact": {
+            "seconds": 2.1548052089929115,
+            "terminal_cpu": 2.59,
+            "cpu": 3.1330850000000003,
+            "rss_kib": 146120
+          },
+          "erase": {
+            "seconds": 2.153933057008544,
+            "terminal_cpu": 2.6100000000000003,
+            "cpu": 3.1752519999999995,
+            "rss_kib": 145832
+          }
+        }
+      }
+    },
+    "compact-style-comparison": {
+      "metadata": {
+        "binaries": {
+          "erase": {
+            "path": "/tmp/cryptty-tuning/cryptty-compact-erase",
+            "sha256": "49ca03a4a74351656ab4393c768d89bbd3c39106e39bd42ed0011297de8e4b18"
+          },
+          "style": {
+            "path": "/tmp/cryptty-tuning/cryptty-compact-style",
+            "sha256": "7155714380a00247f019658b0b125d813a3b5431cca4878863590763a090ec8c"
+          }
+        },
+        "trials": 3,
+        "lines": 4194304,
+        "warmup": 2,
+        "grid": [
+          80,
+          21
+        ],
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "summary": {
+        "plain": {
+          "erase": {
+            "seconds": 1.790338102990063,
+            "terminal_cpu": 2.13,
+            "cpu": 2.628015,
+            "rss_kib": 145908
+          },
+          "style": {
+            "seconds": 1.5730526999977883,
+            "terminal_cpu": 1.9100000000000001,
+            "cpu": 2.395845,
+            "rss_kib": 139768
+          }
+        },
+        "color": {
+          "erase": {
+            "seconds": 2.083388544997433,
+            "terminal_cpu": 2.51,
+            "cpu": 3.040911,
+            "rss_kib": 145864
+          },
+          "style": {
+            "seconds": 1.912071401020512,
+            "terminal_cpu": 2.32,
+            "cpu": 2.86048,
+            "rss_kib": 139456
+          }
+        },
+        "unicode": {
+          "erase": {
+            "seconds": 2.0904305699805263,
+            "terminal_cpu": 2.44,
+            "cpu": 2.955077,
+            "rss_kib": 222700
+          },
+          "style": {
+            "seconds": 1.8906636920000892,
+            "terminal_cpu": 2.25,
+            "cpu": 2.772078,
+            "rss_kib": 214204
+          }
+        },
+        "links": {
+          "erase": {
+            "seconds": 1.819629175006412,
+            "terminal_cpu": 2.07,
+            "cpu": 2.529454,
+            "rss_kib": 146472
+          },
+          "style": {
+            "seconds": 1.710993884014897,
+            "terminal_cpu": 1.96,
+            "cpu": 2.421652,
+            "rss_kib": 140224
+          }
+        },
+        "rgb": {
+          "erase": {
+            "seconds": 2.121320765989367,
+            "terminal_cpu": 2.56,
+            "cpu": 3.117798,
+            "rss_kib": 145732
+          },
+          "style": {
+            "seconds": 1.9678487310011405,
+            "terminal_cpu": 2.41,
+            "cpu": 2.984379,
+            "rss_kib": 139632
+          }
+        },
+        "edits": {
+          "erase": {
+            "seconds": 1.7869390169798862,
+            "terminal_cpu": 2.09,
+            "cpu": 2.55435,
+            "rss_kib": 145976
+          },
+          "style": {
+            "seconds": 1.6851247469894588,
+            "terminal_cpu": 1.9800000000000002,
+            "cpu": 2.450379,
+            "rss_kib": 139512
+          }
+        }
+      }
+    },
+    "native-comparison": {
+      "metadata": {
+        "binaries": {
+          "portable": {
+            "path": "/tmp/cryptty-tuning/cryptty-compact-style",
+            "sha256": "7155714380a00247f019658b0b125d813a3b5431cca4878863590763a090ec8c"
+          },
+          "native": {
+            "path": "/tmp/cryptty-tuning/cryptty-native",
+            "sha256": "a6a896ec6d3256771e4bed4f107fda733694ab4fa4f46a5655fd55b2ee1f6a37"
+          }
+        },
+        "trials": 3,
+        "lines": 4194304,
+        "warmup": 2,
+        "grid": [
+          80,
+          21
+        ],
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "summary": {
+        "plain": {
+          "portable": {
+            "seconds": 1.6168356130074244,
+            "terminal_cpu": 1.9700000000000002,
+            "cpu": 2.4525629999999996,
+            "rss_kib": 139416
+          },
+          "native": {
+            "seconds": 1.5958672639972065,
+            "terminal_cpu": 1.9400000000000002,
+            "cpu": 2.4509100000000004,
+            "rss_kib": 139668
+          }
+        },
+        "color": {
+          "portable": {
+            "seconds": 1.9989524470001925,
+            "terminal_cpu": 2.36,
+            "cpu": 2.901521,
+            "rss_kib": 139476
+          },
+          "native": {
+            "seconds": 1.9571511129906867,
+            "terminal_cpu": 2.35,
+            "cpu": 2.889958,
+            "rss_kib": 139596
+          }
+        },
+        "unicode": {
+          "portable": {
+            "seconds": 1.9307907780166715,
+            "terminal_cpu": 2.25,
+            "cpu": 2.753046,
+            "rss_kib": 218800
+          },
+          "native": {
+            "seconds": 1.88282394700218,
+            "terminal_cpu": 2.24,
+            "cpu": 2.7320830000000003,
+            "rss_kib": 217760
+          }
+        },
+        "links": {
+          "portable": {
+            "seconds": 1.7165797119960189,
+            "terminal_cpu": 1.9800000000000002,
+            "cpu": 2.411812,
+            "rss_kib": 139952
+          },
+          "native": {
+            "seconds": 1.7812352599867154,
+            "terminal_cpu": 2.04,
+            "cpu": 2.504637,
+            "rss_kib": 139924
+          }
+        },
+        "rgb": {
+          "portable": {
+            "seconds": 2.0445451909909025,
+            "terminal_cpu": 2.4299999999999997,
+            "cpu": 2.9725960000000002,
+            "rss_kib": 139604
+          },
+          "native": {
+            "seconds": 2.0111648330057506,
+            "terminal_cpu": 2.4400000000000004,
+            "cpu": 3.0119489999999995,
+            "rss_kib": 139140
+          }
+        },
+        "edits": {
+          "portable": {
+            "seconds": 1.6923207200015895,
+            "terminal_cpu": 2.01,
+            "cpu": 2.4688689999999998,
+            "rss_kib": 139512
+          },
+          "native": {
+            "seconds": 1.7201295050035696,
+            "terminal_cpu": 2.02,
+            "cpu": 2.478973,
+            "rss_kib": 139520
+          }
+        }
+      }
+    },
+    "final-pgo-comparison": {
+      "metadata": {
+        "binaries": {
+          "portable": {
+            "path": "/tmp/cryptty-tuning/cryptty-compact-style",
+            "sha256": "7155714380a00247f019658b0b125d813a3b5431cca4878863590763a090ec8c"
+          },
+          "pgo": {
+            "path": "/tmp/cryptty-tuning/cryptty-final-pgo",
+            "sha256": "4042d869d24fe78e79797ba22457394eb8a27b477e43b0c293ff974ec5b54daf"
+          }
+        },
+        "trials": 3,
+        "lines": 4194304,
+        "warmup": 2,
+        "grid": [
+          80,
+          21
+        ],
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "summary": {
+        "plain": {
+          "portable": {
+            "seconds": 1.5822087750129867,
+            "terminal_cpu": 1.93,
+            "cpu": 2.370755,
+            "rss_kib": 139416
+          },
+          "pgo": {
+            "seconds": 1.5437648529768921,
+            "terminal_cpu": 1.8900000000000001,
+            "cpu": 2.374686,
+            "rss_kib": 136892
+          }
+        },
+        "color": {
+          "portable": {
+            "seconds": 1.892194040992763,
+            "terminal_cpu": 2.3,
+            "cpu": 2.8244489999999995,
+            "rss_kib": 139424
+          },
+          "pgo": {
+            "seconds": 1.8095953470037784,
+            "terminal_cpu": 2.2199999999999998,
+            "cpu": 2.731579,
+            "rss_kib": 137024
+          }
+        },
+        "unicode": {
+          "portable": {
+            "seconds": 1.9122616189997643,
+            "terminal_cpu": 2.26,
+            "cpu": 2.7770799999999998,
+            "rss_kib": 218172
+          },
+          "pgo": {
+            "seconds": 1.866360384010477,
+            "terminal_cpu": 2.1999999999999997,
+            "cpu": 2.701305,
+            "rss_kib": 215368
+          }
+        },
+        "links": {
+          "portable": {
+            "seconds": 1.7134293310227804,
+            "terminal_cpu": 1.94,
+            "cpu": 2.419804,
+            "rss_kib": 139768
+          },
+          "pgo": {
+            "seconds": 1.597229070001049,
+            "terminal_cpu": 1.85,
+            "cpu": 2.293359,
+            "rss_kib": 137492
+          }
+        },
+        "rgb": {
+          "portable": {
+            "seconds": 1.9819861160067376,
+            "terminal_cpu": 2.43,
+            "cpu": 3.000815,
+            "rss_kib": 139400
+          },
+          "pgo": {
+            "seconds": 1.885866905999137,
+            "terminal_cpu": 2.31,
+            "cpu": 2.857193,
+            "rss_kib": 137132
+          }
+        },
+        "edits": {
+          "portable": {
+            "seconds": 1.7045966660080012,
+            "terminal_cpu": 2.0100000000000002,
+            "cpu": 2.479256,
+            "rss_kib": 139292
+          },
+          "pgo": {
+            "seconds": 1.5931678320048377,
+            "terminal_cpu": 1.8800000000000001,
+            "cpu": 2.3509539999999998,
+            "rss_kib": 136816
+          }
+        }
+      }
+    },
+    "final-comparison": {
+      "metadata": {
+        "binaries": {
+          "baseline": {
+            "path": "/tmp/cryptty-tuning/cryptty-baseline",
+            "sha256": "006203c6ad762299ca1751bfcb3d87e5c7924de87a17afc09c8da09efae3284c"
+          },
+          "portable": {
+            "path": "/tmp/cryptty-tuning/cryptty-compact-style",
+            "sha256": "7155714380a00247f019658b0b125d813a3b5431cca4878863590763a090ec8c"
+          },
+          "pgo": {
+            "path": "/tmp/cryptty-tuning/cryptty-final-pgo",
+            "sha256": "4042d869d24fe78e79797ba22457394eb8a27b477e43b0c293ff974ec5b54daf"
+          },
+          "alacritty": {
+            "path": "/usr/bin/alacritty",
+            "sha256": "0cf523596ad06112922350a3d7c0eb0875c7c45b7c05b0dcc405a40afc50e624"
+          }
+        },
+        "trials": 5,
+        "lines": 4194304,
+        "warmup": 2,
+        "grid": [
+          80,
+          21
+        ],
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "summary": {
+        "plain": {
+          "baseline": {
+            "seconds": 2.050528285006294,
+            "terminal_cpu": 2.3699999999999997,
+            "cpu": 2.850812,
+            "rss_kib": 152480
+          },
+          "portable": {
+            "seconds": 1.5954040280194022,
+            "terminal_cpu": 1.93,
+            "cpu": 2.404026,
+            "rss_kib": 139652
+          },
+          "pgo": {
+            "seconds": 1.549856877012644,
+            "terminal_cpu": 1.88,
+            "cpu": 2.364351,
+            "rss_kib": 137056
+          },
+          "alacritty": {
+            "seconds": 2.227860231010709,
+            "terminal_cpu": 2.2800000000000002,
+            "cpu": 2.613521,
+            "rss_kib": 116560
+          }
+        },
+        "color": {
+          "baseline": {
+            "seconds": 2.2930837550084107,
+            "terminal_cpu": 2.7,
+            "cpu": 3.1774809999999998,
+            "rss_kib": 152240
+          },
+          "portable": {
+            "seconds": 1.944088763993932,
+            "terminal_cpu": 2.32,
+            "cpu": 2.831877,
+            "rss_kib": 139492
+          },
+          "pgo": {
+            "seconds": 1.8314296579919755,
+            "terminal_cpu": 2.21,
+            "cpu": 2.695937,
+            "rss_kib": 137076
+          },
+          "alacritty": {
+            "seconds": 2.811051814001985,
+            "terminal_cpu": 2.87,
+            "cpu": 3.227721,
+            "rss_kib": 116792
+          }
+        },
+        "unicode": {
+          "baseline": {
+            "seconds": 2.128326185978949,
+            "terminal_cpu": 2.48,
+            "cpu": 3.031932,
+            "rss_kib": 227292
+          },
+          "portable": {
+            "seconds": 1.8661015850084368,
+            "terminal_cpu": 2.2199999999999998,
+            "cpu": 2.737411,
+            "rss_kib": 225704
+          },
+          "pgo": {
+            "seconds": 1.8368867860117462,
+            "terminal_cpu": 2.17,
+            "cpu": 2.66418,
+            "rss_kib": 214844
+          },
+          "alacritty": {
+            "seconds": 2.174220446991967,
+            "terminal_cpu": 2.2199999999999998,
+            "cpu": 2.553883,
+            "rss_kib": 138040
+          }
+        },
+        "links": {
+          "baseline": {
+            "seconds": 1.5267777170229238,
+            "terminal_cpu": 1.78,
+            "cpu": 2.194141,
+            "rss_kib": 152772
+          },
+          "portable": {
+            "seconds": 1.417568728007609,
+            "terminal_cpu": 1.67,
+            "cpu": 2.102806,
+            "rss_kib": 139884
+          },
+          "pgo": {
+            "seconds": 1.3289378299959935,
+            "terminal_cpu": 1.58,
+            "cpu": 1.9846209999999997,
+            "rss_kib": 137692
+          },
+          "alacritty": {
+            "seconds": 1.5924631749803666,
+            "terminal_cpu": 1.6199999999999999,
+            "cpu": 1.892004,
+            "rss_kib": 118712
+          }
+        },
+        "rgb": {
+          "baseline": {
+            "seconds": 1.8859295769943856,
+            "terminal_cpu": 2.33,
+            "cpu": 2.850491,
+            "rss_kib": 152444
+          },
+          "portable": {
+            "seconds": 1.663657561992295,
+            "terminal_cpu": 2.0999999999999996,
+            "cpu": 2.621595,
+            "rss_kib": 139656
+          },
+          "pgo": {
+            "seconds": 1.505809951981064,
+            "terminal_cpu": 1.9400000000000002,
+            "cpu": 2.464876,
+            "rss_kib": 136996
+          },
+          "alacritty": {
+            "seconds": 2.489494431007188,
+            "terminal_cpu": 2.54,
+            "cpu": 2.905643,
+            "rss_kib": 116776
+          }
+        },
+        "edits": {
+          "baseline": {
+            "seconds": 7.625958127027843,
+            "terminal_cpu": 7.8100000000000005,
+            "cpu": 8.286851,
+            "rss_kib": 152152
+          },
+          "portable": {
+            "seconds": 1.411146133003058,
+            "terminal_cpu": 1.7,
+            "cpu": 2.137418,
+            "rss_kib": 139440
+          },
+          "pgo": {
+            "seconds": 1.3050807169929612,
+            "terminal_cpu": 1.56,
+            "cpu": 1.983751,
+            "rss_kib": 137012
+          },
+          "alacritty": {
+            "seconds": 2.5093706590123475,
+            "terminal_cpu": 2.54,
+            "cpu": 2.834851,
+            "rss_kib": 116680
+          }
+        }
+      }
+    }
+  },
+  "final_throughput": {
+    "metadata": {
+      "binaries": {
+        "baseline": {
+          "path": "/tmp/cryptty-tuning/cryptty-baseline",
+          "sha256": "006203c6ad762299ca1751bfcb3d87e5c7924de87a17afc09c8da09efae3284c"
+        },
+        "portable": {
+          "path": "/tmp/cryptty-tuning/cryptty-mailbox",
+          "sha256": "cd7e7cd0340bc507d3c5f4294114b11158af381b01de68f2c8e052d361b005dd"
+        },
+        "pgo": {
+          "path": "/tmp/cryptty-tuning/cryptty-mailbox-pgo",
+          "sha256": "69ace2e95240802e74ef7f6db3c729d6be92eb1c8c7f54ef2e2d98683976df76"
+        },
+        "alacritty": {
+          "path": "/usr/bin/alacritty",
+          "sha256": "0cf523596ad06112922350a3d7c0eb0875c7c45b7c05b0dcc405a40afc50e624"
+        }
+      },
+      "trials": 5,
+      "lines": 4194304,
+      "warmup": 2,
+      "grid": [
+        80,
+        21
+      ],
+      "affinity": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    "summary": {
+      "plain": {
+        "baseline": {
+          "seconds": 1.4898035740188789,
+          "terminal_cpu": 1.8099999999999998,
+          "cpu": 2.3178739999999998,
+          "rss_kib": 152332
+        },
+        "portable": {
+          "seconds": 1.255494312994415,
+          "terminal_cpu": 1.6,
+          "cpu": 2.089649,
+          "rss_kib": 139464
+        },
+        "pgo": {
+          "seconds": 1.242235748009989,
+          "terminal_cpu": 1.53,
+          "cpu": 2.009189,
+          "rss_kib": 136968
+        },
+        "alacritty": {
+          "seconds": 1.9405173399718478,
+          "terminal_cpu": 1.98,
+          "cpu": 2.2910519999999996,
+          "rss_kib": 116992
+        }
+      },
+      "color": {
+        "baseline": {
+          "seconds": 1.8161063019942958,
+          "terminal_cpu": 2.22,
+          "cpu": 2.707613,
+          "rss_kib": 152480
+        },
+        "portable": {
+          "seconds": 1.5490502419997938,
+          "terminal_cpu": 1.94,
+          "cpu": 2.492815,
+          "rss_kib": 139392
+        },
+        "pgo": {
+          "seconds": 1.4565460119920317,
+          "terminal_cpu": 1.8599999999999999,
+          "cpu": 2.379402,
+          "rss_kib": 137284
+        },
+        "alacritty": {
+          "seconds": 2.494967066013487,
+          "terminal_cpu": 2.5300000000000002,
+          "cpu": 2.879251,
+          "rss_kib": 116884
+        }
+      },
+      "unicode": {
+        "baseline": {
+          "seconds": 1.7414019780117087,
+          "terminal_cpu": 2.0799999999999996,
+          "cpu": 2.556693,
+          "rss_kib": 226036
+        },
+        "portable": {
+          "seconds": 1.5567570499842986,
+          "terminal_cpu": 1.91,
+          "cpu": 2.4094429999999996,
+          "rss_kib": 217316
+        },
+        "pgo": {
+          "seconds": 1.4876208929927088,
+          "terminal_cpu": 1.82,
+          "cpu": 2.313417,
+          "rss_kib": 215248
+        },
+        "alacritty": {
+          "seconds": 1.926985475991387,
+          "terminal_cpu": 1.9699999999999998,
+          "cpu": 2.305028,
+          "rss_kib": 142072
+        }
+      },
+      "links": {
+        "baseline": {
+          "seconds": 1.5129566929826979,
+          "terminal_cpu": 1.76,
+          "cpu": 2.1817889999999998,
+          "rss_kib": 152860
+        },
+        "portable": {
+          "seconds": 1.4518829750013538,
+          "terminal_cpu": 1.69,
+          "cpu": 2.155546,
+          "rss_kib": 139956
+        },
+        "pgo": {
+          "seconds": 1.3454506759881042,
+          "terminal_cpu": 1.59,
+          "cpu": 2.020321,
+          "rss_kib": 137608
+        },
+        "alacritty": {
+          "seconds": 1.5837696689995937,
+          "terminal_cpu": 1.5999999999999999,
+          "cpu": 1.8884729999999998,
+          "rss_kib": 118816
+        }
+      },
+      "rgb": {
+        "baseline": {
+          "seconds": 1.9336658520041965,
+          "terminal_cpu": 2.3499999999999996,
+          "cpu": 2.8797369999999995,
+          "rss_kib": 152124
+        },
+        "portable": {
+          "seconds": 1.6242062469827943,
+          "terminal_cpu": 2.06,
+          "cpu": 2.603141,
+          "rss_kib": 139496
+        },
+        "pgo": {
+          "seconds": 1.5154431920091156,
+          "terminal_cpu": 1.94,
+          "cpu": 2.481607,
+          "rss_kib": 137172
+        },
+        "alacritty": {
+          "seconds": 2.4860860189946834,
+          "terminal_cpu": 2.5300000000000002,
+          "cpu": 2.9074020000000003,
+          "rss_kib": 117072
+        }
+      },
+      "edits": {
+        "baseline": {
+          "seconds": 7.70156919801957,
+          "terminal_cpu": 7.85,
+          "cpu": 8.330123,
+          "rss_kib": 152112
+        },
+        "portable": {
+          "seconds": 1.4594060959934723,
+          "terminal_cpu": 1.74,
+          "cpu": 2.211993,
+          "rss_kib": 139500
+        },
+        "pgo": {
+          "seconds": 1.2650959590100683,
+          "terminal_cpu": 1.56,
+          "cpu": 2.011465,
+          "rss_kib": 136952
+        },
+        "alacritty": {
+          "seconds": 2.4944881119881757,
+          "terminal_cpu": 2.5300000000000002,
+          "cpu": 2.8246,
+          "rss_kib": 116880
+        }
+      }
+    },
+    "runs": [
+      {
+        "seconds": 1.4846527210029308,
+        "bytes": 276824064,
+        "terminal_cpu": 1.7999999999999998,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "plain",
+        "trial": 0,
+        "cpu": 2.262447,
+        "rss_kib": 152436
+      },
+      {
+        "seconds": 1.2823914499895182,
+        "bytes": 276824064,
+        "terminal_cpu": 1.61,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "plain",
+        "trial": 0,
+        "cpu": 2.090992,
+        "rss_kib": 139572
+      },
+      {
+        "seconds": 1.2447139360010624,
+        "bytes": 276824064,
+        "terminal_cpu": 1.52,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "plain",
+        "trial": 0,
+        "cpu": 1.994321,
+        "rss_kib": 136968
+      },
+      {
+        "seconds": 1.9405173399718478,
+        "bytes": 276824064,
+        "terminal_cpu": 1.9799999999999998,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "plain",
+        "trial": 0,
+        "cpu": 2.2910519999999996,
+        "rss_kib": 116832
+      },
+      {
+        "seconds": 1.1896952580136713,
+        "bytes": 276824064,
+        "terminal_cpu": 1.54,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "plain",
+        "trial": 1,
+        "cpu": 2.018885,
+        "rss_kib": 139596
+      },
+      {
+        "seconds": 1.2483093880000524,
+        "bytes": 276824064,
+        "terminal_cpu": 1.58,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "plain",
+        "trial": 1,
+        "cpu": 2.0669519999999997,
+        "rss_kib": 136864
+      },
+      {
+        "seconds": 1.9395813299925067,
+        "bytes": 276824064,
+        "terminal_cpu": 1.98,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "plain",
+        "trial": 1,
+        "cpu": 2.269039,
+        "rss_kib": 116856
+      },
+      {
+        "seconds": 1.536242381989723,
+        "bytes": 276824064,
+        "terminal_cpu": 1.86,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "plain",
+        "trial": 1,
+        "cpu": 2.369437,
+        "rss_kib": 152332
+      },
+      {
+        "seconds": 1.2035898210015148,
+        "bytes": 276824064,
+        "terminal_cpu": 1.53,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "plain",
+        "trial": 2,
+        "cpu": 2.009189,
+        "rss_kib": 137472
+      },
+      {
+        "seconds": 1.9649265479820315,
+        "bytes": 276824064,
+        "terminal_cpu": 2.0100000000000002,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "plain",
+        "trial": 2,
+        "cpu": 2.3225309999999997,
+        "rss_kib": 117000
+      },
+      {
+        "seconds": 1.5314974739740137,
+        "bytes": 276824064,
+        "terminal_cpu": 1.8699999999999999,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "plain",
+        "trial": 2,
+        "cpu": 2.338861,
+        "rss_kib": 152504
+      },
+      {
+        "seconds": 1.255494312994415,
+        "bytes": 276824064,
+        "terminal_cpu": 1.6,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "plain",
+        "trial": 2,
+        "cpu": 2.094305,
+        "rss_kib": 139464
+      },
+      {
+        "seconds": 1.9218592449906282,
+        "bytes": 276824064,
+        "terminal_cpu": 1.9499999999999997,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "plain",
+        "trial": 3,
+        "cpu": 2.249932,
+        "rss_kib": 117288
+      },
+      {
+        "seconds": 1.4898035740188789,
+        "bytes": 276824064,
+        "terminal_cpu": 1.8099999999999998,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "plain",
+        "trial": 3,
+        "cpu": 2.3178739999999998,
+        "rss_kib": 152092
+      },
+      {
+        "seconds": 1.2560297840100247,
+        "bytes": 276824064,
+        "terminal_cpu": 1.6,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "plain",
+        "trial": 3,
+        "cpu": 2.089649,
+        "rss_kib": 139280
+      },
+      {
+        "seconds": 1.1845153140020557,
+        "bytes": 276824064,
+        "terminal_cpu": 1.52,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "plain",
+        "trial": 3,
+        "cpu": 2.004636,
+        "rss_kib": 136940
+      },
+      {
+        "seconds": 1.4546736879856326,
+        "bytes": 276824064,
+        "terminal_cpu": 1.7899999999999998,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "plain",
+        "trial": 4,
+        "cpu": 2.284542,
+        "rss_kib": 152148
+      },
+      {
+        "seconds": 1.2482114339945838,
+        "bytes": 276824064,
+        "terminal_cpu": 1.58,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "plain",
+        "trial": 4,
+        "cpu": 2.068365,
+        "rss_kib": 139328
+      },
+      {
+        "seconds": 1.242235748009989,
+        "bytes": 276824064,
+        "terminal_cpu": 1.57,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "plain",
+        "trial": 4,
+        "cpu": 2.0377099999999997,
+        "rss_kib": 137320
+      },
+      {
+        "seconds": 1.966011704003904,
+        "bytes": 276824064,
+        "terminal_cpu": 2.0100000000000002,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "plain",
+        "trial": 4,
+        "cpu": 2.331107,
+        "rss_kib": 116992
+      },
+      {
+        "seconds": 1.5449283079942688,
+        "bytes": 335544320,
+        "terminal_cpu": 1.94,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "color",
+        "trial": 0,
+        "cpu": 2.504107,
+        "rss_kib": 139380
+      },
+      {
+        "seconds": 1.4521770110004582,
+        "bytes": 335544320,
+        "terminal_cpu": 1.84,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "color",
+        "trial": 0,
+        "cpu": 2.379402,
+        "rss_kib": 137180
+      },
+      {
+        "seconds": 2.5054165229958016,
+        "bytes": 335544320,
+        "terminal_cpu": 2.55,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "color",
+        "trial": 0,
+        "cpu": 2.8956449999999996,
+        "rss_kib": 116660
+      },
+      {
+        "seconds": 1.8195506939955521,
+        "bytes": 335544320,
+        "terminal_cpu": 2.22,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "color",
+        "trial": 0,
+        "cpu": 2.735933,
+        "rss_kib": 152392
+      },
+      {
+        "seconds": 1.4565460119920317,
+        "bytes": 335544320,
+        "terminal_cpu": 1.8599999999999999,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "color",
+        "trial": 1,
+        "cpu": 2.379016,
+        "rss_kib": 137328
+      },
+      {
+        "seconds": 2.4726674419944175,
+        "bytes": 335544320,
+        "terminal_cpu": 2.5,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "color",
+        "trial": 1,
+        "cpu": 2.865987,
+        "rss_kib": 117140
+      },
+      {
+        "seconds": 1.8161063019942958,
+        "bytes": 335544320,
+        "terminal_cpu": 2.22,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "color",
+        "trial": 1,
+        "cpu": 2.707613,
+        "rss_kib": 152712
+      },
+      {
+        "seconds": 1.5330974539974704,
+        "bytes": 335544320,
+        "terminal_cpu": 1.9300000000000002,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "color",
+        "trial": 1,
+        "cpu": 2.456226,
+        "rss_kib": 139924
+      },
+      {
+        "seconds": 2.494967066013487,
+        "bytes": 335544320,
+        "terminal_cpu": 2.5300000000000002,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "color",
+        "trial": 2,
+        "cpu": 2.8734770000000003,
+        "rss_kib": 116884
+      },
+      {
+        "seconds": 1.8011853090138175,
+        "bytes": 335544320,
+        "terminal_cpu": 2.19,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "color",
+        "trial": 2,
+        "cpu": 2.698334,
+        "rss_kib": 152480
+      },
+      {
+        "seconds": 1.5490502419997938,
+        "bytes": 335544320,
+        "terminal_cpu": 1.93,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "color",
+        "trial": 2,
+        "cpu": 2.487489,
+        "rss_kib": 139392
+      },
+      {
+        "seconds": 1.4522679570072796,
+        "bytes": 335544320,
+        "terminal_cpu": 1.84,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "color",
+        "trial": 2,
+        "cpu": 2.3735,
+        "rss_kib": 137432
+      },
+      {
+        "seconds": 1.7813386009947862,
+        "bytes": 335544320,
+        "terminal_cpu": 2.17,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "color",
+        "trial": 3,
+        "cpu": 2.675369,
+        "rss_kib": 152484
+      },
+      {
+        "seconds": 1.6087929420173168,
+        "bytes": 335544320,
+        "terminal_cpu": 1.9900000000000002,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "color",
+        "trial": 3,
+        "cpu": 2.522939,
+        "rss_kib": 140000
+      },
+      {
+        "seconds": 1.4843792839965317,
+        "bytes": 335544320,
+        "terminal_cpu": 1.87,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "color",
+        "trial": 3,
+        "cpu": 2.403111,
+        "rss_kib": 137284
+      },
+      {
+        "seconds": 2.4876824659877457,
+        "bytes": 335544320,
+        "terminal_cpu": 2.5300000000000002,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "color",
+        "trial": 3,
+        "cpu": 2.879251,
+        "rss_kib": 116740
+      },
+      {
+        "seconds": 1.5528937830240466,
+        "bytes": 335544320,
+        "terminal_cpu": 1.9500000000000002,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "color",
+        "trial": 4,
+        "cpu": 2.492815,
+        "rss_kib": 139164
+      },
+      {
+        "seconds": 1.5056237730022985,
+        "bytes": 335544320,
+        "terminal_cpu": 1.89,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "color",
+        "trial": 4,
+        "cpu": 2.392979,
+        "rss_kib": 137220
+      },
+      {
+        "seconds": 2.5013658560055774,
+        "bytes": 335544320,
+        "terminal_cpu": 2.54,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "color",
+        "trial": 4,
+        "cpu": 2.90156,
+        "rss_kib": 116912
+      },
+      {
+        "seconds": 1.8870248089951929,
+        "bytes": 335544320,
+        "terminal_cpu": 2.28,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "color",
+        "trial": 4,
+        "cpu": 2.7919080000000003,
+        "rss_kib": 152256
+      },
+      {
+        "seconds": 1.530733121006051,
+        "bytes": 289406976,
+        "terminal_cpu": 1.87,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "unicode",
+        "trial": 0,
+        "cpu": 2.361713,
+        "rss_kib": 215220
+      },
+      {
+        "seconds": 1.9191648850101046,
+        "bytes": 289406976,
+        "terminal_cpu": 1.95,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "unicode",
+        "trial": 0,
+        "cpu": 2.305028,
+        "rss_kib": 141960
+      },
+      {
+        "seconds": 1.7250146220030729,
+        "bytes": 289406976,
+        "terminal_cpu": 2.06,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "unicode",
+        "trial": 0,
+        "cpu": 2.572856,
+        "rss_kib": 228048
+      },
+      {
+        "seconds": 1.5702157890191302,
+        "bytes": 289406976,
+        "terminal_cpu": 1.9100000000000001,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "unicode",
+        "trial": 0,
+        "cpu": 2.4094429999999996,
+        "rss_kib": 226156
+      },
+      {
+        "seconds": 2.0385923449939582,
+        "bytes": 289406976,
+        "terminal_cpu": 2.08,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "unicode",
+        "trial": 1,
+        "cpu": 2.394106,
+        "rss_kib": 142072
+      },
+      {
+        "seconds": 1.7540672559989616,
+        "bytes": 289406976,
+        "terminal_cpu": 2.1,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "unicode",
+        "trial": 1,
+        "cpu": 2.5981,
+        "rss_kib": 229164
+      },
+      {
+        "seconds": 1.60105729100178,
+        "bytes": 289406976,
+        "terminal_cpu": 1.93,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "unicode",
+        "trial": 1,
+        "cpu": 2.420401,
+        "rss_kib": 218248
+      },
+      {
+        "seconds": 1.4876208929927088,
+        "bytes": 289406976,
+        "terminal_cpu": 1.8199999999999998,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "unicode",
+        "trial": 1,
+        "cpu": 2.313417,
+        "rss_kib": 215248
+      },
+      {
+        "seconds": 1.7414019780117087,
+        "bytes": 289406976,
+        "terminal_cpu": 2.0799999999999996,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "unicode",
+        "trial": 2,
+        "cpu": 2.556693,
+        "rss_kib": 226036
+      },
+      {
+        "seconds": 1.5076162240002304,
+        "bytes": 289406976,
+        "terminal_cpu": 1.8399999999999999,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "unicode",
+        "trial": 2,
+        "cpu": 2.334647,
+        "rss_kib": 216356
+      },
+      {
+        "seconds": 1.5406551560154185,
+        "bytes": 289406976,
+        "terminal_cpu": 1.87,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "unicode",
+        "trial": 2,
+        "cpu": 2.363035,
+        "rss_kib": 215460
+      },
+      {
+        "seconds": 1.926985475991387,
+        "bytes": 289406976,
+        "terminal_cpu": 1.9699999999999998,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "unicode",
+        "trial": 2,
+        "cpu": 2.281863,
+        "rss_kib": 142240
+      },
+      {
+        "seconds": 1.518392492987914,
+        "bytes": 289406976,
+        "terminal_cpu": 1.86,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "unicode",
+        "trial": 3,
+        "cpu": 2.380235,
+        "rss_kib": 217316
+      },
+      {
+        "seconds": 1.4773310010205023,
+        "bytes": 289406976,
+        "terminal_cpu": 1.8199999999999998,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "unicode",
+        "trial": 3,
+        "cpu": 2.307448,
+        "rss_kib": 215524
+      },
+      {
+        "seconds": 2.0341131209861487,
+        "bytes": 289406976,
+        "terminal_cpu": 2.0,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "unicode",
+        "trial": 3,
+        "cpu": 2.311354,
+        "rss_kib": 142252
+      },
+      {
+        "seconds": 1.7418513190059457,
+        "bytes": 289406976,
+        "terminal_cpu": 2.0799999999999996,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "unicode",
+        "trial": 3,
+        "cpu": 2.552096,
+        "rss_kib": 225968
+      },
+      {
+        "seconds": 1.464221845002612,
+        "bytes": 289406976,
+        "terminal_cpu": 1.82,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "unicode",
+        "trial": 4,
+        "cpu": 2.301744,
+        "rss_kib": 214988
+      },
+      {
+        "seconds": 1.9088546599959955,
+        "bytes": 289406976,
+        "terminal_cpu": 1.94,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "unicode",
+        "trial": 4,
+        "cpu": 2.281214,
+        "rss_kib": 141936
+      },
+      {
+        "seconds": 1.686207762977574,
+        "bytes": 289406976,
+        "terminal_cpu": 2.02,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "unicode",
+        "trial": 4,
+        "cpu": 2.5190379999999997,
+        "rss_kib": 207704
+      },
+      {
+        "seconds": 1.5567570499842986,
+        "bytes": 289406976,
+        "terminal_cpu": 1.91,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "unicode",
+        "trial": 4,
+        "cpu": 2.417718,
+        "rss_kib": 200912
+      },
+      {
+        "seconds": 1.5976895759813488,
+        "bytes": 209715200,
+        "terminal_cpu": 1.63,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "links",
+        "trial": 0,
+        "cpu": 1.89623,
+        "rss_kib": 118816
+      },
+      {
+        "seconds": 1.5129566929826979,
+        "bytes": 209715200,
+        "terminal_cpu": 1.76,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "links",
+        "trial": 0,
+        "cpu": 2.177615,
+        "rss_kib": 152824
+      },
+      {
+        "seconds": 1.4700590370048303,
+        "bytes": 209715200,
+        "terminal_cpu": 1.71,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "links",
+        "trial": 0,
+        "cpu": 2.147285,
+        "rss_kib": 139828
+      },
+      {
+        "seconds": 1.3835036499949638,
+        "bytes": 209715200,
+        "terminal_cpu": 1.6,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "links",
+        "trial": 0,
+        "cpu": 2.020321,
+        "rss_kib": 137608
+      },
+      {
+        "seconds": 1.5452074400091078,
+        "bytes": 209715200,
+        "terminal_cpu": 1.79,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "links",
+        "trial": 1,
+        "cpu": 2.190575,
+        "rss_kib": 152860
+      },
+      {
+        "seconds": 1.445601467974484,
+        "bytes": 209715200,
+        "terminal_cpu": 1.67,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "links",
+        "trial": 1,
+        "cpu": 2.121716,
+        "rss_kib": 139964
+      },
+      {
+        "seconds": 1.3417211979976855,
+        "bytes": 209715200,
+        "terminal_cpu": 1.59,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "links",
+        "trial": 1,
+        "cpu": 2.005257,
+        "rss_kib": 137732
+      },
+      {
+        "seconds": 1.5837696689995937,
+        "bytes": 209715200,
+        "terminal_cpu": 1.5999999999999999,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "links",
+        "trial": 1,
+        "cpu": 1.8699119999999998,
+        "rss_kib": 118744
+      },
+      {
+        "seconds": 1.4827032050234266,
+        "bytes": 209715200,
+        "terminal_cpu": 1.72,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "links",
+        "trial": 2,
+        "cpu": 2.182803,
+        "rss_kib": 139924
+      },
+      {
+        "seconds": 1.3481916290184017,
+        "bytes": 209715200,
+        "terminal_cpu": 1.59,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "links",
+        "trial": 2,
+        "cpu": 2.031507,
+        "rss_kib": 137544
+      },
+      {
+        "seconds": 1.560571317007998,
+        "bytes": 209715200,
+        "terminal_cpu": 1.5899999999999999,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "links",
+        "trial": 2,
+        "cpu": 1.873051,
+        "rss_kib": 119024
+      },
+      {
+        "seconds": 1.5199995629955083,
+        "bytes": 209715200,
+        "terminal_cpu": 1.7699999999999998,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "links",
+        "trial": 2,
+        "cpu": 2.215324,
+        "rss_kib": 152960
+      },
+      {
+        "seconds": 1.3454506759881042,
+        "bytes": 209715200,
+        "terminal_cpu": 1.59,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "links",
+        "trial": 3,
+        "cpu": 2.024001,
+        "rss_kib": 137824
+      },
+      {
+        "seconds": 1.5713363779941574,
+        "bytes": 209715200,
+        "terminal_cpu": 1.5899999999999999,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "links",
+        "trial": 3,
+        "cpu": 1.8884729999999998,
+        "rss_kib": 118732
+      },
+      {
+        "seconds": 1.512091871991288,
+        "bytes": 209715200,
+        "terminal_cpu": 1.75,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "links",
+        "trial": 3,
+        "cpu": 2.1817889999999998,
+        "rss_kib": 152620
+      },
+      {
+        "seconds": 1.4518829750013538,
+        "bytes": 209715200,
+        "terminal_cpu": 1.69,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "links",
+        "trial": 3,
+        "cpu": 2.155546,
+        "rss_kib": 139956
+      },
+      {
+        "seconds": 1.5893225189938676,
+        "bytes": 209715200,
+        "terminal_cpu": 1.6099999999999999,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "links",
+        "trial": 4,
+        "cpu": 1.897525,
+        "rss_kib": 118920
+      },
+      {
+        "seconds": 1.5085886740125716,
+        "bytes": 209715200,
+        "terminal_cpu": 1.75,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "links",
+        "trial": 4,
+        "cpu": 2.181721,
+        "rss_kib": 153112
+      },
+      {
+        "seconds": 1.4335749729943927,
+        "bytes": 209715200,
+        "terminal_cpu": 1.68,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "links",
+        "trial": 4,
+        "cpu": 2.1669340000000004,
+        "rss_kib": 140260
+      },
+      {
+        "seconds": 1.315812806977192,
+        "bytes": 209715200,
+        "terminal_cpu": 1.56,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "links",
+        "trial": 4,
+        "cpu": 1.9938189999999998,
+        "rss_kib": 137368
+      },
+      {
+        "seconds": 1.8975955469941255,
+        "bytes": 361299968,
+        "terminal_cpu": 2.34,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "rgb",
+        "trial": 0,
+        "cpu": 2.8797369999999995,
+        "rss_kib": 152124
+      },
+      {
+        "seconds": 1.6234921129944269,
+        "bytes": 361299968,
+        "terminal_cpu": 2.06,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "rgb",
+        "trial": 0,
+        "cpu": 2.594513,
+        "rss_kib": 139588
+      },
+      {
+        "seconds": 1.5091198199952487,
+        "bytes": 361299968,
+        "terminal_cpu": 1.9400000000000002,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "rgb",
+        "trial": 0,
+        "cpu": 2.475859,
+        "rss_kib": 137348
+      },
+      {
+        "seconds": 2.4524855480121914,
+        "bytes": 361299968,
+        "terminal_cpu": 2.5,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "rgb",
+        "trial": 0,
+        "cpu": 2.870408,
+        "rss_kib": 116644
+      },
+      {
+        "seconds": 1.6019999340060167,
+        "bytes": 361299968,
+        "terminal_cpu": 2.02,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "rgb",
+        "trial": 1,
+        "cpu": 2.586992,
+        "rss_kib": 139176
+      },
+      {
+        "seconds": 1.5312574559939094,
+        "bytes": 361299968,
+        "terminal_cpu": 1.9600000000000002,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "rgb",
+        "trial": 1,
+        "cpu": 2.481607,
+        "rss_kib": 137048
+      },
+      {
+        "seconds": 2.4955564210249577,
+        "bytes": 361299968,
+        "terminal_cpu": 2.5300000000000002,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "rgb",
+        "trial": 1,
+        "cpu": 2.9121439999999996,
+        "rss_kib": 117092
+      },
+      {
+        "seconds": 1.9336658520041965,
+        "bytes": 361299968,
+        "terminal_cpu": 2.3499999999999996,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "rgb",
+        "trial": 1,
+        "cpu": 2.876722,
+        "rss_kib": 152120
+      },
+      {
+        "seconds": 1.50840178198996,
+        "bytes": 361299968,
+        "terminal_cpu": 1.94,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "rgb",
+        "trial": 2,
+        "cpu": 2.4778789999999997,
+        "rss_kib": 137108
+      },
+      {
+        "seconds": 2.4751616150024347,
+        "bytes": 361299968,
+        "terminal_cpu": 2.5100000000000002,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "rgb",
+        "trial": 2,
+        "cpu": 2.8887720000000003,
+        "rss_kib": 117120
+      },
+      {
+        "seconds": 1.9900953350006603,
+        "bytes": 361299968,
+        "terminal_cpu": 2.4099999999999997,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "rgb",
+        "trial": 2,
+        "cpu": 2.933941,
+        "rss_kib": 152360
+      },
+      {
+        "seconds": 1.6242062469827943,
+        "bytes": 361299968,
+        "terminal_cpu": 2.04,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "rgb",
+        "trial": 2,
+        "cpu": 2.603141,
+        "rss_kib": 139408
+      },
+      {
+        "seconds": 2.5242372539942153,
+        "bytes": 361299968,
+        "terminal_cpu": 2.5500000000000003,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "rgb",
+        "trial": 3,
+        "cpu": 2.9131720000000003,
+        "rss_kib": 117072
+      },
+      {
+        "seconds": 1.94004629200208,
+        "bytes": 361299968,
+        "terminal_cpu": 2.37,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "rgb",
+        "trial": 3,
+        "cpu": 2.899243,
+        "rss_kib": 152100
+      },
+      {
+        "seconds": 1.6997892869985662,
+        "bytes": 361299968,
+        "terminal_cpu": 2.11,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "rgb",
+        "trial": 3,
+        "cpu": 2.675573,
+        "rss_kib": 139676
+      },
+      {
+        "seconds": 1.530448277015239,
+        "bytes": 361299968,
+        "terminal_cpu": 1.9200000000000002,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "rgb",
+        "trial": 3,
+        "cpu": 2.484469,
+        "rss_kib": 137172
+      },
+      {
+        "seconds": 1.8773287959920708,
+        "bytes": 361299968,
+        "terminal_cpu": 2.3099999999999996,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "rgb",
+        "trial": 4,
+        "cpu": 2.833183,
+        "rss_kib": 152632
+      },
+      {
+        "seconds": 1.6830429929832462,
+        "bytes": 361299968,
+        "terminal_cpu": 2.1199999999999997,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "rgb",
+        "trial": 4,
+        "cpu": 2.647491,
+        "rss_kib": 139496
+      },
+      {
+        "seconds": 1.5154431920091156,
+        "bytes": 361299968,
+        "terminal_cpu": 1.94,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "rgb",
+        "trial": 4,
+        "cpu": 2.4820659999999997,
+        "rss_kib": 137280
+      },
+      {
+        "seconds": 2.4860860189946834,
+        "bytes": 361299968,
+        "terminal_cpu": 2.5300000000000002,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "rgb",
+        "trial": 4,
+        "cpu": 2.9074020000000003,
+        "rss_kib": 116804
+      },
+      {
+        "seconds": 1.4118760739802383,
+        "bytes": 247463936,
+        "terminal_cpu": 1.72,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "edits",
+        "trial": 0,
+        "cpu": 2.188634,
+        "rss_kib": 139440
+      },
+      {
+        "seconds": 1.2620936459861696,
+        "bytes": 247463936,
+        "terminal_cpu": 1.57,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "edits",
+        "trial": 0,
+        "cpu": 2.046321,
+        "rss_kib": 136948
+      },
+      {
+        "seconds": 2.4827577210089657,
+        "bytes": 247463936,
+        "terminal_cpu": 2.52,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "edits",
+        "trial": 0,
+        "cpu": 2.8246,
+        "rss_kib": 117032
+      },
+      {
+        "seconds": 7.70156919801957,
+        "bytes": 247463936,
+        "terminal_cpu": 7.85,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "edits",
+        "trial": 0,
+        "cpu": 8.330123,
+        "rss_kib": 151908
+      },
+      {
+        "seconds": 1.2650959590100683,
+        "bytes": 247463936,
+        "terminal_cpu": 1.55,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "edits",
+        "trial": 1,
+        "cpu": 2.011465,
+        "rss_kib": 136952
+      },
+      {
+        "seconds": 2.499132072989596,
+        "bytes": 247463936,
+        "terminal_cpu": 2.53,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "edits",
+        "trial": 1,
+        "cpu": 2.834955,
+        "rss_kib": 116880
+      },
+      {
+        "seconds": 7.7118755990231875,
+        "bytes": 247463936,
+        "terminal_cpu": 7.9799999999999995,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "edits",
+        "trial": 1,
+        "cpu": 8.434104,
+        "rss_kib": 151896
+      },
+      {
+        "seconds": 1.4594060959934723,
+        "bytes": 247463936,
+        "terminal_cpu": 1.77,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "edits",
+        "trial": 1,
+        "cpu": 2.233897,
+        "rss_kib": 139092
+      },
+      {
+        "seconds": 2.4944881119881757,
+        "bytes": 247463936,
+        "terminal_cpu": 2.5300000000000002,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "edits",
+        "trial": 2,
+        "cpu": 2.824215,
+        "rss_kib": 116744
+      },
+      {
+        "seconds": 7.736305058992002,
+        "bytes": 247463936,
+        "terminal_cpu": 7.930000000000001,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "edits",
+        "trial": 2,
+        "cpu": 8.378666,
+        "rss_kib": 152408
+      },
+      {
+        "seconds": 1.4688193449983373,
+        "bytes": 247463936,
+        "terminal_cpu": 1.74,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "edits",
+        "trial": 2,
+        "cpu": 2.193644,
+        "rss_kib": 139544
+      },
+      {
+        "seconds": 1.2530364030099008,
+        "bytes": 247463936,
+        "terminal_cpu": 1.54,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "edits",
+        "trial": 2,
+        "cpu": 1.986886,
+        "rss_kib": 137308
+      },
+      {
+        "seconds": 7.516336826985935,
+        "bytes": 247463936,
+        "terminal_cpu": 7.77,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "edits",
+        "trial": 3,
+        "cpu": 8.26867,
+        "rss_kib": 152156
+      },
+      {
+        "seconds": 1.4716370190144517,
+        "bytes": 247463936,
+        "terminal_cpu": 1.7599999999999998,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "edits",
+        "trial": 3,
+        "cpu": 2.250107,
+        "rss_kib": 139500
+      },
+      {
+        "seconds": 1.2655069889733568,
+        "bytes": 247463936,
+        "terminal_cpu": 1.56,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "edits",
+        "trial": 3,
+        "cpu": 2.008174,
+        "rss_kib": 137184
+      },
+      {
+        "seconds": 2.489058891980676,
+        "bytes": 247463936,
+        "terminal_cpu": 2.54,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "edits",
+        "trial": 3,
+        "cpu": 2.824214,
+        "rss_kib": 117104
+      },
+      {
+        "seconds": 1.4395535760268103,
+        "bytes": 247463936,
+        "terminal_cpu": 1.72,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "portable",
+        "mode": "edits",
+        "trial": 4,
+        "cpu": 2.211993,
+        "rss_kib": 139668
+      },
+      {
+        "seconds": 1.2774222070001997,
+        "bytes": 247463936,
+        "terminal_cpu": 1.57,
+        "parent_name": "cryptty-mailbox",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "pgo",
+        "mode": "edits",
+        "trial": 4,
+        "cpu": 2.019539,
+        "rss_kib": 136868
+      },
+      {
+        "seconds": 2.4953441719990224,
+        "bytes": 247463936,
+        "terminal_cpu": 2.54,
+        "parent_name": "alacritty",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "alacritty",
+        "mode": "edits",
+        "trial": 4,
+        "cpu": 2.8253340000000002,
+        "rss_kib": 116600
+      },
+      {
+        "seconds": 7.586610172002111,
+        "bytes": 247463936,
+        "terminal_cpu": 7.84,
+        "parent_name": "cryptty-baselin",
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "terminal_affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "cols": 80,
+        "rows": 21,
+        "reply": "\u001b[21;1R",
+        "end_cols": 80,
+        "end_rows": 21,
+        "status": "ok",
+        "name": "baseline",
+        "mode": "edits",
+        "trial": 4,
+        "cpu": 8.313833,
+        "rss_kib": 152112
+      }
+    ]
+  },
+  "latency": {
+    "latency-comparison": {
+      "metadata": {
+        "binaries": {
+          "baseline": {
+            "path": "/tmp/cryptty-tuning/cryptty-baseline",
+            "sha256": "006203c6ad762299ca1751bfcb3d87e5c7924de87a17afc09c8da09efae3284c"
+          },
+          "portable": {
+            "path": "/tmp/cryptty-tuning/cryptty-compact-style",
+            "sha256": "7155714380a00247f019658b0b125d813a3b5431cca4878863590763a090ec8c"
+          },
+          "pgo": {
+            "path": "/tmp/cryptty-tuning/cryptty-final-pgo",
+            "sha256": "4042d869d24fe78e79797ba22457394eb8a27b477e43b0c293ff974ec5b54daf"
+          },
+          "alacritty": {
+            "path": "/usr/bin/alacritty",
+            "sha256": "0cf523596ad06112922350a3d7c0eb0875c7c45b7c05b0dcc405a40afc50e624"
+          }
+        },
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "trials": 2,
+        "scope": "PTY marker/request to cursor reply; display presentation excluded"
+      },
+      "summary": {
+        "idle": {
+          "baseline": {
+            "samples_ms": {
+              "median": 0.3142815,
+              "p95": 13.557859,
+              "p99": 15.546417,
+              "maximum": 16.427454
+            },
+            "request_to_reply_ms": {
+              "median": 0.320064,
+              "p95": 13.565138,
+              "p99": 15.552797,
+              "maximum": 16.434177
+            },
+            "lock_wait_ms": {
+              "median": 0.005814,
+              "p95": 0.008397,
+              "p99": 0.010908,
+              "maximum": 0.109157
+            }
+          },
+          "portable": {
+            "samples_ms": {
+              "median": 0.300632,
+              "p95": 13.954465,
+              "p99": 16.13403,
+              "maximum": 16.689767
+            },
+            "request_to_reply_ms": {
+              "median": 0.30777,
+              "p95": 13.961682,
+              "p99": 16.13929,
+              "maximum": 16.701889
+            },
+            "lock_wait_ms": {
+              "median": 0.005589,
+              "p95": 0.00828,
+              "p99": 0.012122,
+              "maximum": 0.03322
+            }
+          },
+          "pgo": {
+            "samples_ms": {
+              "median": 0.3004785,
+              "p95": 14.006964,
+              "p99": 15.838175,
+              "maximum": 16.255962
+            },
+            "request_to_reply_ms": {
+              "median": 0.3064005,
+              "p95": 14.014577,
+              "p99": 15.844621,
+              "maximum": 16.261899
+            },
+            "lock_wait_ms": {
+              "median": 0.005862,
+              "p95": 0.008123,
+              "p99": 0.011164,
+              "maximum": 0.095053
+            }
+          },
+          "alacritty": {
+            "samples_ms": {
+              "median": 0.215815,
+              "p95": 0.480844,
+              "p99": 0.773577,
+              "maximum": 5.537453
+            },
+            "request_to_reply_ms": {
+              "median": 0.219736,
+              "p95": 0.485204,
+              "p99": 0.780842,
+              "maximum": 5.541619
+            },
+            "lock_wait_ms": {
+              "median": 0.0041285,
+              "p95": 0.008025,
+              "p99": 0.010273,
+              "maximum": 0.042741
+            }
+          }
+        },
+        "paced": {
+          "baseline": {
+            "samples_ms": {
+              "median": 1.19142,
+              "p95": 7.503068,
+              "p99": 17.125716,
+              "maximum": 18.453822
+            },
+            "request_to_reply_ms": {
+              "median": 1.192792,
+              "p95": 15.78227,
+              "p99": 17.476828,
+              "maximum": 18.45604
+            },
+            "lock_wait_ms": {
+              "median": 0.0019245,
+              "p95": 10.074516,
+              "p99": 12.673761,
+              "maximum": 13.569799
+            },
+            "load_bytes_per_second": 67107513.262015805
+          },
+          "portable": {
+            "samples_ms": {
+              "median": 1.8353315000000001,
+              "p95": 15.918119,
+              "p99": 17.292893,
+              "maximum": 19.180427
+            },
+            "request_to_reply_ms": {
+              "median": 2.082052,
+              "p95": 16.312431,
+              "p99": 17.386144,
+              "maximum": 19.181153
+            },
+            "lock_wait_ms": {
+              "median": 0.00258,
+              "p95": 9.523671,
+              "p99": 12.323057,
+              "maximum": 14.003536
+            },
+            "load_bytes_per_second": 67057262.14943593
+          },
+          "pgo": {
+            "samples_ms": {
+              "median": 1.543222,
+              "p95": 15.164949,
+              "p99": 17.479233,
+              "maximum": 19.832801
+            },
+            "request_to_reply_ms": {
+              "median": 1.6403409999999998,
+              "p95": 16.35291,
+              "p99": 17.710281,
+              "maximum": 20.201092
+            },
+            "lock_wait_ms": {
+              "median": 0.0022170000000000002,
+              "p95": 9.790271,
+              "p99": 12.231793,
+              "maximum": 15.489472
+            },
+            "load_bytes_per_second": 67106832.92438697
+          },
+          "alacritty": {
+            "samples_ms": {
+              "median": 0.08935599999999999,
+              "p95": 3.69485,
+              "p99": 4.934351,
+              "maximum": 5.926386
+            },
+            "request_to_reply_ms": {
+              "median": 0.0907445,
+              "p95": 3.854075,
+              "p99": 5.17072,
+              "maximum": 7.122413
+            },
+            "lock_wait_ms": {
+              "median": 0.0010025,
+              "p95": 0.102571,
+              "p99": 0.79063,
+              "maximum": 1.608352
+            },
+            "load_bytes_per_second": 67107414.29438034
+          }
+        },
+        "loaded": {
+          "baseline": {
+            "samples_ms": {
+              "median": 1.90095,
+              "p95": 2.444765,
+              "p99": 2.974588,
+              "maximum": 3.780126
+            },
+            "request_to_reply_ms": {
+              "median": 2.3982665,
+              "p95": 4.081926,
+              "p99": 5.403543,
+              "maximum": 6.399933
+            },
+            "lock_wait_ms": {
+              "median": 0.3880245,
+              "p95": 2.00336,
+              "p99": 3.243085,
+              "maximum": 4.52536
+            },
+            "load_bytes_per_second": 147542079.10294926
+          },
+          "portable": {
+            "samples_ms": {
+              "median": 1.5433015,
+              "p95": 1.962212,
+              "p99": 2.539375,
+              "maximum": 3.858677
+            },
+            "request_to_reply_ms": {
+              "median": 1.9070085,
+              "p95": 3.258106,
+              "p99": 4.096681,
+              "maximum": 5.151172
+            },
+            "lock_wait_ms": {
+              "median": 0.26588199999999995,
+              "p95": 1.517232,
+              "p99": 2.318513,
+              "maximum": 2.957864
+            },
+            "load_bytes_per_second": 182946533.22755155
+          },
+          "pgo": {
+            "samples_ms": {
+              "median": 1.5113485,
+              "p95": 1.962752,
+              "p99": 2.374692,
+              "maximum": 2.902273
+            },
+            "request_to_reply_ms": {
+              "median": 1.8748695,
+              "p95": 3.064074,
+              "p99": 3.977145,
+              "maximum": 6.149112
+            },
+            "lock_wait_ms": {
+              "median": 0.28386350000000005,
+              "p95": 1.457868,
+              "p99": 2.462696,
+              "maximum": 4.705917
+            },
+            "load_bytes_per_second": 185619836.2279386
+          },
+          "alacritty": {
+            "samples_ms": {
+              "median": 1.8820359999999998,
+              "p95": 2.404512,
+              "p99": 3.047158,
+              "maximum": 3.32766
+            },
+            "request_to_reply_ms": {
+              "median": 2.2837175,
+              "p95": 4.069049,
+              "p99": 5.166693,
+              "maximum": 8.264881
+            },
+            "lock_wait_ms": {
+              "median": 0.360175,
+              "p95": 1.924625,
+              "p99": 3.214261,
+              "maximum": 6.297867
+            },
+            "load_bytes_per_second": 140868042.95299837
+          }
+        }
+      }
+    },
+    "mailbox-latency-comparison": {
+      "metadata": {
+        "binaries": {
+          "previous": {
+            "path": "/tmp/cryptty-tuning/cryptty-compact-style",
+            "sha256": "7155714380a00247f019658b0b125d813a3b5431cca4878863590763a090ec8c"
+          },
+          "mailbox": {
+            "path": "/tmp/cryptty-tuning/cryptty-mailbox",
+            "sha256": "cd7e7cd0340bc507d3c5f4294114b11158af381b01de68f2c8e052d361b005dd"
+          },
+          "alacritty": {
+            "path": "/usr/bin/alacritty",
+            "sha256": "0cf523596ad06112922350a3d7c0eb0875c7c45b7c05b0dcc405a40afc50e624"
+          }
+        },
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "trials": 2,
+        "scope": "PTY marker/request to cursor reply; display presentation excluded"
+      },
+      "summary": {
+        "idle": {
+          "previous": {
+            "samples_ms": {
+              "median": 0.3006025,
+              "p95": 13.239467,
+              "p99": 15.846973,
+              "maximum": 16.592591
+            },
+            "request_to_reply_ms": {
+              "median": 0.306466,
+              "p95": 13.241208,
+              "p99": 15.853166,
+              "maximum": 16.599304
+            },
+            "lock_wait_ms": {
+              "median": 0.0044575,
+              "p95": 0.007794,
+              "p99": 0.009271,
+              "maximum": 0.014081
+            }
+          },
+          "mailbox": {
+            "samples_ms": {
+              "median": 0.2007405,
+              "p95": 0.503861,
+              "p99": 1.123736,
+              "maximum": 2.259394
+            },
+            "request_to_reply_ms": {
+              "median": 0.20446999999999999,
+              "p95": 0.511418,
+              "p99": 1.126736,
+              "maximum": 2.266511
+            },
+            "lock_wait_ms": {
+              "median": 0.0052375,
+              "p95": 0.008184,
+              "p99": 0.010168,
+              "maximum": 0.070148
+            }
+          },
+          "alacritty": {
+            "samples_ms": {
+              "median": 0.224057,
+              "p95": 0.488385,
+              "p99": 0.682905,
+              "maximum": 7.820377
+            },
+            "request_to_reply_ms": {
+              "median": 0.226797,
+              "p95": 0.490646,
+              "p99": 0.689536,
+              "maximum": 7.825659
+            },
+            "lock_wait_ms": {
+              "median": 0.0030285,
+              "p95": 0.007766,
+              "p99": 0.009366,
+              "maximum": 0.01767
+            }
+          }
+        },
+        "paced": {
+          "previous": {
+            "samples_ms": {
+              "median": 1.84212,
+              "p95": 16.395813,
+              "p99": 17.669351,
+              "maximum": 18.607065
+            },
+            "request_to_reply_ms": {
+              "median": 2.0835860000000004,
+              "p95": 16.736606,
+              "p99": 17.930215,
+              "maximum": 19.417322
+            },
+            "lock_wait_ms": {
+              "median": 0.0027625,
+              "p95": 10.292,
+              "p99": 12.907028,
+              "maximum": 13.722214
+            },
+            "load_bytes_per_second": 67107800.284443855
+          },
+          "mailbox": {
+            "samples_ms": {
+              "median": 0.0672315,
+              "p95": 0.502601,
+              "p99": 0.909261,
+              "maximum": 1.606053
+            },
+            "request_to_reply_ms": {
+              "median": 0.0692,
+              "p95": 0.510837,
+              "p99": 0.916147,
+              "maximum": 2.113192
+            },
+            "lock_wait_ms": {
+              "median": 0.0012645,
+              "p95": 0.004605,
+              "p99": 0.019278,
+              "maximum": 2.013742
+            },
+            "load_bytes_per_second": 67107818.367701076
+          },
+          "alacritty": {
+            "samples_ms": {
+              "median": 0.085141,
+              "p95": 3.957509,
+              "p99": 5.01998,
+              "maximum": 6.460784
+            },
+            "request_to_reply_ms": {
+              "median": 0.0874885,
+              "p95": 4.11193,
+              "p99": 5.370957,
+              "maximum": 7.026481
+            },
+            "lock_wait_ms": {
+              "median": 0.0011394999999999999,
+              "p95": 0.077731,
+              "p99": 0.7786,
+              "maximum": 3.003569
+            },
+            "load_bytes_per_second": 67106715.84332006
+          }
+        },
+        "loaded": {
+          "previous": {
+            "samples_ms": {
+              "median": 1.573242,
+              "p95": 1.930964,
+              "p99": 2.273676,
+              "maximum": 3.874905
+            },
+            "request_to_reply_ms": {
+              "median": 1.9289435,
+              "p95": 3.26041,
+              "p99": 3.949569,
+              "maximum": 5.636468
+            },
+            "lock_wait_ms": {
+              "median": 0.29614050000000003,
+              "p95": 1.594795,
+              "p99": 2.316291,
+              "maximum": 3.901307
+            },
+            "load_bytes_per_second": 180994776.36508754
+          },
+          "mailbox": {
+            "samples_ms": {
+              "median": 1.5745814999999999,
+              "p95": 1.922358,
+              "p99": 2.299247,
+              "maximum": 4.560576
+            },
+            "request_to_reply_ms": {
+              "median": 1.9274745,
+              "p95": 3.300771,
+              "p99": 4.292047,
+              "maximum": 5.606669
+            },
+            "lock_wait_ms": {
+              "median": 0.27040549999999997,
+              "p95": 1.655651,
+              "p99": 2.449981,
+              "maximum": 3.895203
+            },
+            "load_bytes_per_second": 180119951.73140323
+          },
+          "alacritty": {
+            "samples_ms": {
+              "median": 1.880967,
+              "p95": 2.542281,
+              "p99": 3.055218,
+              "maximum": 8.64342
+            },
+            "request_to_reply_ms": {
+              "median": 2.369802,
+              "p95": 4.235191,
+              "p99": 6.083063,
+              "maximum": 8.856383
+            },
+            "lock_wait_ms": {
+              "median": 0.4208805,
+              "p95": 2.239928,
+              "p99": 3.555342,
+              "maximum": 5.759273
+            },
+            "load_bytes_per_second": 139344633.520627
+          }
+        }
+      }
+    },
+    "presentation-latency": {
+      "metadata": {
+        "binaries": {
+          "baseline": {
+            "path": "/tmp/cryptty-tuning/cryptty-baseline",
+            "sha256": "006203c6ad762299ca1751bfcb3d87e5c7924de87a17afc09c8da09efae3284c"
+          },
+          "portable": {
+            "path": "/tmp/cryptty-tuning/cryptty-mailbox",
+            "sha256": "cd7e7cd0340bc507d3c5f4294114b11158af381b01de68f2c8e052d361b005dd"
+          },
+          "pgo": {
+            "path": "/tmp/cryptty-tuning/cryptty-mailbox-pgo",
+            "sha256": "69ace2e95240802e74ef7f6db3c729d6be92eb1c8c7f54ef2e2d98683976df76"
+          },
+          "alacritty": {
+            "path": "/usr/bin/alacritty",
+            "sha256": "0cf523596ad06112922350a3d7c0eb0875c7c45b7c05b0dcc405a40afc50e624"
+          }
+        },
+        "affinity": [
+          2,
+          4,
+          6,
+          8
+        ],
+        "trials": 2,
+        "scope": "PTY marker/request to cursor reply; display presentation excluded"
+      },
+      "summary": {
+        "idle": {
+          "baseline": {
+            "samples_ms": {
+              "median": 0.29623900000000003,
+              "p95": 11.686783,
+              "p99": 15.506293,
+              "maximum": 16.418672
+            },
+            "request_to_reply_ms": {
+              "median": 0.30163249999999997,
+              "p95": 11.689843,
+              "p99": 15.512378,
+              "maximum": 16.423675
+            },
+            "lock_wait_ms": {
+              "median": 0.005492,
+              "p95": 0.008267,
+              "p99": 0.010425,
+              "maximum": 0.044415
+            }
+          },
+          "portable": {
+            "samples_ms": {
+              "median": 0.226772,
+              "p95": 0.651677,
+              "p99": 1.004739,
+              "maximum": 2.170628
+            },
+            "request_to_reply_ms": {
+              "median": 0.2301535,
+              "p95": 0.653046,
+              "p99": 1.010567,
+              "maximum": 2.179863
+            },
+            "lock_wait_ms": {
+              "median": 0.0042245,
+              "p95": 0.007837,
+              "p99": 0.01073,
+              "maximum": 0.048989
+            }
+          },
+          "pgo": {
+            "samples_ms": {
+              "median": 0.1774305,
+              "p95": 0.407055,
+              "p99": 0.810677,
+              "maximum": 1.259691
+            },
+            "request_to_reply_ms": {
+              "median": 0.181747,
+              "p95": 0.412986,
+              "p99": 0.811874,
+              "maximum": 1.266953
+            },
+            "lock_wait_ms": {
+              "median": 0.004557,
+              "p95": 0.007816,
+              "p99": 0.009858,
+              "maximum": 0.049787
+            }
+          },
+          "alacritty": {
+            "samples_ms": {
+              "median": 0.19317499999999999,
+              "p95": 0.441221,
+              "p99": 0.640127,
+              "maximum": 5.375228
+            },
+            "request_to_reply_ms": {
+              "median": 0.199077,
+              "p95": 0.448111,
+              "p99": 0.646166,
+              "maximum": 5.378014
+            },
+            "lock_wait_ms": {
+              "median": 0.0039795,
+              "p95": 0.008067,
+              "p99": 0.015068,
+              "maximum": 0.044949
+            }
+          }
+        },
+        "paced": {
+          "baseline": {
+            "samples_ms": {
+              "median": 1.9946679999999999,
+              "p95": 9.331248,
+              "p99": 16.498836,
+              "maximum": 18.592119
+            },
+            "request_to_reply_ms": {
+              "median": 2.2182304999999998,
+              "p95": 12.967691,
+              "p99": 16.741584,
+              "maximum": 18.594115
+            },
+            "lock_wait_ms": {
+              "median": 0.0020165,
+              "p95": 6.080895,
+              "p99": 11.31065,
+              "maximum": 13.163784
+            },
+            "load_bytes_per_second": 67108354.05632574
+          },
+          "portable": {
+            "samples_ms": {
+              "median": 0.077406,
+              "p95": 0.494745,
+              "p99": 0.92416,
+              "maximum": 2.42753
+            },
+            "request_to_reply_ms": {
+              "median": 0.0790125,
+              "p95": 0.495861,
+              "p99": 0.926301,
+              "maximum": 2.431646
+            },
+            "lock_wait_ms": {
+              "median": 0.0015265,
+              "p95": 0.006753,
+              "p99": 0.018764,
+              "maximum": 0.790369
+            },
+            "load_bytes_per_second": 67106563.144778825
+          },
+          "pgo": {
+            "samples_ms": {
+              "median": 0.0727725,
+              "p95": 0.485847,
+              "p99": 0.933889,
+              "maximum": 2.277204
+            },
+            "request_to_reply_ms": {
+              "median": 0.074172,
+              "p95": 0.488484,
+              "p99": 0.988605,
+              "maximum": 2.279451
+            },
+            "lock_wait_ms": {
+              "median": 0.0013855,
+              "p95": 0.007982,
+              "p99": 0.023893,
+              "maximum": 0.804898
+            },
+            "load_bytes_per_second": 67107411.51364618
+          },
+          "alacritty": {
+            "samples_ms": {
+              "median": 0.0885315,
+              "p95": 3.706547,
+              "p99": 4.609509,
+              "maximum": 6.002755
+            },
+            "request_to_reply_ms": {
+              "median": 0.0906155,
+              "p95": 3.939658,
+              "p99": 5.205095,
+              "maximum": 8.743564
+            },
+            "lock_wait_ms": {
+              "median": 0.001132,
+              "p95": 0.088338,
+              "p99": 1.148026,
+              "maximum": 2.740809
+            },
+            "load_bytes_per_second": 67107563.82034613
+          }
+        },
+        "loaded": {
+          "baseline": {
+            "samples_ms": {
+              "median": 1.9070605,
+              "p95": 2.420045,
+              "p99": 3.010172,
+              "maximum": 3.857013
+            },
+            "request_to_reply_ms": {
+              "median": 2.398135,
+              "p95": 4.078742,
+              "p99": 4.87409,
+              "maximum": 6.395811
+            },
+            "lock_wait_ms": {
+              "median": 0.417885,
+              "p95": 1.967123,
+              "p99": 2.91774,
+              "maximum": 4.235257
+            },
+            "load_bytes_per_second": 147075663.40512618
+          },
+          "portable": {
+            "samples_ms": {
+              "median": 1.5905505,
+              "p95": 2.091631,
+              "p99": 2.642094,
+              "maximum": 6.536215
+            },
+            "request_to_reply_ms": {
+              "median": 1.9875725,
+              "p95": 3.325538,
+              "p99": 4.205566,
+              "maximum": 6.537095
+            },
+            "lock_wait_ms": {
+              "median": 0.321943,
+              "p95": 1.580575,
+              "p99": 2.256722,
+              "maximum": 2.988192
+            },
+            "load_bytes_per_second": 177964285.48564315
+          },
+          "pgo": {
+            "samples_ms": {
+              "median": 1.5317675,
+              "p95": 1.929711,
+              "p99": 2.474136,
+              "maximum": 5.649417
+            },
+            "request_to_reply_ms": {
+              "median": 1.864178,
+              "p95": 3.262175,
+              "p99": 4.188719,
+              "maximum": 5.64998
+            },
+            "lock_wait_ms": {
+              "median": 0.2564735,
+              "p95": 1.639884,
+              "p99": 2.462513,
+              "maximum": 3.980887
+            },
+            "load_bytes_per_second": 183880680.97925955
+          },
+          "alacritty": {
+            "samples_ms": {
+              "median": 1.87075,
+              "p95": 2.575928,
+              "p99": 3.123859,
+              "maximum": 3.640235
+            },
+            "request_to_reply_ms": {
+              "median": 2.363484,
+              "p95": 4.022234,
+              "p99": 4.847409,
+              "maximum": 6.924009
+            },
+            "lock_wait_ms": {
+              "median": 0.424842,
+              "p95": 2.051106,
+              "p99": 2.902666,
+              "maximum": 4.803433
+            },
+            "load_bytes_per_second": 138796660.2003777
+          }
+        }
+      }
+    }
+  },
+  "analysis": {
+    "plain": {
+      "portable": {
+        "speedup_vs_baseline": 1.1866270986649274,
+        "speedup_vs_alacritty": 1.5456201751671974
+      },
+      "pgo": {
+        "speedup_vs_baseline": 1.199292144349801,
+        "speedup_vs_alacritty": 1.562116806798128
+      }
+    },
+    "color": {
+      "portable": {
+        "speedup_vs_baseline": 1.1723998697742288,
+        "speedup_vs_alacritty": 1.6106430884982355
+      },
+      "pgo": {
+        "speedup_vs_baseline": 1.246858174779192,
+        "speedup_vs_alacritty": 1.7129339172754785
+      }
+    },
+    "unicode": {
+      "portable": {
+        "speedup_vs_baseline": 1.1186086987878245,
+        "speedup_vs_alacritty": 1.2378202982994826
+      },
+      "pgo": {
+        "speedup_vs_baseline": 1.170595268064875,
+        "speedup_vs_alacritty": 1.2953471446040195
+      }
+    },
+    "links": {
+      "portable": {
+        "speedup_vs_baseline": 1.0420651795171627,
+        "speedup_vs_alacritty": 1.0908383776578943
+      },
+      "pgo": {
+        "speedup_vs_baseline": 1.1244980733846497,
+        "speedup_vs_alacritty": 1.1771294907087302
+      }
+    },
+    "rgb": {
+      "portable": {
+        "speedup_vs_baseline": 1.1905297468201896,
+        "speedup_vs_alacritty": 1.5306467535221955
+      },
+      "pgo": {
+        "speedup_vs_baseline": 1.275973828778509,
+        "speedup_vs_alacritty": 1.6405009650666795
+      }
+    },
+    "edits": {
+      "portable": {
+        "speedup_vs_baseline": 5.277194071727393,
+        "speedup_vs_alacritty": 1.7092487956822493
+      },
+      "pgo": {
+        "speedup_vs_baseline": 6.087735197609841,
+        "speedup_vs_alacritty": 1.9717777882557628
+      }
+    }
+  }
+}

@@ -134,10 +134,11 @@ impl Gpu {
                 continue;
             };
             // Match the software renderer's byte-space color blending.
-            let Some(format) = surface
-                .get_capabilities(&adapter)
+            let capabilities = surface.get_capabilities(&adapter);
+            let Some(format) = capabilities
                 .formats
-                .into_iter()
+                .iter()
+                .copied()
                 .find(|format| !format.is_srgb())
             else {
                 errors.push(format!(
@@ -146,7 +147,15 @@ impl Gpu {
                 continue;
             };
             config.format = format;
-            config.present_mode = wgpu::PresentMode::AutoVsync;
+            // Replace stale frames while preserving synchronized presentation.
+            config.present_mode = if capabilities
+                .present_modes
+                .contains(&wgpu::PresentMode::Mailbox)
+            {
+                wgpu::PresentMode::Mailbox
+            } else {
+                wgpu::PresentMode::AutoVsync
+            };
             config.desired_maximum_frame_latency = 2;
             let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
             surface.configure(&device, &config);
@@ -160,8 +169,8 @@ impl Gpu {
                 continue;
             }
             eprintln!(
-                "Cryptty: GPU {index}: {} ({:?})",
-                info.name, info.backend
+                "Cryptty: GPU {index}: {} ({:?}, {:?})",
+                info.name, info.backend, config.present_mode
             );
             return Ok(Self {
                 surface,

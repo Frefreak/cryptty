@@ -33,12 +33,12 @@ fn narrow_then_wide_preserves_long_url_and_cursor() {
 fn hard_lines_remain_separate_and_styles_and_links_survive() {
     let mut t = Terminal::new(20, 6);
     t.feed(b"\x1b[31mfirst-line\r\n\x1b]8;;https://example.com\x07second-line\x1b]8;;\x07");
-    let style = t.rows[0][0].style;
+    let style = t.rows[0][0].style();
     t.resize(7, 6);
     t.resize(20, 6);
     assert_eq!(row(&t, 0).trim_end(), "first-line");
     assert_eq!(row(&t, 1).trim_end(), "second-line");
-    assert_eq!(t.rows[0][0].style, style);
+    assert_eq!(t.rows[0][0].style(), style);
     assert_eq!(
         t.link_at(Position { row: 1, col: 3 }).unwrap().uri,
         "https://example.com"
@@ -54,16 +54,15 @@ fn wide_and_combining_characters_survive_repeated_reflow() {
         t.resize(width, 5);
         for cells in &t.rows {
             for (x, cell) in cells.iter().enumerate() {
-                match cell.content {
-                    Content::Text { wide: true, .. } => assert!(matches!(
-                        cells[x + 1].content,
-                        Content::Continuation
-                    )),
+                match &cell.content {
+                    Content::Text { text } if text.columns() == 2 => assert!(
+                        matches!(cells[x + 1].content, Content::Continuation)
+                    ),
                     Content::Continuation => assert!(
                         x > 0
                             && matches!(
-                                cells[x - 1].content,
-                                Content::Text { wide: true, .. }
+                                &cells[x - 1].content,
+                                Content::Text { text } if text.columns() == 2
                             )
                     ),
                     _ => (),

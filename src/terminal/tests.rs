@@ -1,6 +1,13 @@
 use super::*;
 
 #[test]
+#[cfg(target_pointer_width = "64")]
+fn cell_storage_stays_within_the_compact_layout() {
+    assert_eq!(std::mem::size_of::<Content>(), 16);
+    assert_eq!(std::mem::size_of::<Cell>(), 40);
+}
+
+#[test]
 fn recycled_history_rows_clear_text_links_and_wrapping() {
     let mut terminal = Terminal::new(8, 2);
     terminal.feed(
@@ -26,8 +33,7 @@ fn recycled_history_rows_clear_text_links_and_wrapping() {
         terminal.history.back().unwrap()[0]
             .content
             .eq(&Content::Text {
-                text: CellText::new('l'),
-                wide: false
+                text: CellText::new('l', false),
             })
     );
     for alternate in [false, true] {
@@ -95,7 +101,7 @@ fn printable_fast_path_matches_general_placement() {
 
 #[test]
 fn combining_text_preserves_the_byte_limit_with_four_byte_scalars() {
-    let mut text = CellText::new('a');
+    let mut text = CellText::new('a', false);
     for _ in 0..31 {
         text.push_combining('\u{301}');
     }
@@ -146,8 +152,7 @@ fn lazy_rows_hide_recycled_cells_and_materialize_gaps() {
         ..Style::default()
     });
     styled.content = Content::Text {
-        text: CellText::new('中'),
-        wide: true,
+        text: CellText::new('中', true),
     };
     styled.hyperlink = Some(Arc::new("https://example.org".into()));
     row.fill(styled.clone());
@@ -187,8 +192,7 @@ fn row_snapshots_copy_logical_cells_across_widths_and_clears() {
             let mut source = Row::new(source_width, Style::default());
             let mut cell = Cell::blank(Style::default());
             cell.content = Content::Text {
-                text: CellText::new('e'),
-                wide: false,
+                text: CellText::new('e', false),
             };
             if let Content::Text { text, .. } = &mut cell.content {
                 text.push_combining('\u{301}');
@@ -264,6 +268,76 @@ fn buffered_parser_matches_direct_callbacks_at_every_chunk_boundary() {
             assert_eq!(buffered.preceding, direct.preceding);
             assert_eq!(buffered.style, direct.style);
             assert_eq!(buffered.title, direct.title);
+        }
+    }
+}
+
+#[test]
+fn batched_erasure_matches_cellwise_erasure_and_later_writes() {
+    let styles = [
+        Style::default(),
+        Style {
+            fg: Color::Indexed(4),
+            bg: Color::Rgb(12, 34, 56),
+            bold: true,
+            underline: Underline::Curly,
+            inverse: true,
+            ..Style::default()
+        },
+    ];
+    for cols in 1..=12 {
+        for prefix in ["", "abc", "中e\u{301}😀xyz", "0123456789ab"] {
+            let mut source = Terminal::new(cols, 1);
+            source.feed("\x1b]8;;https://example.org\x1b\\".as_bytes());
+            source.feed(prefix.as_bytes());
+            for recycled in [false, true] {
+                let mut original = source.rows[0].clone();
+                original.wrapped = Some(cols);
+                for style in styles {
+                    for start in 0..=cols {
+                        for end in start..=cols {
+                            let mut expected = Terminal::new(cols, 1);
+                            expected.rows[0] = original.clone();
+                            let mut actual = original.clone();
+                            if recycled {
+                                for row in [&mut actual, &mut expected.rows[0]]
+                                {
+                                    row.clear(styles[1]);
+                                    row.write_text(
+                                        0,
+                                        'x',
+                                        false,
+                                        &styles[0].into(),
+                                        &None,
+                                    );
+                                    row.wrapped = Some(cols);
+                                }
+                            }
+                            expected.style = style.into();
+                            for col in start..end {
+                                expected.clear_cell(col, 0);
+                            }
+                            actual.erase(start..end, style);
+                            assert_eq!(
+                                actual, expected.rows[0],
+                                "cols={cols} prefix={prefix:?} recycled={recycled} range={start}..{end}"
+                            );
+                            for col in [cols - 1, 0, cols / 2] {
+                                let cell = Cell {
+                                    content: Content::Text {
+                                        text: CellText::new('Z', false),
+                                    },
+                                    style: style.into(),
+                                    hyperlink: None,
+                                };
+                                actual.set(col, cell.clone());
+                                expected.rows[0].set(col, cell);
+                                assert_eq!(actual, expected.rows[0]);
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

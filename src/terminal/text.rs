@@ -61,12 +61,12 @@ impl Terminal {
         for y in first..=last {
             let row = &self.rows[y];
             for x in 0..row.wrapped.unwrap_or(row.len()) {
-                if let Content::Text { text, wide } = &row[x].content {
+                if let Content::Text { text } = &row[x].content {
                     cells.push((
                         Position { row: y, col: x },
                         Position {
                             row: y,
-                            col: x + if *wide { 2 } else { 1 },
+                            col: x + text.columns(),
                         },
                         text,
                     ));
@@ -79,7 +79,7 @@ impl Terminal {
         else {
             return TextRange::between(position, position);
         };
-        let whitespace = |i: usize| cells[i].2.base.is_whitespace();
+        let whitespace = |i: usize| cells[i].2.base().is_whitespace();
         let mut start = index;
         while start > 0 && whitespace(start - 1) == whitespace(index) {
             start -= 1;
@@ -130,7 +130,7 @@ impl Terminal {
 
     pub fn cell_style(&self, x: usize, y: usize) -> Style {
         let position = Position { row: y, col: x };
-        let mut style = self.rows[y][x].style;
+        let mut style = self.rows[y][x].style();
         if self.selection.is_some_and(|r| r.contains(position)) {
             style.inverse = !style.inverse;
         }
@@ -222,7 +222,7 @@ impl Terminal {
         for y in first..=last {
             let row = &self.rows[y];
             for x in 0..row.wrapped.unwrap_or(row.len()) {
-                if let Content::Text { text: cell, wide } = &row[x].content {
+                if let Content::Text { text: cell } = &row[x].content {
                     let start = text.len();
                     text.extend(cell.chars());
                     cells.push((
@@ -230,7 +230,7 @@ impl Terminal {
                         Position { row: y, col: x },
                         Position {
                             row: y,
-                            col: x + if *wide { 2 } else { 1 },
+                            col: x + cell.columns(),
                         },
                     ));
                 }

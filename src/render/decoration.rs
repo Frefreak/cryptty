@@ -17,8 +17,8 @@ pub(super) fn cursor_layout(
         x = x.saturating_sub(1);
     }
     let columns = if matches!(
-        terminal.rows[y][x].content,
-        Content::Text { wide: true, .. }
+        &terminal.rows[y][x].content,
+        Content::Text { text } if text.columns() == 2
     ) {
         2
     } else {
