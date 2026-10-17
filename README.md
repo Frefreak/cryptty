@@ -30,11 +30,14 @@ On Linux, install the binary, desktop entry, and Cryptty coffin icon:
 make install-linux
 ```
 
-The default prefix is `~/.local`; ensure `~/.local/bin` is on your desktop
-session's `PATH`. Override with `make install-linux PREFIX=/your/prefix`.
+This command requires Rust and `desktop-file-utils`.
+The default prefix is `~/.local`. The installed launcher records absolute
+executable and icon paths. Override with
+`make install-linux PREFIX=/your/prefix`.
 The desktop entry lives in `assets/cryptty.desktop` for distribution packaging.
 The Wayland application ID matches `org.cryptty.desktop`, so desktops can
-associate running windows with the installed icon.
+associate running windows with the installed icon. Linux uses the transparent
+coffin artwork in `assets/cryptty-linux.png`; macOS retains its rounded icon.
 Run `make help` for the available targets.
 
 For profile-guided optimization (PGO), train and build with one command:

@@ -30,8 +30,17 @@ install-macos:
 install-linux:
 	@test "$$(uname -s)" = Linux || \
 	  { echo 'install-linux requires Linux' >&2; exit 1; }
+	@command -v desktop-file-edit >/dev/null || \
+	  { echo 'install-linux requires desktop-file-utils' >&2; exit 1; }
 	$(CARGO) install --path . --locked --root "$(PREFIX)"
+	install -Dm644 assets/cryptty-linux-512.png \
+	  "$(PREFIX)/share/icons/hicolor/512x512/apps/cryptty.png"
 	install -Dm644 assets/cryptty.desktop \
 	  "$(PREFIX)/share/applications/org.cryptty.desktop"
-	install -Dm644 assets/cryptty-512.png \
-	  "$(PREFIX)/share/icons/hicolor/512x512/apps/cryptty.png"
+	@prefix=$$(realpath -m -- "$(PREFIX)") && \
+	  desktop-file-edit \
+	    --set-key=Exec --set-value="\"$$prefix/bin/cryptty\"" \
+	    --set-key=TryExec --set-value="$$prefix/bin/cryptty" \
+	    --set-icon="$$prefix/share/icons/hicolor/512x512/apps/cryptty.png" \
+	    "$$prefix/share/applications/org.cryptty.desktop"
+	update-desktop-database "$(PREFIX)/share/applications"
