@@ -30,9 +30,9 @@ impl Rasterizer {
         let size = Size::new(size);
         let mut inner = crossfont::Rasterizer::new()?;
         let primary =
-            Family::load(&mut inner, family, size, None).or_else(|error| {
+            Family::load(&mut inner, family, size).or_else(|error| {
                 eprintln!("Warning: {error}; using Menlo");
-                Family::load(&mut inner, "Menlo", size, None)
+                Family::load(&mut inner, "Menlo", size)
             })?;
         let metrics = inner.metrics(primary.faces[0].key.unwrap(), size)?;
         let cell_width = metrics.average_advance.floor().max(1.0) as usize;
@@ -44,12 +44,7 @@ impl Rasterizer {
                     .iter()
                     .position(|family| family.name == mapping.family())
                     .or_else(|| {
-                        match Family::load(
-                            &mut inner,
-                            mapping.family(),
-                            size,
-                            Some(cell_width),
-                        ) {
+                        match Family::load(&mut inner, mapping.family(), size) {
                             Ok(family) => {
                                 families.push(family);
                                 Some(families.len() - 1)
@@ -74,7 +69,7 @@ impl Rasterizer {
                 {
                     return Some(index);
                 }
-                match Family::load(&mut inner, name, size, Some(cell_width)) {
+                match Family::load(&mut inner, name, size) {
                     Ok(family) => {
                         families.push(family);
                         Some(families.len() - 1)
@@ -105,7 +100,10 @@ impl Rasterizer {
     pub fn rasterize(&mut self, ch: char, style: FontStyle) -> Option<Image> {
         let image = self.rasterize_raw(ch, style)?;
         let family = self.family_for(ch, style);
-        super::symbol_fit::fit(
+        if family == 0 {
+            return Some(image);
+        }
+        super::glyph_fit::fit(
             ch,
             image,
             self.cell_width,
@@ -200,15 +198,8 @@ impl Rasterizer {
         {
             return index;
         }
-        let family = Family::load(
-            &mut self.inner,
-            &name,
-            self.size,
-            Some(self.cell_width),
-        )
-        .unwrap_or_else(|_| {
-            Family::from_fallback(font, self.size, self.cell_width)
-        });
+        let family = Family::load(&mut self.inner, &name, self.size)
+            .unwrap_or_else(|_| Family::from_fallback(font, self.size));
         self.families.push(family);
         self.families.len() - 1
     }

@@ -9,15 +9,11 @@ pub(super) fn fit(
     baseline: i32,
     render: impl FnOnce(f32) -> Option<Image>,
 ) -> Option<Image> {
-    // Keep letters, combining marks, and joining cell graphics untouched.
-    if !matches!(ch as u32,
-        0x2190..=0x24ff | 0x25a0..=0x27ff | 0x2900..=0x2bff
-            | 0xe000..=0xf8ff | 0x1f000..=0x1faff
-            | 0xf0000..=0xffffd | 0x100000..=0x10fffd)
-    {
+    // Combining marks have no cell of their own; retain their attachment.
+    let Some(columns) = ch.width().filter(|&width| width > 0) else {
         return Some(image);
-    }
-    let width = (cell_width * ch.width().unwrap_or(1).max(1)) as i32;
+    };
+    let width = (cell_width * columns) as i32;
     let height = cell_height as i32;
     let p = image.placement;
     if p.left >= 0
@@ -28,18 +24,16 @@ pub(super) fn fit(
         return Some(image);
     }
     let mut fitted = if p.width > width as u32 || p.height > height as u32 {
-        // Reserve one pixel for rasterizer rounding at the smaller size.
-        let scale = ((width - 1).max(1) as f32 / p.width.max(1) as f32)
-            .min((height - 1).max(1) as f32 / p.height.max(1) as f32);
+        let scale = (width as f32 / p.width.max(1) as f32)
+            .min(height as f32 / p.height.max(1) as f32);
         render(scale)?
     } else {
         image
     };
     constrain_bitmap(&mut fitted, width as u32, height as u32)?;
     let f = &mut fitted.placement;
-    f.left = (width - f.width as i32) / 2;
-    let top = p.top - (p.height as i32 - f.height as i32) / 2;
-    f.top = top.clamp(baseline - height + f.height as i32, baseline);
+    f.left = f.left.clamp(0, width - f.width as i32);
+    f.top = f.top.clamp(baseline - height + f.height as i32, baseline);
     Some(fitted)
 }
 
@@ -90,8 +84,8 @@ mod tests {
     }
 
     #[test]
-    fn symbols_fit_even_when_a_bitmap_strike_ignores_size() {
-        for ch in ['①', '→', '\u{e000}', '😀'] {
+    fn glyphs_fit_even_when_a_bitmap_strike_ignores_size() {
+        for ch in ['M', 'x', '中', '①', '→', '\u{e000}', '😀'] {
             let image =
                 fit(ch, glyph(60, 80), 19, 40, 30, |_| Some(glyph(60, 80)))
                     .unwrap();
@@ -105,14 +99,67 @@ mod tests {
     }
 
     #[test]
-    fn letters_combining_marks_and_cell_graphics_remain_unchanged() {
-        for ch in ['g', '中', '\u{301}', '─', '█', '⣿'] {
+    fn combining_marks_remain_unchanged() {
+        for ch in ['\u{301}', '\u{3099}'] {
             let image = fit(ch, glyph(60, 80), 19, 40, 30, |_| {
-                panic!("ordinary glyphs must keep their native raster")
+                panic!("combining marks must keep their native raster")
             })
             .unwrap();
             assert_eq!(image.placement.width, 60);
             assert_eq!(image.placement.left, -2);
         }
+    }
+
+    #[test]
+    fn fitting_glyph_keeps_its_pixels_and_placement() {
+        let mut original = glyph(8, 13);
+        original.placement.left = 3;
+        original.placement.top = 13;
+        let fitted = fit('⇡', original.clone(), 14, 31, 24, |_| {
+            panic!("a fitting glyph must keep its original size")
+        })
+        .unwrap();
+        assert_eq!(fitted.placement.left, original.placement.left);
+        assert_eq!(fitted.placement.top, original.placement.top);
+        assert_eq!(fitted.placement.width, original.placement.width);
+        assert_eq!(fitted.placement.height, original.placement.height);
+        assert_eq!(fitted.data, original.data);
+    }
+
+    #[test]
+    fn overhanging_bearings_shift_without_shrinking() {
+        for (left, top, expected_left, expected_top) in [
+            (-2, 12, 0, 12),
+            (8, 12, 6, 12),
+            (2, 30, 2, 24),
+            (2, 2, 2, 6),
+        ] {
+            let mut original = glyph(8, 13);
+            original.placement.left = left;
+            original.placement.top = top;
+            let fitted = fit('M', original.clone(), 14, 31, 24, |_| {
+                panic!("a bearing overhang does not need a smaller raster")
+            })
+            .unwrap();
+            assert_eq!(fitted.placement.left, expected_left);
+            assert_eq!(fitted.placement.top, expected_top);
+            assert_eq!(fitted.data, original.data);
+        }
+    }
+
+    #[test]
+    fn oversized_raster_is_rendered_at_the_measured_scale() {
+        let fitted = fit('中', glyph(80, 60), 20, 40, 30, |scale| {
+            assert_eq!(scale, 0.5);
+            let mut smaller = glyph(40, 30);
+            smaller.placement.left = -1;
+            smaller.placement.top = 30;
+            Some(smaller)
+        })
+        .unwrap();
+        assert_eq!(fitted.placement.width, 40);
+        assert_eq!(fitted.placement.height, 30);
+        assert_eq!(fitted.placement.left, 0);
+        assert_eq!(fitted.placement.top, 30);
     }
 }

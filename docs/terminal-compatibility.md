@@ -109,14 +109,15 @@ diagonals, fractional blocks, and quadrants follow cell geometry. Shades
 use uniform full-cell alpha 64, 128, and 192. Bold/italic retain the same
 generated shape; foreground/background colors and decorations still apply.
 
-Each other family uses
-one font size derived from a fixed reference in its regular face, shared by
-all styles. References prefer CJK and emoji at two cells, then Latin and
-symbols at one cell; a family lacking these references keeps the configured
-size. Hidden CoreText fallback faces retain their native descriptors.
-Glyph bitmaps and baseline-relative placement remain unchanged after
-rasterization. Font mappings handle mixed-width designs within a family.
-Drawing remains clipped to the allocated cells and viewport.
+All font families and styles start at the configured point size. Hidden
+CoreText fallback faces retain their native descriptors at that size.
+Primary-font glyphs retain their original pixels, size, and bearings in
+every style. Fallback spacing glyphs that fit keep their original pixels
+and baseline-relative placement. Oversized fallback glyphs are rendered
+smaller according to their actual bitmap dimensions, preserving aspect
+ratio. A bitmap that remains too large is downsampled to fit. Outlying bearings are shifted into the allocated
+cells. Combining marks retain their attachment placement. Drawing remains
+clipped to the allocated cells and viewport.
 
 ## Text styles
 

@@ -3,9 +3,7 @@ use core_foundation::base::{CFRange, TCFType};
 use core_foundation::string::{CFString, CFStringRef};
 use core_text::font::{CTFont, CTFontRef, new_from_descriptor};
 use core_text::font_collection::create_for_family;
-use core_text::font_descriptor::{
-    SymbolicTraitAccessors, kCTFontDefaultOrientation,
-};
+use core_text::font_descriptor::SymbolicTraitAccessors;
 use crossfont::{FontDesc, FontKey, Rasterize, Size, Style};
 
 pub(super) struct Family {
@@ -24,7 +22,6 @@ impl Family {
         inner: &mut crossfont::Rasterizer,
         name: &str,
         size: Size,
-        cell_width: Option<usize>,
     ) -> Result<Self> {
         let collection = create_for_family(name)
             .with_context(|| format!("Font family unavailable: {name}"))?;
@@ -45,15 +42,6 @@ impl Family {
             })
             .or_else(|| fonts.first())
             .context("Font family has no faces")?;
-        let size = if let Some(width) = cell_width {
-            Size::new(super::normalization::font_size(
-                size.as_pt(),
-                width,
-                |ch| advance(regular, ch),
-            ))
-        } else {
-            size
-        };
         let name = regular.family_name();
         let load = |inner: &mut crossfont::Rasterizer, bold, italic| {
             let font = fonts
@@ -87,18 +75,12 @@ impl Family {
         Ok(Self { name, size, faces })
     }
 
-    pub fn from_fallback(font: CTFont, size: Size, width: usize) -> Self {
+    pub fn from_fallback(font: CTFont, size: Size) -> Self {
         use core_text::font_descriptor::{
             kCTFontBoldTrait, kCTFontItalicTrait,
         };
         let mask = kCTFontBoldTrait | kCTFontItalicTrait;
         let regular = with_traits(&font, 0, mask).unwrap_or(font);
-        let regular = regular.clone_with_font_size(f64::from(size.as_pt()));
-        let size = Size::new(super::normalization::font_size(
-            size.as_pt(),
-            width,
-            |ch| advance(&regular, ch),
-        ));
         let regular = regular.clone_with_font_size(f64::from(size.as_pt()));
         let faces =
             [0, kCTFontBoldTrait, kCTFontItalicTrait, mask].map(|traits| {
@@ -184,18 +166,6 @@ fn glyph(font: &CTFont, ch: char) -> Option<u16> {
     (glyphs[0] != 0).then_some(glyphs[0])
 }
 
-fn advance(font: &CTFont, ch: char) -> Option<f32> {
-    let glyph = glyph(font, ch)?;
-    Some(unsafe {
-        font.get_advances_for_glyphs(
-            kCTFontDefaultOrientation,
-            &glyph,
-            std::ptr::null_mut(),
-            1,
-        ) as f32
-    })
-}
-
 #[link(name = "CoreText", kind = "framework")]
 unsafe extern "C" {
     fn CTFontCreateForString(
@@ -210,25 +180,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn emoji_keeps_two_columns_and_bold_survives_missing_italic() {
+    fn emoji_keeps_size_and_bold_survives_missing_italic() {
         let mut rasterizer = crossfont::Rasterizer::new().unwrap();
-        let emoji = Family::load(
-            &mut rasterizer,
-            "Apple Color Emoji",
-            Size::new(38.0),
-            Some(19),
-        )
-        .unwrap();
-        assert!(
-            (advance(&emoji.faces[0].font, '😀').unwrap() - 38.0).abs() < 0.01
-        );
-        let cjk = Family::load(
-            &mut rasterizer,
-            "PingFang SC",
-            Size::new(38.0),
-            Some(19),
-        )
-        .unwrap();
+        let emoji =
+            Family::load(&mut rasterizer, "Apple Color Emoji", Size::new(38.0))
+                .unwrap();
+        assert!((emoji.faces[0].font.pt_size() - 38.0).abs() < 0.01);
+        let cjk = Family::load(&mut rasterizer, "PingFang SC", Size::new(38.0))
+            .unwrap();
         assert!(cjk.faces[3].font.symbolic_traits().is_bold());
         assert_eq!(
             cjk.faces[1].font.postscript_name(),
@@ -237,25 +196,18 @@ mod tests {
     }
 
     #[test]
-    fn family_styles_share_one_size_and_match_the_target_advance() {
+    fn family_styles_keep_the_requested_size() {
         let mut rasterizer = crossfont::Rasterizer::new().unwrap();
-        for target in [10, 19, 27] {
-            let family = Family::load(
-                &mut rasterizer,
-                "Menlo",
-                Size::new(38.0),
-                Some(target),
-            )
-            .unwrap();
+        for size in [10.0, 19.0, 27.0] {
+            let family =
+                Family::load(&mut rasterizer, "Menlo", Size::new(size))
+                    .unwrap();
             for face in &family.faces {
                 assert!(
                     (face.font.pt_size() as f32 - family.size.as_pt()).abs()
                         < 0.001
                 );
-                assert!(
-                    (advance(&face.font, 'M').unwrap() - target as f32).abs()
-                        < 0.01
-                );
+                assert!((face.font.pt_size() as f32 - size).abs() < 0.01);
             }
             for ch in ['▲', '▼', 'm', 'g'] {
                 assert!(family.faces[0].supports(ch));

@@ -43,7 +43,6 @@ pub struct Rasterizer {
     fallbacks: Vec<[ID; 4]>,
     scale: ScaleContext,
     size: f32,
-    family_sizes: HashMap<String, f32>,
     hinting: bool,
     pub cell_width: usize,
     pub cell_height: usize,
@@ -126,10 +125,6 @@ impl Rasterizer {
             .max(1.0) as usize
             + 1;
         let baseline = metrics.ascent.ceil() as i32;
-        let family_sizes = HashMap::from([(
-            db.face(regular).unwrap().families[0].0.clone(),
-            size,
-        )]);
         let mut fonts = HashMap::new();
         fonts.insert(regular, font);
         for id in faces.into_iter().skip(1) {
@@ -145,7 +140,6 @@ impl Rasterizer {
             fallbacks,
             scale: ScaleContext::new(),
             size,
-            family_sizes,
             hinting,
             cell_width,
             cell_height,
@@ -155,14 +149,17 @@ impl Rasterizer {
 
     pub fn rasterize(&mut self, ch: char, style: FontStyle) -> Option<Image> {
         let id = self.face_for(ch, style);
-        let size = self.font_size(id)?;
+        let size = self.size;
         if let std::collections::hash_map::Entry::Vacant(entry) =
             self.fonts.entry(id)
         {
             entry.insert(Font::load(&self.db, id)?);
         }
         let image = self.render_at_size(id, ch, size)?;
-        super::symbol_fit::fit(
+        if self.faces.contains(&id) {
+            return Some(image);
+        }
+        super::glyph_fit::fit(
             ch,
             image,
             self.cell_width,
@@ -188,34 +185,6 @@ impl Rasterizer {
         ])
         .format(swash::zeno::Format::Alpha)
         .render(&mut scaler, glyph)
-    }
-
-    fn font_size(&mut self, id: ID) -> Option<f32> {
-        let family = self.db.face(id)?.families[0].0.clone();
-        if let Some(&size) = self.family_sizes.get(&family) {
-            return Some(size);
-        }
-        let regular = self
-            .db
-            .query(&Query {
-                families: &[Family::Name(&family)],
-                ..Query::default()
-            })
-            .unwrap_or(id);
-        if let std::collections::hash_map::Entry::Vacant(entry) =
-            self.fonts.entry(regular)
-        {
-            entry.insert(Font::load(&self.db, regular)?);
-        }
-        let font = self.fonts.get(&regular)?.as_ref();
-        let metrics = font.glyph_metrics(&[]).scale(self.size);
-        let size =
-            super::normalization::font_size(self.size, self.cell_width, |ch| {
-                let glyph = font.charmap().map(ch);
-                (glyph != 0).then(|| metrics.advance_width(glyph))
-            });
-        self.family_sizes.insert(family, size);
-        Some(size)
     }
 
     fn face_for(&self, ch: char, style: FontStyle) -> ID {
@@ -316,66 +285,93 @@ mod tests {
     }
 
     #[test]
-    fn family_size_is_shared_across_styles_and_request_order() {
-        let mut first =
-            Rasterizer::new(38.0, false, "monospace", &[], &[]).unwrap();
-        let primary = first.faces[0];
-        assert_eq!(first.font_size(primary), Some(38.0));
-        let alternate = first
-            .db
-            .faces()
-            .find(|face| {
-                face.families[0].0
-                    != first.db.face(primary).unwrap().families[0].0
-                    && face.style == fontdb::Style::Normal
-                    && face.weight == Weight::NORMAL
-                    && first.supports(face.id, 'M')
-                    && first.supports(face.id, 'g')
-            })
-            .unwrap()
-            .id;
-        let faces = styled_faces(&first.db, alternate);
-        let family = first.db.face(alternate).unwrap().families[0].0.clone();
-        let config = crate::config::Config::parse(&format!(
-            "font:\n  codepoint_map:\n    - ranges: ['U+0041-U+007A']\n      family: {family:?}\n"
-        )).unwrap();
-        let mut second = Rasterizer::new(
-            38.0,
+    fn fallback_keeps_configured_size_when_its_bitmap_fits() {
+        let mut db = Database::new();
+        db.load_system_fonts();
+        for name in ["FantasqueSansM Nerd Font Mono", "DejaVu Sans Mono"] {
+            if db
+                .query(&Query {
+                    families: &[Family::Name(name)],
+                    ..Query::default()
+                })
+                .is_none()
+            {
+                eprintln!("Skipping font fixture: {name} is unavailable");
+                return;
+            }
+        }
+        let mut rasterizer = Rasterizer::new(
+            17.0 * 96.0 / 72.0 * 1.25,
             false,
-            "monospace",
-            &config.font.codepoint_map,
-            &config.font.fallback,
+            "FantasqueSansM Nerd Font Mono",
+            &[],
+            &["DejaVu Sans Mono".to_owned()],
         )
         .unwrap();
-        let bold_size = first.font_size(faces[1]).unwrap();
-        let second_regular = second
-            .db
-            .query(&Query {
-                families: &[Family::Name(&family)],
-                ..Query::default()
-            })
+        let style = FontStyle::default();
+        let id = rasterizer.face_for('⇡', style);
+        assert_eq!(
+            rasterizer.db.face(id).unwrap().families[0].0,
+            "DejaVu Sans Mono"
+        );
+        let actual = rasterizer.rasterize('⇡', style).unwrap();
+        let expected =
+            rasterizer.render_at_size(id, '⇡', rasterizer.size).unwrap();
+        assert_eq!(actual.placement.left, expected.placement.left);
+        assert_eq!(actual.placement.top, expected.placement.top);
+        assert_eq!(actual.placement.width, expected.placement.width);
+        assert_eq!(actual.placement.height, expected.placement.height);
+        assert_eq!(actual.data, expected.data);
+    }
+
+    #[test]
+    fn primary_glyphs_stay_raw_and_fallbacks_fit_across_sizes_and_styles() {
+        for size in [16.0, 28.333334, 38.0] {
+            let mut rasterizer = Rasterizer::new(
+                size,
+                false,
+                "FantasqueSansM Nerd Font Mono",
+                &[],
+                &["DejaVu Sans Mono".to_owned()],
+            )
             .unwrap();
-        let regular_size = second.font_size(second_regular).unwrap();
-        assert_eq!(bold_size, regular_size);
-        for face in faces {
-            assert_eq!(first.font_size(face), Some(regular_size));
+            for bold in [false, true] {
+                for italic in [false, true] {
+                    for ch in "%AWmMHxgj⇡①中😀\u{e0b0}".chars() {
+                        let style = FontStyle { bold, italic };
+                        let id = rasterizer.face_for(ch, style);
+                        let image = rasterizer.rasterize(ch, style).unwrap();
+                        let p = image.placement;
+                        if rasterizer.faces.contains(&id) {
+                            let raw = rasterizer
+                                .render_at_size(id, ch, size)
+                                .unwrap();
+                            assert_eq!(p.left, raw.placement.left);
+                            assert_eq!(p.top, raw.placement.top);
+                            assert_eq!(p.width, raw.placement.width);
+                            assert_eq!(p.height, raw.placement.height);
+                            assert_eq!(image.content, raw.content);
+                            assert_eq!(image.data, raw.data);
+                            continue;
+                        }
+                        let columns =
+                            unicode_width::UnicodeWidthChar::width(ch).unwrap();
+                        assert!(p.left >= 0, "{ch} {size} {p:?}");
+                        assert!(
+                            p.left as usize + p.width as usize
+                                <= rasterizer.cell_width * columns,
+                            "{ch} {size} {p:?}"
+                        );
+                        assert!(p.top <= rasterizer.baseline);
+                        assert!(
+                            rasterizer.baseline - p.top + p.height as i32
+                                <= rasterizer.cell_height as i32
+                        );
+                        assert!(image.data.iter().any(|&v| v != 0));
+                    }
+                }
+            }
         }
-        for (ch, style) in [
-            ('g', FontStyle::default()),
-            (
-                'M',
-                FontStyle {
-                    bold: true,
-                    italic: true,
-                },
-            ),
-        ] {
-            let image = second.rasterize(ch, style).unwrap();
-            assert!(image.data.iter().any(|&pixel| pixel != 0));
-        }
-        assert!(second.cell_width > 0);
-        assert!(second.baseline > 0);
-        assert!(second.cell_height >= second.baseline as usize);
     }
 
     #[test]

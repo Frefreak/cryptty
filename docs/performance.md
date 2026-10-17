@@ -470,10 +470,10 @@ used a full-block reference to preserve fractional geometry. These changes
 follow the archived measurements above and have separate rendering checks.
 The historical performance tables retain their original source snapshots.
 
-Current rendering normalizes fallback font sizes per family against the
-primary cell advance. Styles share the regular face's scale. Per-glyph bitmap
-fitting and block transforms have been removed; baseline placement and font
-mappings remain. These changes have no new performance measurements here.
+That revision normalized fallback font sizes per family against the
+primary cell advance. Styles shared the regular face's scale. Per-glyph
+bitmap fitting and block transforms were removed; baseline placement and
+font mappings remained. Those changes have no performance measurements here.
 
 Validation on Linux passed 125 default tests, Clippy with warnings denied,
 and the explicit GPU/software pixel comparison across font sizes, range
@@ -805,3 +805,17 @@ Validation: macOS test suite, release build, formatting, and Linux
 all-target compilation passed. Independent review found no blocking issue.
 Clippy completed with warnings in unchanged code; `-D warnings` fails on
 those existing diagnostics.
+
+## Equal point sizes and glyph fitting, 2026-10-18
+
+All families now start at the configured point size. Family-wide reference
+advance normalization has been removed. Primary-font glyphs retain their
+original pixels, size, and bearings in every style. Fallback spacing glyphs
+are fitted using actual raster dimensions, with aspect-preserving size
+reduction when
+needed and a bitmap downsampling fallback for fixed strikes or rounding.
+Bearings are shifted only as needed to keep the bitmap inside its cells.
+Combining-mark placement and generated cell geometry remain unchanged.
+
+The preceding counts and timings describe their historical revisions.
+Performance and macOS runtime appearance for this change remain unmeasured.

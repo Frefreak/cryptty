@@ -206,13 +206,17 @@ An unavailable family warns and falls back to the primary family. A missing
 glyph follows the normal fallback path.
 
 The primary family and size define the grid, with one bottom pixel
-reserved for rasterized descenders. Block and beam cursors cover the cell height. Other families receive a shared
-font size measured from their regular face: CJK and emoji references target
-two cells, Latin and symbol references target one. All styles share that
-size. Families without a supported reference retain the configured size.
-Glyphs retain the rasterizer's baseline-relative placement, with no bitmap
-resizing or centering. Drawing is clipped to the allocated cells. Use font
-mappings for mixed-width designs, such as one-cell triangles in a CJK font.
+reserved for rasterized descenders. Block and beam cursors cover the cell
+height. All font families and styles start at the configured point size.
+Primary-font glyphs retain their original pixels, size, and bearings in
+every style. Drawing clips overflow to the allocated cells. Fallback glyphs
+that fit retain their original pixels and baseline-relative placement.
+Oversized fallback spacing glyphs are rendered smaller, preserving aspect
+ratio, using their rasterized width and height to fit their allocated cells.
+If the rasterizer still returns an oversized bitmap, it is downsampled to
+fit. Bearings that place a bitmap outside its cells are shifted just enough
+to bring it inside. Combining marks retain their attachment placement;
+generated box drawing and block elements already follow cell geometry.
 
 ## Keyboard bindings
 

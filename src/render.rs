@@ -17,6 +17,7 @@ mod font;
 mod atlas;
 mod decoration;
 mod generated;
+mod glyph_fit;
 pub mod gpu;
 #[cfg(test)]
 mod gpu_tests;
@@ -25,13 +26,11 @@ mod images;
 mod native_fallback;
 #[cfg(target_os = "macos")]
 mod native_family;
-mod normalization;
 mod painter;
 mod scene;
 #[cfg(all(test, target_os = "macos"))]
 #[path = "render/swash.rs"]
 mod swash_tests;
-mod symbol_fit;
 
 const CACHE_LIMIT: usize = 4096;
 

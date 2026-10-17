@@ -9,8 +9,8 @@ validation counts remain in [performance.md](performance.md).
 - Terminal core, selection, paste, scrolling, and Ctrl-click links.
 - GPU rendering and optimization stages 1–17, with recorded throughput,
   memory, and latency comparisons.
-- Native macOS font rendering, font mappings, shared family sizing, and
-  generated box drawing/block glyphs for U+2500–U+259F.
+- Native macOS font rendering, font mappings, equal point sizes with
+  glyph fitting, and generated box drawing/block glyphs for U+2500–U+259F.
 - Cursor geometry: adjusted cell height and a beam width of 15% of a cell.
 - Kitty and Xterm mode-2 keyboard negotiation, configurable text bindings,
   and manual configuration reload with Ctrl+Shift+R.
