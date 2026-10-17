@@ -183,7 +183,7 @@ pub(super) fn build(
             FontStyle::default(),
             (x, y),
             columns,
-            super::PREEDIT_COLOR,
+            terminal.theme().palette[2],
         )?;
         x += columns;
     }

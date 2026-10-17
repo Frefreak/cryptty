@@ -456,7 +456,7 @@ fn image_pane_preserves_paths_and_closes_on_enter() {
     )
     .unwrap();
     let image = fixture.directory.join("a ' $(exit 73).png");
-    image::RgbaImage::from_pixel(16, 16, image::Rgba([70, 90, 130, 255]))
+    image::RgbaImage::from_pixel(336, 1200, image::Rgba([70, 90, 130, 255]))
         .save(&image)
         .unwrap();
     let script = fixture.directory.join("preview.sh");
@@ -464,6 +464,9 @@ fn image_pane_preserves_paths_and_closes_on_enter() {
         &script,
         concat!(
             "#!/bin/sh\n",
+            "tmux split-window -h -l 60% /bin/sh\n",
+            "tmux display-message -p -t \"$TMUX_PANE\" ",
+            "'#{window_layout}' > \"$3.layout\"\n",
             "\"$1\" image --pane \"$2\" > \"$3\"\n",
             "printf PREVIEW_LAUNCHED\nread done\n"
         ),
@@ -487,15 +490,15 @@ fn image_pane_preserves_paths_and_closes_on_enter() {
     let mut pty = Pty::spawn(
         &command,
         PtySize {
-            rows: 24,
-            cols: 80,
-            pixel_width: 800,
-            pixel_height: 480,
+            rows: 48,
+            cols: 201,
+            pixel_width: 4020,
+            pixel_height: 1920,
         },
         || {},
     )
     .unwrap();
-    let mut terminal = Terminal::new(80, 24);
+    let mut terminal = Terminal::new(201, 48);
     let mut phase = 0;
     drive(&mut pty, &mut terminal, |_, terminal| {
         let text = screen(terminal);
@@ -507,7 +510,7 @@ fn image_pane_preserves_paths_and_closes_on_enter() {
                     .contains("Opened image preview in pane")
             );
             phase = 1;
-            fixture.tmux(&["send-keys", "-t", "0:0.1", "Enter"]);
+            fixture.tmux(&["send-keys", "-t", "0:0.2", "Enter"]);
         } else if phase == 1
             && text.contains("PREVIEW_LAUNCHED")
             && !text.contains("Press Enter to close")
@@ -520,11 +523,116 @@ fn image_pane_preserves_paths_and_closes_on_enter() {
             assert!(output.status.success());
             assert_eq!(
                 String::from_utf8(output.stdout).unwrap().lines().count(),
-                1
+                2
+            );
+            let layout = Command::new("tmux")
+                .args([
+                    "-L",
+                    &fixture.socket,
+                    "display-message",
+                    "-p",
+                    "-t",
+                    "0:0",
+                    "#{window_layout}",
+                ])
+                .env_remove("TMUX")
+                .output()
+                .unwrap();
+            assert!(layout.status.success());
+            assert_eq!(
+                String::from_utf8(layout.stdout).unwrap(),
+                std::fs::read_to_string(report.with_extension("txt.layout"))
+                    .unwrap()
             );
             phase = 2;
             fixture.tmux(&["kill-server"]);
         }
     });
     assert_eq!(phase, 2, "preview did not open and close");
+}
+
+#[test]
+#[ignore = "requires tmux on PATH and a native PTY"]
+fn image_preview_uploads_after_focus_returns_to_source_pane() {
+    let fixture = Fixture::new("image-preview-focus");
+    let config = fixture.directory.join("tmux.conf");
+    std::fs::write(
+        &config,
+        concat!(
+            "set -g status off\nset -g allow-passthrough off\n",
+            "set-hook -g after-split-window 'select-pane -t 0'\n"
+        ),
+    )
+    .unwrap();
+    let image = fixture.directory.join("image.png");
+    image::RgbaImage::from_pixel(336, 1200, image::Rgba([70, 90, 130, 255]))
+        .save(&image)
+        .unwrap();
+    let script = fixture.directory.join("preview.sh");
+    std::fs::write(
+        &script,
+        concat!(
+            "\"$1\" image --pane \"$2\" > \"$3\"\n",
+            "printf PREVIEW_LAUNCHED\nread done\n"
+        ),
+    )
+    .unwrap();
+    let report = fixture.directory.join("launch.txt");
+    let command: Vec<OsString> = vec![
+        "tmux".into(),
+        "-u".into(),
+        "-L".into(),
+        fixture.socket.clone().into(),
+        "-f".into(),
+        config.into_os_string(),
+        "new-session".into(),
+        "/bin/sh".into(),
+        script.into_os_string(),
+        env!("CARGO_BIN_EXE_cryptty").into(),
+        image.into_os_string(),
+        report.into_os_string(),
+    ];
+    let mut pty = Pty::spawn(
+        &command,
+        PtySize {
+            rows: 48,
+            cols: 201,
+            pixel_width: 4020,
+            pixel_height: 1920,
+        },
+        || {},
+    )
+    .unwrap();
+    let mut terminal = Terminal::new(201, 48);
+    let mut checked = false;
+    drive(&mut pty, &mut terminal, |_, terminal| {
+        let text = screen(terminal);
+        if !checked
+            && text.contains("Press Enter to close")
+            && text.contains("PREVIEW_LAUNCHED")
+        {
+            assert_eq!(terminal.graphics.images.len(), 1);
+            assert!(text.contains(cryptty::graphics::MARKER));
+            assert!(!text.contains("Timed out"));
+            let output = Command::new("tmux")
+                .args([
+                    "-L",
+                    &fixture.socket,
+                    "list-panes",
+                    "-F",
+                    "#{pane_index}:#{pane_active}:#{allow-passthrough}",
+                ])
+                .env_remove("TMUX")
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            assert_eq!(
+                String::from_utf8(output.stdout).unwrap(),
+                "0:1:off\n1:0:all\n"
+            );
+            checked = true;
+            fixture.tmux(&["kill-server"]);
+        }
+    });
+    assert!(checked, "inactive preview must finish uploading");
 }

@@ -30,17 +30,35 @@ pub fn open_pane(paths: &[OsString]) -> Result<()> {
                 .with_context(|| format!("Open {}", Path::new(path).display()))
         })
         .collect::<Result<Vec<_>>>()?;
+    let layout = Command::new("tmux")
+        .args(["display-message", "-p", "-t"])
+        .arg(&pane)
+        .arg("#{window_layout}")
+        .stdin(Stdio::null())
+        .output()
+        .context("Read tmux layout before image preview")?;
+    ensure!(
+        layout.status.success(),
+        "Read tmux layout: {}",
+        String::from_utf8_lossy(&layout.stderr).trim()
+    );
+    let layout = String::from_utf8(layout.stdout)?;
     let output = Command::new("tmux")
         .args(["split-window", "-h", "-f", "-l", "35%", "-t"])
-        .arg(pane)
+        .arg(&pane)
         .args(["-P", "-F", "#{pane_id}", "/bin/sh", "-c"])
         .arg(concat!(
+            "source_pane=$1; layout=$2; shift 2; ",
             "tmux set -p -t \"$TMUX_PANE\" remain-on-exit off || exit; ",
-            "\"$@\"; result=$?; ",
+            "CRYPTTY_IMAGE_PREVIEW=1 \"$@\"; ",
             "printf '\\nPress Enter to close preview.\\n'; ",
-            "read -r reply; exit \"$result\""
+            "read -r reply; ",
+            "tmux kill-pane -t \"$TMUX_PANE\" \\; ",
+            "select-layout -t \"$source_pane\" \"$layout\""
         ))
         .arg("cryptty-preview")
+        .arg(pane)
+        .arg(layout.trim())
         .arg(std::env::current_exe()?)
         .args(["image", "--"])
         .args(paths)
@@ -139,10 +157,18 @@ fn enable_tmux_passthrough() -> Result<()> {
     let pane = std::env::var_os("TMUX_PANE")
         .filter(|pane| !pane.is_empty())
         .context("TMUX_PANE is required to enable image passthrough")?;
+    // Preview output must pass through during tmux split redraws.
+    let mode = if std::env::var_os("CRYPTTY_IMAGE_PREVIEW").as_deref()
+        == Some(std::ffi::OsStr::new("1"))
+    {
+        "all"
+    } else {
+        "on"
+    };
     let output = Command::new("tmux")
         .args(["set", "-p", "-t"])
         .arg(pane)
-        .args(["allow-passthrough", "on"])
+        .args(["allow-passthrough", mode])
         .stdin(Stdio::null())
         .output()
         .context("Enable tmux image passthrough for the current pane")?;

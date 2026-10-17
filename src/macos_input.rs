@@ -136,7 +136,10 @@ unsafe extern "C" fn insert_text(
                 NSEventModifierFlags::NSEventModifierFlagControl
                     | NSEventModifierFlags::NSEventModifierFlagCommand,
             );
-        let original = unsafe { event.characters() }.map(|s| s.to_string());
+        let original = key_down
+            .then(|| unsafe { event.characters() })
+            .flatten()
+            .map(|s| s.to_string());
         if key_down
             && !marked
             && !shortcut

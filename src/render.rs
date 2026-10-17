@@ -33,7 +33,6 @@ mod scene;
 mod swash_tests;
 
 const CACHE_LIMIT: usize = 4096;
-const PREEDIT_COLOR: u32 = 0x6366f1;
 
 pub struct Renderer {
     rasterizer: font::Rasterizer,
@@ -174,7 +173,7 @@ impl Renderer {
                     x,
                     y,
                     columns,
-                    PREEDIT_COLOR,
+                    terminal.theme().palette[2],
                 );
                 x += columns;
             }

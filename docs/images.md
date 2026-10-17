@@ -18,8 +18,9 @@ are unavailable, sizing uses an 8-by-16 pixel cell estimate.
 ## tmux and SSH
 
 Use `--pane` inside tmux to open a right-side preview occupying 35% of the
-window width. Press Enter in that pane to close it. The default command
-continues to display in the current terminal. `--pane` also works when the
+window width. Press Enter in that pane to close it and restore the saved
+layout. The default command continues to display in the current terminal.
+`--pane` also works when the
 calling tool captures stdout, provided `TMUX` and `TMUX_PANE` identify the
 target session and pane. Paths are resolved before opening the preview.
 
@@ -27,6 +28,8 @@ The sender detects tmux, enables `allow-passthrough on` for the current
 pane, and wraps image uploads automatically. The pane setting remains
 enabled after the command exits; other panes and global settings are
 unchanged. Failure to enable passthrough reports an error before upload.
+The temporary preview pane uses `allow-passthrough all` so uploads can pass
+through split redraws. This setting ends when the preview pane closes.
 Image positions use ordinary text cells, so tmux can redraw them after window
 switches and resize. After attaching from a new terminal, run the image
 command again to populate that terminal's image cache. Nested multiplexers
