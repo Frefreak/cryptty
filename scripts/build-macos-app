@@ -89,6 +89,17 @@ def main():
         )
         iconset = Path(temporary) / "Cryptty.iconset"
         iconset.mkdir()
+        # Leave transparent margins so macOS does not add a gray backing tile.
+        master_icon = Path(temporary) / "icon.png"
+        subprocess.run(
+            ["sips", "-z", "824", "824", str(root / "assets/cryptty.png"),
+             "--out", str(master_icon)], check=True,
+            stdout=subprocess.DEVNULL,
+        )
+        subprocess.run(
+            ["sips", "-p", "1024", "1024", str(master_icon)],
+            check=True, stdout=subprocess.DEVNULL,
+        )
         for points in (16, 32, 128, 256, 512):
             for scale in (1, 2):
                 pixels = str(points * scale)
@@ -96,7 +107,7 @@ def main():
                 icon = iconset / f"icon_{points}x{points}{suffix}.png"
                 subprocess.run(
                     ["sips", "-z", pixels, pixels,
-                     str(root / "assets/cryptty.png"), "--out", str(icon)],
+                     str(master_icon), "--out", str(icon)],
                     check=True, stdout=subprocess.DEVNULL,
                 )
         subprocess.run(

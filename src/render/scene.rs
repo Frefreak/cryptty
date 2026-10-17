@@ -21,6 +21,7 @@ pub(super) struct Quad {
 pub(super) struct Frame {
     pub quads: Vec<Quad>,
     pub overlay: usize,
+    pub backgrounds: usize,
 }
 
 impl Quad {
@@ -136,10 +137,14 @@ pub(super) fn build(
     };
     for (y, row) in terminal.rows.iter().enumerate() {
         for x in 0..row.len() {
-            let (_, bg) = terminal.colors(terminal.cell_style(x, y));
-            let (left, top) = scene.renderer.cell_origin(x, y);
-            scene.solid(left, top, w, h, bg);
+            if let Some(bg) = super::cell_background(terminal, x, y) {
+                let (left, top) = scene.renderer.cell_origin(x, y);
+                scene.solid(left, top, w, h, bg);
+            }
         }
+    }
+    let backgrounds = scene.quads.len();
+    for (y, row) in terminal.rows.iter().enumerate() {
         for (x, cell) in row.iter().enumerate() {
             let Content::Text { text } = &cell.content else {
                 continue;
@@ -215,5 +220,6 @@ pub(super) fn build(
     Some(Frame {
         quads: scene.quads,
         overlay,
+        backgrounds,
     })
 }

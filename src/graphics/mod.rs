@@ -4,7 +4,10 @@ use std::sync::Arc;
 
 use base64::{Engine, engine::general_purpose::STANDARD};
 
+mod lifecycle;
 mod placeholders;
+mod placement;
+pub use placement::{Geometry, Placement, Positioned, Screen};
 pub mod sender;
 pub mod stream;
 pub use placeholders::{DIACRITICS, Placeholder};
@@ -19,18 +22,14 @@ pub struct Raster {
     pub rgba: Vec<u8>,
 }
 
-#[derive(Clone, Copy, Default)]
-pub struct Placement {
-    pub cols: u32,
-    pub rows: u32,
-}
-
 #[derive(Default)]
 pub struct Graphics {
-    pub images: BTreeMap<u32, Arc<Raster>>,
-    pub placements: BTreeMap<(u32, u32), Placement>,
+    pub images: BTreeMap<u64, Arc<Raster>>,
+    pub placements: BTreeMap<(u64, u32), Placement>,
+    pub positioned: Vec<Positioned>,
+    next_anonymous: u32,
     pending: Option<Transfer>,
-    order: VecDeque<u32>,
+    order: VecDeque<u64>,
     pub revision: u64,
 }
 
@@ -56,6 +55,11 @@ impl Control {
                     return Err("EINVAL:invalid control value");
                 }
                 u32::from(field[2])
+            } else if key == b'z' {
+                std::str::from_utf8(&field[2..])
+                    .ok()
+                    .and_then(|s| s.parse::<i32>().ok())
+                    .ok_or("EINVAL:invalid z-index")? as u32
             } else {
                 std::str::from_utf8(&field[2..])
                     .ok()
@@ -91,7 +95,11 @@ impl Control {
 }
 
 impl Graphics {
-    pub fn command(&mut self, bytes: &[u8]) -> Vec<u8> {
+    pub fn command(
+        &mut self,
+        bytes: &[u8],
+        screen: Screen,
+    ) -> (Vec<u8>, Option<(usize, usize)>) {
         let (header, data) = match bytes.iter().position(|&b| b == b';') {
             Some(i) => (&bytes[..i], &bytes[i + 1..]),
             None => (bytes, &[][..]),
@@ -100,7 +108,7 @@ impl Graphics {
             Ok(control) => control,
             Err(_) => {
                 self.pending = None;
-                return Vec::new();
+                return (Vec::new(), None);
             }
         };
         let more = control.get(b'm', 0) == 1;
@@ -123,137 +131,221 @@ impl Graphics {
         }
         if more {
             self.pending = Some(transfer);
-            return Vec::new();
+            return (Vec::new(), None);
         }
         let result = if transfer.failed {
             Err("EFBIG:transfer limit exceeded")
         } else {
-            self.execute(&transfer.control, &transfer.encoded)
+            self.execute(&transfer.control, &transfer.encoded, screen)
         };
-        transfer.control.response(result)
+        let movement = result.as_ref().ok().copied().flatten();
+        (transfer.control.response(result.map(|_| ())), movement)
     }
 
     fn execute(
         &mut self,
         c: &Control,
         data: &[u8],
-    ) -> Result<(), &'static str> {
+        screen: Screen,
+    ) -> Result<Option<(usize, usize)>, &'static str> {
         match c.get(b'a', b't' as u32) as u8 {
-            b'd' => self.delete(c),
-            b'p' => self.place(c),
+            b'd' => {
+                self.delete(c, screen)?;
+                Ok(None)
+            }
+            b'p' => self.place(c, u64::from(c.get(b'i', 0)), screen),
             b't' | b'T' | b'q' => {
                 if c.get(b't', b'd' as u32) != b'd' as u32 {
                     return Err("ENOTSUP:use direct byte transmission");
                 }
-                if c.get(b'a', 0) == b'T' as u32 && c.get(b'U', 0) != 1 {
-                    return Err("ENOTSUP:use Unicode placeholders");
-                }
                 let raster = decode(c, data)?;
                 if c.get(b'a', 0) == b'q' as u32 {
-                    return Ok(());
+                    return Ok(None);
                 }
-                let id = c.get(b'i', 0);
-                if id == 0 {
-                    return Err("EINVAL:explicit image id required");
-                }
+                let id = if c.get(b'i', 0) == 0 {
+                    self.next_anonymous = self.next_anonymous.wrapping_add(1);
+                    (1u64 << 32) | u64::from(self.next_anonymous)
+                } else {
+                    u64::from(c.get(b'i', 0))
+                };
                 if c.get(b'a', 0) == b'T' as u32 {
-                    self.check_placement(c, true)?;
+                    self.check_placement(c, id, screen, true)?;
                 }
-                self.images.remove(&id);
-                self.placements.retain(|&(i, _), _| i != id);
-                self.order.retain(|&old| old != id);
+                self.remove_image(id);
                 let mut used: usize =
                     self.images.values().map(|image| image.rgba.len()).sum();
                 while used + raster.rgba.len() > STORE_BYTES
                     || self.images.len() >= 128
                 {
-                    let Some(old) = self.order.pop_front() else {
+                    let Some(old) = self.order.front().copied() else {
                         break;
                     };
-                    if let Some(image) = self.images.remove(&old) {
-                        used -= image.rgba.len();
-                    }
-                    self.placements.retain(|&(i, _), _| i != old);
+                    used -= self.images[&old].rgba.len();
+                    self.remove_image(old);
                 }
                 self.order.push_back(id);
                 self.images.insert(id, Arc::new(raster));
                 self.revision = self.revision.wrapping_add(1);
                 if c.get(b'a', 0) == b'T' as u32 {
-                    self.place(c)?;
+                    self.place(c, id, screen)
+                } else {
+                    Ok(None)
                 }
-                Ok(())
             }
             _ => Err("ENOTSUP:unsupported graphics action"),
         }
     }
 
+    fn remove_image(&mut self, id: u64) {
+        self.images.remove(&id);
+        self.placements.retain(|&(i, _), _| i != id);
+        self.positioned.retain(|p| p.image != id);
+        self.order.retain(|&i| i != id);
+    }
+
     fn check_placement(
         &self,
         c: &Control,
+        image: u64,
+        screen: Screen,
         replacing: bool,
-    ) -> Result<(), &'static str> {
-        if c.get(b'U', 0) != 1 {
-            return Err("ENOTSUP:use Unicode placeholders");
-        }
-        if [b'x', b'y', b'w', b'h', b'X', b'Y', b'P', b'Q']
+    ) -> Result<Placement, &'static str> {
+        let layout = Placement::parse(c, screen.cell)?;
+        let id = c.get(b'p', 0);
+        let retained = self
+            .positioned
             .iter()
-            .any(|&k| c.get(k, 0) != 0)
-        {
-            return Err("ENOTSUP:cropping and relative placements unsupported");
-        }
-        if c.get(b'c', 0) > 65535 || c.get(b'r', 0) > 65535 {
-            return Err("EINVAL:placement too large");
-        }
-        let key = (c.get(b'i', 0), c.get(b'p', 0));
-        if self
-            .placements
-            .keys()
-            .filter(|&&(id, _)| !replacing || id != key.0)
+            .filter(|p| {
+                p.image != image || (!replacing && (id == 0 || p.id != id))
+            })
             .count()
-            >= 256
-            && !self.placements.contains_key(&key)
-        {
+            + self
+                .placements
+                .keys()
+                .filter(|&&(i, p)| i != image || (!replacing && p != id))
+                .count();
+        if retained >= 256 {
             return Err("ENOSPC:placement limit exceeded");
         }
-        Ok(())
+        Ok(layout)
     }
 
-    fn place(&mut self, c: &Control) -> Result<(), &'static str> {
-        self.check_placement(c, false)?;
-        let id = c.get(b'i', 0);
-        if !self.images.contains_key(&id) {
-            return Err("ENOENT:image not found");
+    fn place(
+        &mut self,
+        c: &Control,
+        image: u64,
+        screen: Screen,
+    ) -> Result<Option<(usize, usize)>, &'static str> {
+        let layout = self.check_placement(c, image, screen, false)?;
+        let raster = self.images.get(&image).ok_or("ENOENT:image not found")?;
+        let cells = layout.geometry(raster, screen.cell).cells;
+        let id = c.get(b'p', 0);
+        if id != 0 {
+            self.positioned.retain(|p| p.image != image || p.id != id);
+            self.placements.remove(&(image, id));
         }
-        self.placements.insert(
-            (id, c.get(b'p', 0)),
-            Placement {
-                cols: c.get(b'c', 0),
-                rows: c.get(b'r', 0),
-            },
-        );
+        let movement = if c.get(b'U', 0) == 1 {
+            self.placements.insert((image, id), layout);
+            None
+        } else {
+            self.positioned.push(Positioned {
+                image,
+                id,
+                layout,
+                col: screen.cursor.0,
+                row: screen.cursor.1 as isize,
+                clip: (0.0, 1.0),
+            });
+            (c.get(b'C', 0) == 0).then_some(cells)
+        };
         self.revision = self.revision.wrapping_add(1);
-        Ok(())
+        Ok(movement)
     }
 
-    fn delete(&mut self, c: &Control) -> Result<(), &'static str> {
+    fn delete(
+        &mut self,
+        c: &Control,
+        screen: Screen,
+    ) -> Result<(), &'static str> {
         let mode = c.get(b'd', b'a' as u32) as u8;
-        match mode {
-            // Virtual placements have no screen position.
-            b'a' | b'A' | b'c' | b'C' | b'p' | b'P' => return Ok(()),
-            b'i' | b'I' => {
-                let id = c.get(b'i', 0);
-                let placement = c.get(b'p', 0);
-                self.placements.retain(|&(i, p), _| {
-                    i != id || (placement != 0 && p != placement)
-                });
-                if mode == b'I'
+        let lower = mode.to_ascii_lowercase();
+        if !matches!(
+            lower,
+            b'a' | b'i' | b'c' | b'p' | b'q' | b'r' | b'x' | b'y' | b'z'
+        ) {
+            return Err("ENOTSUP:unsupported deletion mode");
+        }
+        let image = u64::from(c.get(b'i', 0));
+        let placement = c.get(b'p', 0);
+        let z = c.get(b'z', 0) as i32;
+        let (x, y) = if lower == b'c' {
+            screen.cursor
+        } else {
+            (
+                c.get(b'x', 0).saturating_sub(1) as usize,
+                c.get(b'y', 0).saturating_sub(1) as usize,
+            )
+        };
+        let cw = screen.cell.0.max(1) as f32;
+        let ch = screen.cell.1.max(1) as f32;
+        let mut affected = Vec::new();
+        self.positioned.retain(|p| {
+            let [left, top, right, bottom] =
+                p.bounds(&self.images[&p.image], screen.cell);
+            let at_x = left < (x + 1) as f32 * cw && right > x as f32 * cw;
+            let at_y = top < (y + 1) as f32 * ch && bottom > y as f32 * ch;
+            let remove = match lower {
+                b'a' => bottom > 0.0 && top < screen.size.1 as f32 * ch,
+                b'i' => {
+                    p.image == image && (placement == 0 || p.id == placement)
+                }
+                b'c' | b'p' => at_x && at_y,
+                b'q' => at_x && at_y && p.layout.z == z,
+                b'x' => at_x,
+                b'y' => at_y,
+                b'z' => p.layout.z == z,
+                b'r' => {
+                    p.image >= u64::from(c.get(b'x', 0))
+                        && p.image <= u64::from(c.get(b'y', 0))
+                }
+                _ => false,
+            };
+            if remove {
+                affected.push(p.image);
+            }
+            !remove
+        });
+        if matches!(lower, b'i' | b'r') {
+            self.placements.retain(|&(i, p), _| {
+                let remove = if lower == b'i' {
+                    i == image && (placement == 0 || p == placement)
+                } else {
+                    i >= u64::from(c.get(b'x', 0))
+                        && i <= u64::from(c.get(b'y', 0))
+                };
+                if remove {
+                    affected.push(i);
+                }
+                !remove
+            });
+            if lower == b'i' {
+                affected.push(image);
+            }
+            if lower == b'r' {
+                affected.extend(self.images.keys().copied().filter(|&i| {
+                    i >= u64::from(c.get(b'x', 0))
+                        && i <= u64::from(c.get(b'y', 0))
+                }));
+            }
+        }
+        if mode.is_ascii_uppercase() {
+            for id in affected {
+                if !self.positioned.iter().any(|p| p.image == id)
                     && !self.placements.keys().any(|&(i, _)| i == id)
                 {
-                    self.images.remove(&id);
-                    self.order.retain(|&old| old != id);
+                    self.remove_image(id);
                 }
             }
-            _ => return Err("ENOTSUP:unsupported deletion mode"),
         }
         self.revision = self.revision.wrapping_add(1);
         Ok(())

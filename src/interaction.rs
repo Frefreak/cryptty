@@ -65,9 +65,6 @@ impl Interaction {
         current: Option<TextRange>,
     ) -> bool {
         if previous == current {
-            if current.is_none() {
-                self.selection_anchor = None;
-            }
             return false;
         }
         self.clicks = Clicks::default();
@@ -144,7 +141,8 @@ impl View {
 
     pub(super) fn refresh_pointer(&mut self) {
         let available = self.terminal.mouse_mode == MouseMode::Off
-            || self.modifiers.shift_key();
+            || self.modifiers.shift_key()
+            || self.interaction.selection_anchor.is_some();
         let (x, y) = self.pointer_cell();
         let link = (available && self.interaction.pointer_inside)
             .then(|| self.terminal.link_at(Position { row: y, col: x }))
@@ -444,14 +442,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn output_clears_pending_drag_without_interrupting_double_clicks() {
+    fn output_preserves_pending_drag_and_double_clicks() {
         let mut interaction = Interaction::default();
         let cell = Position { row: 1, col: 2 };
         let now = Instant::now();
         assert_eq!(interaction.clicks.press(now, cell), 1);
         interaction.selection_anchor = Some(SelectionAnchor::Character(cell));
         assert!(!interaction.selection_after_output(None, None));
-        assert!(interaction.selection_anchor.is_none());
+        assert!(matches!(
+            interaction.selection_anchor,
+            Some(SelectionAnchor::Character(position)) if position == cell
+        ));
         assert_eq!(
             interaction
                 .clicks

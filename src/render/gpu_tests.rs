@@ -57,6 +57,18 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
     )
     .unwrap();
     terminal.feed(&image_bytes);
+    terminal.feed(
+        concat!(
+            "\x1b[1;1H\x1b_Ga=T,i=101,f=32,s=2,v=1,c=6,r=2,C=1,z=-2147483648;",
+            "/wAAgAD/AP8=\x1b\\",
+            "\x1b[2;2H\x1b_Ga=p,i=101,p=1,c=4,r=3,C=1,z=-1,X=1,Y=1\x1b\\",
+            "\x1b[2;2H\x1b_Ga=T,i=102,f=24,s=1,v=1,c=3,r=2,C=1,z=-2;AAD/\x1b\\",
+            "\x1b[2;2H\x1b_Ga=p,i=101,p=3,c=4,r=3,C=1,z=-3\x1b\\",
+            "\x1b[3;3H\x1b_Ga=p,i=101,p=2,c=3,r=2,C=1,z=1\x1b\\",
+            "\x1b[1;2H\x1b[44m  \x1b[0m"
+        )
+        .as_bytes(),
+    );
     terminal.feed(b"\x1b[H");
     let mapped_family = if cfg!(target_os = "macos") {
         "Menlo"

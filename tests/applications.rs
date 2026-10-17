@@ -554,7 +554,21 @@ fn image_pane_preserves_paths_and_closes_on_enter() {
 #[test]
 #[ignore = "requires tmux on PATH and a native PTY"]
 fn image_preview_uploads_after_focus_returns_to_source_pane() {
-    let fixture = Fixture::new("image-preview-focus");
+    check_preview_upload(false);
+}
+
+#[test]
+#[ignore = "requires tmux on PATH and a native PTY"]
+fn image_preview_uploads_from_a_hidden_window() {
+    check_preview_upload(true);
+}
+
+fn check_preview_upload(hidden_window: bool) {
+    let fixture = Fixture::new(if hidden_window {
+        "image-preview-hidden"
+    } else {
+        "image-preview-focus"
+    });
     let config = fixture.directory.join("tmux.conf");
     std::fs::write(
         &config,
@@ -565,15 +579,23 @@ fn image_preview_uploads_after_focus_returns_to_source_pane() {
     )
     .unwrap();
     let image = fixture.directory.join("image.png");
-    image::RgbaImage::from_pixel(336, 1200, image::Rgba([70, 90, 130, 255]))
+    image::RgbaImage::from_pixel(1254, 1254, image::Rgba([70, 90, 130, 255]))
         .save(&image)
         .unwrap();
     let script = fixture.directory.join("preview.sh");
     std::fs::write(
         &script,
-        concat!(
-            "\"$1\" image --pane \"$2\" > \"$3\"\n",
-            "printf PREVIEW_LAUNCHED\nread done\n"
+        format!(
+            concat!(
+                "{}",
+                "\"$1\" image --pane \"$2\" > \"$3\"\n",
+                "printf PREVIEW_LAUNCHED\nread done\n"
+            ),
+            if hidden_window {
+                "tmux new-window /bin/sh\n"
+            } else {
+                ""
+            }
         ),
     )
     .unwrap();
@@ -613,6 +635,34 @@ fn image_preview_uploads_after_focus_returns_to_source_pane() {
         {
             assert_eq!(terminal.graphics.images.len(), 1);
             assert!(text.contains(cryptty::graphics::MARKER));
+            let mut found = 0;
+            for row in &terminal.rows {
+                let mut previous = None;
+                let mut image_col = 0;
+                for cell in row {
+                    previous =
+                        cryptty::graphics::Placeholder::read(cell, previous);
+                    if let Some(placeholder) = previous {
+                        assert_eq!(
+                            placeholder.col, image_col,
+                            "row={}, cell={:?}",
+                            placeholder.row, cell
+                        );
+                        image_col += 1;
+                        assert!(
+                            terminal
+                                .graphics
+                                .images
+                                .contains_key(&u64::from(placeholder.image)),
+                            "placeholder id {} missing from {:?}",
+                            placeholder.image,
+                            terminal.graphics.images.keys().collect::<Vec<_>>()
+                        );
+                        found += 1;
+                    }
+                }
+            }
+            assert!(found > 0, "image placeholders must be drawable");
             assert!(!text.contains("Timed out"));
             let output = Command::new("tmux")
                 .args([

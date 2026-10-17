@@ -2,6 +2,54 @@ use vte::{Params, Perform};
 
 use super::{Cell, Style, Terminal};
 
+#[derive(Default)]
+pub(super) struct Parser {
+    inner: vte::Parser<{ super::OSC_LIMIT }>,
+    utf8_remaining: usize,
+}
+
+impl Parser {
+    pub(super) fn advance<P: Perform>(
+        &mut self,
+        performer: &mut P,
+        mut bytes: &[u8],
+    ) {
+        // Finish split UTF-8 separately: vte 0.15 can skip a following
+        // control byte when its partial-character buffer also contains it.
+        while self.utf8_remaining > 0 && !bytes.is_empty() {
+            self.inner.advance(performer, &bytes[..1]);
+            self.utf8_remaining = if bytes[0] & 0xc0 == 0x80 {
+                self.utf8_remaining - 1
+            } else {
+                utf8_continuations(bytes[0])
+            };
+            bytes = &bytes[1..];
+        }
+        if bytes.is_empty() {
+            return;
+        }
+        self.inner.advance(performer, bytes);
+        self.utf8_remaining = bytes
+            .iter()
+            .rev()
+            .take(4)
+            .enumerate()
+            .find(|(_, byte)| **byte & 0xc0 != 0x80)
+            .map_or(0, |(trailing, byte)| {
+                utf8_continuations(*byte).saturating_sub(trailing)
+            });
+    }
+}
+
+fn utf8_continuations(byte: u8) -> usize {
+    match byte {
+        0xc2..=0xdf => 1,
+        0xe0..=0xef => 2,
+        0xf0..=0xf4 => 3,
+        _ => 0,
+    }
+}
+
 impl Perform for Terminal {
     fn print(&mut self, ch: char) {
         let ch = if self.charsets[self.active_charset] {

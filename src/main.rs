@@ -63,15 +63,17 @@ struct App {
 
 impl App {
     fn create(&mut self, events: &ActiveEventLoop) -> Result<()> {
-        let window = Arc::new(
-            events.create_window(
-                Window::default_attributes()
-                    .with_title("Cryptty")
-                    .with_visible(false)
-                    .with_inner_size(LogicalSize::new(900.0, 560.0))
-                    .with_min_inner_size(LogicalSize::new(160.0, 100.0)),
-            )?,
-        );
+        let attributes = Window::default_attributes()
+            .with_title("Cryptty")
+            .with_visible(false)
+            .with_inner_size(LogicalSize::new(900.0, 560.0))
+            .with_min_inner_size(LogicalSize::new(160.0, 100.0));
+        #[cfg(target_os = "linux")]
+        let attributes = {
+            use winit::platform::wayland::WindowAttributesExtWayland;
+            attributes.with_name("org.cryptty", "cryptty")
+        };
+        let window = Arc::new(events.create_window(attributes)?);
         window.set_ime_allowed(true);
         window.set_cursor(CursorIcon::Text);
         #[cfg(target_os = "macos")]
@@ -271,6 +273,7 @@ impl View {
             WindowEvent::CursorLeft { .. } => self.pointer_left(),
             WindowEvent::MouseInput { state, button, .. } => {
                 self.mouse_button(button, state)?;
+                self.refresh_pointer();
             }
             WindowEvent::MouseWheel { delta, .. } => self.mouse_wheel(delta)?,
             WindowEvent::Ime(Ime::Preedit(text, _)) => {

@@ -10,7 +10,7 @@ pub(super) struct Painter {
     pipelines: Vec<wgpu::RenderPipeline>,
     vertices: wgpu::Buffer,
     layout: wgpu::BindGroupLayout,
-    images: std::collections::BTreeMap<u32, super::images::GpuImage>,
+    images: std::collections::BTreeMap<u64, super::images::GpuImage>,
 }
 
 impl Painter {
@@ -122,6 +122,7 @@ impl Painter {
                 super::images::tiles(
                     terminal,
                     row,
+                    y,
                     (renderer.cell_width, renderer.cell_height),
                     renderer.cell_origin(0, y),
                     (
@@ -131,7 +132,7 @@ impl Painter {
                 )
             })
             .collect();
-        tiles.sort_by_key(|tile| tile.id);
+        tiles.sort_by_key(|tile| (tile.z, tile.id));
         super::images::prepare(
             &mut self.images,
             terminal,
@@ -185,21 +186,35 @@ impl Painter {
             for pipeline in &self.pipelines {
                 pass.set_pipeline(pipeline);
                 pass.set_bind_group(0, &self.bindings, &[]);
-                pass.draw(0..6, 0..overlay as u32);
-                let mut start = 0;
-                while start < tiles.len() {
-                    let id = tiles[start].id;
-                    let end =
-                        start + tiles[start..].partition_point(|t| t.id == id);
-                    pass.set_bind_group(0, &self.images[&id].bindings, &[]);
-                    pass.draw(
-                        0..6,
-                        (text_end + start) as u32..(text_end + end) as u32,
-                    );
-                    start = end;
+                let behind_background =
+                    tiles.partition_point(|t| t.z < -1_073_741_824);
+                let behind_text = tiles.partition_point(|t| t.z < 0);
+                for (images, text) in [
+                    (0..behind_background, 0..frame.backgrounds),
+                    (
+                        behind_background..behind_text,
+                        frame.backgrounds..overlay,
+                    ),
+                    (behind_text..tiles.len(), overlay..text_end),
+                ] {
+                    let mut start = images.start;
+                    while start < images.end {
+                        let id = tiles[start].id;
+                        let end = start
+                            + tiles[start..images.end]
+                                .iter()
+                                .take_while(|t| t.id == id)
+                                .count();
+                        pass.set_bind_group(0, &self.images[&id].bindings, &[]);
+                        pass.draw(
+                            0..6,
+                            (text_end + start) as u32..(text_end + end) as u32,
+                        );
+                        start = end;
+                    }
+                    pass.set_bind_group(0, &self.bindings, &[]);
+                    pass.draw(0..6, text.start as u32..text.end as u32);
                 }
-                pass.set_bind_group(0, &self.bindings, &[]);
-                pass.draw(0..6, overlay as u32..text_end as u32);
             }
         }
         queue.submit([encoder.finish()]);

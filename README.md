@@ -15,7 +15,7 @@ make install-macos   # Install ~/Applications/Cryptty.app
 ```
 
 These commands require Rust, uv, and the Xcode Command Line Tools.
-The app contains a native launcher and a placeholder terminal icon, with
+The app contains a native launcher and the Cryptty coffin icon, with
 an ad-hoc signature for local use. It opens the inherited `$SHELL` as a
 login shell in your home directory. Repeat the install command to update.
 When `LC_ALL`, `LC_CTYPE`, and `LANG` are empty or unset, the launcher sets
@@ -24,7 +24,7 @@ For a custom destination, use `./scripts/build-macos-app --destination PATH`;
 add `--install` to register that location with macOS.
 The app runs independently of this checkout and of uv.
 
-On Linux, install the binary, desktop entry, and placeholder icon:
+On Linux, install the binary, desktop entry, and Cryptty coffin icon:
 
 ```fish
 make install-linux
@@ -33,6 +33,8 @@ make install-linux
 The default prefix is `~/.local`; ensure `~/.local/bin` is on your desktop
 session's `PATH`. Override with `make install-linux PREFIX=/your/prefix`.
 The desktop entry lives in `assets/cryptty.desktop` for distribution packaging.
+The Wayland application ID matches `org.cryptty.desktop`, so desktops can
+associate running windows with the installed icon.
 Run `make help` for the available targets.
 
 For profile-guided optimization (PGO), train and build with one command:

@@ -43,6 +43,17 @@ pub fn open_pane(paths: &[OsString]) -> Result<()> {
         String::from_utf8_lossy(&layout.stderr).trim()
     );
     let layout = String::from_utf8(layout.stdout)?;
+    let selected = Command::new("tmux")
+        .args(["select-window", "-t"])
+        .arg(&pane)
+        .stdin(Stdio::null())
+        .output()
+        .context("Show tmux window for image preview")?;
+    ensure!(
+        selected.status.success(),
+        "Show tmux window: {}",
+        String::from_utf8_lossy(&selected.stderr).trim()
+    );
     let output = Command::new("tmux")
         .args(["split-window", "-h", "-f", "-l", "35%", "-t"])
         .arg(&pane)

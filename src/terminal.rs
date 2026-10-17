@@ -407,6 +407,7 @@ impl Default for SavedCursor {
 }
 
 struct InactiveScreen {
+    graphics: crate::graphics::Graphics,
     rows: VecDeque<Row>,
     cursor: (usize, usize),
     saved: SavedCursor,
@@ -456,7 +457,7 @@ pub struct Terminal {
     pub reverse_video: bool,
     style: CellStyle,
     saved: SavedCursor,
-    parser: Option<Box<vte::Parser<OSC_LIMIT>>>,
+    parser: Option<Box<parser::Parser>>,
     cancelling: bool,
     replies: Vec<u8>,
     dcs: Option<Vec<u8>>,
@@ -489,6 +490,7 @@ impl Terminal {
         let rows: VecDeque<_> =
             (0..rows).map(|_| Row::new(cols, style)).collect();
         let inactive = InactiveScreen {
+            graphics: Default::default(),
             rows: rows.clone(),
             cursor: (0, 0),
             saved: SavedCursor::default(),
@@ -636,6 +638,7 @@ impl Terminal {
                 &mut self.inactive.cursor,
                 &mut self.inactive.pending_wrap,
                 &mut self.inactive.saved,
+                &mut self.inactive.graphics,
                 cols,
                 rows,
             );
@@ -646,6 +649,7 @@ impl Terminal {
                 &mut self.cursor,
                 &mut self.pending_wrap,
                 &mut self.saved,
+                &mut self.graphics,
                 cols,
                 rows,
             );
@@ -723,8 +727,7 @@ impl Terminal {
             }
             crate::graphics::stream::Event::Graphics(command) => {
                 performer.flush();
-                let reply = performer.terminal.graphics.command(command);
-                performer.terminal.replies.extend(reply);
+                performer.terminal.graphics_command(command);
             }
         });
         performer.flush();
@@ -736,6 +739,29 @@ impl Terminal {
             self.selection = None;
         }
         std::mem::take(&mut self.replies)
+    }
+
+    fn graphics_command(&mut self, command: &[u8]) {
+        let screen = crate::graphics::Screen {
+            cursor: self.cursor,
+            cell: self.cell_pixels,
+            size: (self.cols(), self.rows.len()),
+        };
+        let (reply, movement) = self.graphics.command(command, screen);
+        self.replies.extend(reply);
+        if let Some((cols, rows)) = movement {
+            for _ in 1..rows.min(self.rows.len()) {
+                self.linefeed();
+            }
+            let col = self.cursor.0.saturating_add(cols);
+            if col >= self.cols() {
+                self.cursor.0 = 0;
+                self.linefeed();
+            } else {
+                self.cursor.0 = col;
+            }
+            self.pending_wrap = false;
+        }
     }
 
     pub fn has_blinking_text(&self) -> bool {
@@ -1016,6 +1042,15 @@ impl Terminal {
             self.rows[top - 1].wrapped = None;
         }
         let count = count.min(self.scroll_bottom + 1 - top);
+        self.graphics.scroll(
+            top,
+            self.scroll_bottom,
+            -(count as isize),
+            self.cell_pixels,
+            top == 0
+                && self.scroll_bottom + 1 == self.rows.len()
+                && !self.alternate,
+        );
         self.scroll_selection(top, count, true);
         self.rotate_rows(top, count, true);
         let start = self.scroll_bottom + 1 - count;
@@ -1049,6 +1084,13 @@ impl Terminal {
             self.rows[top - 1].wrapped = None;
         }
         let count = count.min(self.scroll_bottom + 1 - top);
+        self.graphics.scroll(
+            top,
+            self.scroll_bottom,
+            count as isize,
+            self.cell_pixels,
+            false,
+        );
         self.scroll_selection(top, count, false);
         self.rotate_rows(top, count, false);
         self.rows[self.scroll_bottom].wrapped = None;
@@ -1090,12 +1132,20 @@ impl Terminal {
         }
         self.selection = None;
         std::mem::swap(&mut self.rows, &mut self.inactive.rows);
+        std::mem::swap(&mut self.graphics, &mut self.inactive.graphics);
+        self.graphics.revision = self
+            .graphics
+            .revision
+            .max(self.inactive.graphics.revision)
+            .wrapping_add(1);
         std::mem::swap(&mut self.keyboard, &mut self.inactive.keyboard);
         std::mem::swap(&mut self.cursor, &mut self.inactive.cursor);
         std::mem::swap(&mut self.saved, &mut self.inactive.saved);
         std::mem::swap(&mut self.pending_wrap, &mut self.inactive.pending_wrap);
         self.alternate = alternate;
         if clear {
+            self.graphics
+                .clear_visible(self.rows.len(), self.cell_pixels);
             self.pending_wrap = false;
             for row in &mut self.rows {
                 row.fill(Cell::blank(Style::default()));
@@ -1116,7 +1166,12 @@ impl Terminal {
     fn erase_display(&mut self, mode: usize) {
         if mode == 3 {
             self.history.clear();
+            self.graphics.clear_history(self.cell_pixels);
             return;
+        }
+        if mode == 2 {
+            self.graphics
+                .clear_visible(self.rows.len(), self.cell_pixels);
         }
         if mode == 2
             && !self.alternate

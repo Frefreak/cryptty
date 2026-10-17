@@ -9,6 +9,21 @@ fn upload(t: &mut Terminal, control: &str, pixels: &[u8]) -> Vec<u8> {
 }
 
 #[test]
+fn split_combining_marks_preserve_following_backspace() {
+    let bytes = "a\u{30e}\x08é".as_bytes();
+    for split in 0..=bytes.len() {
+        let mut t = Terminal::new(10, 2);
+        t.feed(&bytes[..split]);
+        t.feed(&bytes[split..]);
+        assert_eq!(t.cursor, (1, 0), "split at {split}");
+        let Content::Text { text } = &t.rows[0][0].content else {
+            panic!("expected text");
+        };
+        assert_eq!(text.chars().collect::<String>(), "é");
+    }
+}
+
+#[test]
 fn sender_survives_every_stream_boundary_and_keeps_image_cells() {
     let raster = Raster {
         width: 2,
@@ -120,9 +135,12 @@ fn placeholders_follow_tmux_style_inheritance_scrolling_and_erasure() {
 #[test]
 fn png_and_zlib_transmissions_decode_without_filesystem_access() {
     use std::io::Write;
-    let png = include_bytes!("../assets/cryptty-512.png");
+    let mut png = std::io::Cursor::new(Vec::new());
+    image::RgbaImage::from_pixel(512, 1, image::Rgba([70, 90, 130, 255]))
+        .write_to(&mut png, image::ImageFormat::Png)
+        .unwrap();
     let mut t = Terminal::new(10, 2);
-    upload(&mut t, "a=T,U=1,i=8,f=100,q=2", png);
+    upload(&mut t, "a=T,U=1,i=8,f=100,q=2", png.get_ref());
     assert_eq!(t.graphics.images[&8].width, 512);
     let mut encoder =
         flate2::write::ZlibEncoder::new(Vec::new(), Default::default());

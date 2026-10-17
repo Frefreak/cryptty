@@ -12,6 +12,7 @@ pub(super) fn resize_primary(
     cursor: &mut Point,
     pending_wrap: &mut bool,
     saved: &mut SavedCursor,
+    graphics: &mut crate::graphics::Graphics,
     cols: usize,
     rows: usize,
 ) {
@@ -20,6 +21,9 @@ pub(super) fn resize_primary(
         let removed = (cursor.1 + 1).saturating_sub(rows);
         history.extend(screen.drain(..removed));
         cursor.1 -= removed;
+        for p in &mut graphics.positioned {
+            p.row -= removed as isize;
+        }
         saved.position.1 = saved.position.1.saturating_sub(removed);
         if screen.len() > rows {
             screen[rows - 1].wrapped = None;
@@ -32,13 +36,16 @@ pub(super) fn resize_primary(
         prefix.append(screen);
         *screen = prefix;
         cursor.1 += pulled;
+        for p in &mut graphics.positioned {
+            p.row += pulled as isize;
+        }
         saved.position.1 += pulled;
         screen.resize_with(rows, || Row::new(old_cols, Style::default()));
     }
     saved.position.1 = saved.position.1.min(rows - 1);
     if old_cols != cols {
         let history_len = history.len();
-        let anchors = [
+        let mut anchors = vec![
             (
                 cursor.0 + usize::from(*pending_wrap),
                 cursor.1 + history_len,
@@ -48,8 +55,22 @@ pub(super) fn resize_primary(
                 saved.position.1 + history_len,
             ),
         ];
+        let image_indices: Vec<_> = graphics
+            .positioned
+            .iter()
+            .enumerate()
+            .filter_map(|(i, p)| {
+                let row = p.row + history_len as isize;
+                (row >= 0 && row < (history_len + screen.len()) as isize)
+                    .then_some(i)
+            })
+            .collect();
+        anchors.extend(image_indices.iter().map(|&i| {
+            let p = &graphics.positioned[i];
+            (p.col.min(old_cols), (p.row + history_len as isize) as usize)
+        }));
         let source = history.drain(..).chain(screen.drain(..));
-        let (mut output, mut mapped) = reflow(source, anchors, cols);
+        let (mut output, mut mapped) = reflow(source, &anchors, cols);
         for point in &mut mapped {
             if point.0 == cols && output[point.1].wrapped.is_some() {
                 *point = (0, point.1 + 1);
@@ -70,9 +91,20 @@ pub(super) fn resize_primary(
             cursor_position(mapped[0], start, cols, rows);
         (saved.position, saved.pending_wrap) =
             cursor_position(mapped[1], start, cols, rows);
+        for (&i, point) in image_indices.iter().zip(&mapped[2..]) {
+            let p = &mut graphics.positioned[i];
+            p.col = point.0;
+            p.row = point.1 as isize - start as isize;
+        }
     }
     let excess = history.len().saturating_sub(HISTORY_LIMIT);
     history.drain(..excess);
+    if !graphics.positioned.is_empty() {
+        graphics.positioned.retain(|p| {
+            p.row < rows as isize && p.row >= -(HISTORY_LIMIT as isize)
+        });
+        graphics.revision = graphics.revision.wrapping_add(1);
+    }
 }
 
 fn cursor_position(
@@ -92,14 +124,14 @@ fn cursor_position(
 
 fn reflow(
     source: impl Iterator<Item = Row>,
-    anchors: [Point; 2],
+    anchors: &[Point],
     cols: usize,
-) -> (Vec<Row>, [Point; 2]) {
+) -> (Vec<Row>, Vec<Point>) {
     let blank = Cell::blank(Style::default());
     let mut output = Vec::new();
     let mut row = Row::new(cols, Style::default());
     let mut x = 0;
-    let mut mapped = [(0, 0); 2];
+    let mut mapped = vec![(0, 0); anchors.len()];
     let mut continuing = false;
     for (y, source) in source.enumerate() {
         let mut end = source.wrapped.unwrap_or_else(|| {
@@ -108,7 +140,7 @@ fn reflow(
                 .rposition(|cell| cell != &blank)
                 .map_or(0, |i| i + 1)
         });
-        for &(col, line) in &anchors {
+        for &(col, line) in anchors {
             if line == y {
                 end = end.max(col.min(source.len()));
             }

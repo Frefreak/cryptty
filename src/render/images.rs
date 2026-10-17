@@ -5,7 +5,8 @@ use crate::graphics::{Placeholder, Raster};
 use crate::terminal::{Row, Terminal};
 
 pub(super) struct Tile<'a> {
-    pub id: u32,
+    pub id: u64,
+    pub z: i32,
     pub image: &'a Arc<Raster>,
     pub rect: [f32; 4],
     pub uv: [f32; 4],
@@ -14,6 +15,7 @@ pub(super) struct Tile<'a> {
 pub(super) fn tiles<'a>(
     terminal: &'a Terminal,
     row: &Row,
+    row_index: usize,
     cell: (usize, usize),
     origin: (usize, usize),
     end: (usize, usize),
@@ -24,53 +26,110 @@ pub(super) fn tiles<'a>(
         let placeholder = Placeholder::read(c, previous);
         previous = placeholder;
         let Some(p) = placeholder else { continue };
-        let Some(image) = terminal.graphics.images.get(&p.image) else {
+        let id = u64::from(p.image);
+        let Some(image) = terminal.graphics.images.get(&id) else {
             continue;
         };
         let placement = terminal
             .graphics
             .placements
-            .get(&(p.image, p.placement))
+            .get(&(id, p.placement))
             .or_else(|| {
                 (p.placement == 0)
                     .then(|| {
                         terminal
                             .graphics
                             .placements
-                            .range((p.image, 0)..=(p.image, u32::MAX))
+                            .range((id, 0)..=(id, u32::MAX))
                             .next()
                             .map(|(_, placement)| placement)
                     })
                     .flatten()
             });
         let Some(placement) = placement else { continue };
+        let geometry =
+            placement.geometry(image, (cell.0 as u32, cell.1 as u32));
         let (cw, ch) = (cell.0 as f32, cell.1 as f32);
-        let (iw, ih) = (image.width as f32, image.height as f32);
-        let scale = match (placement.cols, placement.rows) {
-            (0, 0) => 1.0,
-            (c, 0) => c as f32 * cw / iw,
-            (0, r) => r as f32 * ch / ih,
-            (c, r) => (c as f32 * cw / iw).min(r as f32 * ch / ih),
-        };
-        let (sx, sy) = (p.col as f32 * cw, p.row as f32 * ch);
-        let (left, top) = (origin.0 + x * cell.0, origin.1);
-        let width = cw
-            .min(iw * scale - sx)
-            .min(end.0.saturating_sub(left) as f32);
-        let height = ch
-            .min(ih * scale - sy)
-            .min(end.1.saturating_sub(top) as f32);
-        if width <= 0.0 || height <= 0.0 {
-            continue;
-        }
-        tiles.push(Tile {
-            id: p.image,
+        let sx = p.col as f32 * cw - placement.offset.0 as f32;
+        let sy = p.row as f32 * ch - placement.offset.1 as f32;
+        let left = (origin.0 + x * cell.0) as f32;
+        let top = origin.1 as f32;
+        if let Some(tile) = clipped_tile(
+            id,
+            placement.z,
             image,
-            rect: [left as f32, top as f32, width, height],
-            uv: [sx / scale, sy / scale, width / scale, height / scale],
-        });
+            [left - sx, top - sy, geometry.size.0, geometry.size.1],
+            geometry.source,
+            [
+                left,
+                top,
+                (left + cw).min(end.0 as f32),
+                (top + ch).min(end.1 as f32),
+            ],
+        ) {
+            tiles.push(tile);
+        }
     }
+    let cell_pixels = (cell.0 as u32, cell.1 as u32);
+    for p in &terminal.graphics.positioned {
+        let Some(image) = terminal.graphics.images.get(&p.image) else {
+            continue;
+        };
+        let geometry = p.layout.geometry(image, cell_pixels);
+        let top = origin.1 as f32
+            + (p.row as f32 - row_index as f32) * cell.1 as f32
+            + p.layout.offset.1 as f32;
+        let left =
+            (origin.0 + p.col * cell.0) as f32 + p.layout.offset.0 as f32;
+        let clip_top = (top + geometry.size.1 * p.clip.0).max(origin.1 as f32);
+        let clip_bottom = (top + geometry.size.1 * p.clip.1)
+            .min((origin.1 + cell.1).min(end.1) as f32);
+        if let Some(tile) = clipped_tile(
+            p.image,
+            p.layout.z,
+            image,
+            [left, top, geometry.size.0, geometry.size.1],
+            geometry.source,
+            [origin.0 as f32, clip_top, end.0 as f32, clip_bottom],
+        ) {
+            tiles.push(tile);
+        }
+    }
+    tiles.sort_by_key(|tile| (tile.z, tile.id));
     tiles
+}
+
+fn clipped_tile(
+    id: u64,
+    z: i32,
+    image: &Arc<Raster>,
+    rect: [f32; 4],
+    source: [f32; 4],
+    clip: [f32; 4],
+) -> Option<Tile<'_>> {
+    let [x, y, w, h] = rect;
+    if w <= 0.0 || h <= 0.0 {
+        return None;
+    }
+    let left = x.max(clip[0]);
+    let top = y.max(clip[1]);
+    let right = (x + w).min(clip[2]);
+    let bottom = (y + h).min(clip[3]);
+    if right <= left || bottom <= top {
+        return None;
+    }
+    Some(Tile {
+        id,
+        z,
+        image,
+        rect: [left, top, right - left, bottom - top],
+        uv: [
+            source[0] + (left - x) * source[2] / w,
+            source[1] + (top - y) * source[3] / h,
+            (right - left) * source[2] / w,
+            (bottom - top) * source[3] / h,
+        ],
+    })
 }
 
 pub(super) struct GpuImage {
@@ -79,7 +138,7 @@ pub(super) struct GpuImage {
 }
 
 pub(super) fn prepare(
-    cache: &mut BTreeMap<u32, GpuImage>,
+    cache: &mut BTreeMap<u64, GpuImage>,
     terminal: &Terminal,
     device: &wgpu::Device,
     queue: &wgpu::Queue,

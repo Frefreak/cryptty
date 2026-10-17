@@ -225,10 +225,33 @@ impl Renderer {
     fn draw_row(&mut self, y: usize, terminal: &Terminal) {
         let row = &terminal.rows[y];
         let (_, top) = self.cell_origin(0, y);
+        let tiles = images::tiles(
+            terminal,
+            row,
+            y,
+            (self.cell_width, self.cell_height),
+            self.cell_origin(0, y),
+            self.content_end(),
+        );
+        let (left, _) = self.cell_origin(0, y);
+        self.solid(
+            left,
+            top,
+            row.len() * self.cell_width,
+            self.cell_height,
+            terminal.theme().background,
+        );
+        for tile in tiles.iter().filter(|t| t.z < -1_073_741_824) {
+            self.paint_image(tile);
+        }
         for x in 0..row.len() {
-            let (_, bg) = terminal.colors(terminal.cell_style(x, y));
-            let (left, _) = self.cell_origin(x, y);
-            self.solid(left, top, self.cell_width, self.cell_height, bg);
+            if let Some(bg) = cell_background(terminal, x, y) {
+                let (left, _) = self.cell_origin(x, y);
+                self.solid(left, top, self.cell_width, self.cell_height, bg);
+            }
+        }
+        for tile in tiles.iter().filter(|t| t.z >= -1_073_741_824 && t.z < 0) {
+            self.paint_image(tile);
         }
         for (x, cell) in row.iter().enumerate() {
             let style = terminal.cell_style(x, y);
@@ -264,32 +287,28 @@ impl Renderer {
                 );
             }
         }
-        for tile in images::tiles(
-            terminal,
-            row,
-            (self.cell_width, self.cell_height),
-            self.cell_origin(0, y),
-            self.content_end(),
-        ) {
-            let [x, y, w, h] = tile.rect;
-            let [u, v, uw, vh] = tile.uv;
-            for py in 0..(h - 0.5).ceil().max(0.0) as usize {
-                for px in 0..(w - 0.5).ceil().max(0.0) as usize {
-                    let sx = (u + (px as f32 + 0.5) * uw / w + 0.0001) as u32;
-                    let sy = (v + (py as f32 + 0.5) * vh / h + 0.0001) as u32;
-                    if sx >= tile.image.width || sy >= tile.image.height {
-                        continue;
-                    }
-                    let at = (sy * tile.image.width + sx) as usize * 4;
-                    let rgba = &tile.image.rgba[at..at + 4];
-                    let index =
-                        (y as usize + py) * self.width + x as usize + px;
-                    let rgb = u32::from(rgba[0]) << 16
-                        | u32::from(rgba[1]) << 8
-                        | u32::from(rgba[2]);
-                    self.pixels[index] =
-                        blend(self.pixels[index], rgb, rgba[3]);
+        for tile in tiles.iter().filter(|t| t.z >= 0) {
+            self.paint_image(tile);
+        }
+    }
+
+    fn paint_image(&mut self, tile: &images::Tile<'_>) {
+        let [x, y, w, h] = tile.rect;
+        let [u, v, uw, vh] = tile.uv;
+        for py in 0..(h - 0.5).ceil().max(0.0) as usize {
+            for px in 0..(w - 0.5).ceil().max(0.0) as usize {
+                let sx = (u + (px as f32 + 0.5) * uw / w + 0.0001) as u32;
+                let sy = (v + (py as f32 + 0.5) * vh / h + 0.0001) as u32;
+                if sx >= tile.image.width || sy >= tile.image.height {
+                    continue;
                 }
+                let at = (sy * tile.image.width + sx) as usize * 4;
+                let rgba = &tile.image.rgba[at..at + 4];
+                let index = (y as usize + py) * self.width + x as usize + px;
+                let rgb = u32::from(rgba[0]) << 16
+                    | u32::from(rgba[1]) << 8
+                    | u32::from(rgba[2]);
+                self.pixels[index] = blend(self.pixels[index], rgb, rgba[3]);
             }
         }
     }
@@ -476,6 +495,23 @@ mod tests {
     }
 
     #[test]
+    fn screen_switches_repaint_images_on_identical_blank_rows() {
+        let mut terminal = Terminal::new(6, 2);
+        terminal.cursor_visible = false;
+        let mut renderer = Renderer::new(19.0).unwrap();
+        terminal.feed(b"\x1b_Ga=T,i=1,f=24,s=1,v=1,c=2,r=1,C=1;/wAA\x1b\\");
+        renderer.draw(&terminal, 180, 100, "");
+        let primary = renderer.pixels.clone();
+        terminal.feed(b"\x1b[?47h");
+        terminal.feed(b"\x1b_Ga=T,i=1,f=24,s=1,v=1,c=2,r=1,C=1;AAD/\x1b\\");
+        renderer.draw(&terminal, 180, 100, "");
+        assert_ne!(renderer.pixels, primary);
+        terminal.feed(b"\x1b[?47l");
+        renderer.draw(&terminal, 180, 100, "");
+        assert_eq!(renderer.pixels, primary);
+    }
+
+    #[test]
     fn osc_palette_changes_invalidate_cached_rows() {
         let mut terminal = Terminal::new(4, 2);
         terminal.cursor_visible = false;
@@ -631,4 +667,12 @@ colors:
         padded.draw(&terminal, 1, 1, "中");
         assert_eq!(padded.pixels, vec![theme.background]);
     }
+}
+
+fn cell_background(terminal: &Terminal, x: usize, y: usize) -> Option<u32> {
+    let style = terminal.cell_style(x, y);
+    let (_, bg) = terminal.colors(style);
+    (style.bg != crate::terminal::Color::Background
+        || bg != terminal.theme().background)
+        .then_some(bg)
 }
