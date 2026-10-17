@@ -21,6 +21,21 @@ pub struct Config {
     pub window: Window,
     pub colors: Colors,
     pub keyboard: Keyboard,
+    pub selection: Selection,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Selection {
+    pub word_characters: String,
+}
+
+impl Default for Selection {
+    fn default() -> Self {
+        Self {
+            word_characters: "/\\._-~:@%+=,#?".into(),
+        }
+    }
 }
 
 impl Config {

@@ -61,6 +61,25 @@ Remaining measurements:
 
 Retrain PGO when the relevant source or compiler snapshot changes.
 
+## Inline images and selection
+
+Configurable extra word characters exclude tmux separators from path
+selection by default. Unicode letters and digits remain word characters.
+
+Static Kitty Unicode placeholder graphics and `cryptty image FILE...` are
+implemented. Protocol tests, an isolated tmux lifecycle test, and the
+Metal/software pixel comparison pass. Linux compilation passes; native
+Linux and SSH acceptance remain open. Yazi integration is deferred.
+See [image usage and protocol scope](images.md).
+
+## Terminal identity follow-up
+
+Defer explicit Cryptty environment markers and their propagation through
+tmux, SSH, and agent tool subprocesses. Captured tool output cannot reliably
+identify the user's interface. Consider a user-local `~/.terminfo` entry
+for terminal capabilities; tmux retains its own terminal type. Terminfo
+does not identify the agent frontend. No system-wide installation planned.
+
 ## Application icon
 
 Three concepts have been generated for selection: a crypt portal with a

@@ -14,6 +14,10 @@ pub enum RendererChoice {
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Action {
+    Image {
+        paths: Vec<OsString>,
+        pane: bool,
+    },
     Run {
         renderer: RendererChoice,
         command: Vec<OsString>,
@@ -30,6 +34,32 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Action> {
     let mut list = false;
     while let Some(arg) = args.next() {
         match arg.to_str() {
+            Some("image")
+                if renderer == RendererChoice::Auto
+                    && adapter.is_none()
+                    && !list =>
+            {
+                let mut paths = Vec::new();
+                let mut pane = false;
+                while let Some(arg) = args.next() {
+                    match arg.to_str() {
+                        Some("--pane") => pane = true,
+                        Some("--") => {
+                            paths.extend(args);
+                            break;
+                        }
+                        Some("--help" | "-h") => return Ok(Action::Help),
+                        Some(value) if value.starts_with('-') => {
+                            bail!("Unknown image option {arg:?}; use --help");
+                        }
+                        _ => paths.push(arg),
+                    }
+                }
+                if paths.is_empty() {
+                    bail!("Usage: cryptty image [--pane] FILE [FILE...]");
+                }
+                return Ok(Action::Image { paths, pane });
+            }
             Some("--") => {
                 command.extend(args);
                 break;
@@ -78,6 +108,9 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Action> {
 pub const HELP: &str = "Cryptty — terminal for macOS and Linux
 
 Usage: cryptty [OPTIONS] [-- PROGRAM [ARG...]]
+       cryptty image [--pane] FILE [FILE...]
+
+  image --pane                Open a right-side tmux preview; Enter closes it
 
   --renderer auto|software|gpu  Renderer (default: auto)
   --list-gpus                  List adapters and exit
@@ -119,5 +152,25 @@ mod tests {
         ] {
             assert!(args(&values).is_err(), "{values:?}");
         }
+    }
+
+    #[test]
+    fn image_pane_is_optional_and_paths_can_escape_option_parsing() {
+        assert_eq!(
+            args(&["image", "picture.png"]).unwrap(),
+            Action::Image {
+                paths: vec!["picture.png".into()],
+                pane: false,
+            }
+        );
+        assert_eq!(
+            args(&["image", "--pane", "--", "--pane", "a b.png"]).unwrap(),
+            Action::Image {
+                paths: vec!["--pane".into(), "a b.png".into()],
+                pane: true,
+            }
+        );
+        assert!(args(&["image", "--pane"]).is_err());
+        assert!(args(&["image", "--unknown", "a.png"]).is_err());
     }
 }

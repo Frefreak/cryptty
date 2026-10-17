@@ -138,7 +138,7 @@ fn shrinking_then_growing_does_not_join_unrelated_rows() {
 }
 
 #[test]
-fn double_click_uses_whitespace_boundaries() {
+fn double_click_keeps_paths_and_unicode_words() {
     let mut t = Terminal::new(80, 3);
     t.feed("foo.bar-baz /usr/local/bin  变量_name2 cafe\u{301}".as_bytes());
     for (col, expected) in [
@@ -181,7 +181,7 @@ fn echoed_interrupt_suffix_is_excluded_from_plain_urls_and_word_selection() {
     assert_eq!(t.selected_text(t.word_selection(position)), uri);
     let suffix = p(uri.len() / 12, uri.len() % 12);
     assert!(t.link_at(suffix).is_none());
-    assert_eq!(t.selected_text(t.word_selection(suffix)), "^C^C");
+    assert_eq!(t.selected_text(t.word_selection(suffix)), "^");
 }
 
 #[test]
@@ -196,9 +196,29 @@ fn echoed_interrupt_is_excluded_when_a_url_has_a_label_or_brackets() {
     for token in ["URL=https://example.com/x", "(https://example.com/x)"] {
         let mut t = Terminal::new(80, 3);
         t.feed(format!("{token}^C").as_bytes());
-        assert_eq!(t.selected_text(t.word_selection(p(0, 10))), token);
+        assert_eq!(
+            t.selected_text(t.word_selection(p(0, 10))),
+            token.trim_matches(['(', ')'])
+        );
         assert_eq!(t.link_at(p(0, 15)).unwrap().uri, "https://example.com/x");
     }
+}
+
+#[test]
+fn tmux_separator_stops_path_selection_and_extra_characters_are_configurable() {
+    let mut t = Terminal::new(80, 3);
+    t.feed("left│/Users/even/.cargo/bin/cryptty".as_bytes());
+    assert_eq!(
+        t.selected_text(t.word_selection(p(0, 15))),
+        "/Users/even/.cargo/bin/cryptty"
+    );
+    assert_eq!(t.selected_text(t.word_selection(p(0, 4))), "│");
+    t.word_characters = "_".into();
+    assert_eq!(t.selected_text(t.word_selection(p(0, 8))), "Users");
+    t.feed(b"\x1bc");
+    assert_eq!(t.word_characters, "_");
+    t.feed(b"foo.bar_baz");
+    assert_eq!(t.selected_text(t.word_selection(p(0, 5))), "bar_baz");
 }
 
 #[test]

@@ -1,4 +1,5 @@
 pub mod config;
+pub mod graphics;
 pub mod input;
 pub mod keyboard;
 pub mod options;

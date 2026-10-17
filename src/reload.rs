@@ -41,6 +41,11 @@ impl View {
         self.display.clear_glyphs();
         self.terminal.resize(cols, rows);
         self.terminal.set_theme(config.colors.theme());
+        self.terminal.word_characters = config.selection.word_characters;
+        self.terminal.cell_pixels = (
+            self.renderer.cell_width as u32,
+            self.renderer.cell_height as u32,
+        );
         self.font = config.font;
         self.padding = config.window.padding;
         self.keyboard = config.keyboard;

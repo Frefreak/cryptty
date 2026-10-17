@@ -18,6 +18,22 @@ pub(super) struct Quad {
     padding: [u32; 3],
 }
 
+pub(super) struct Frame {
+    pub quads: Vec<Quad>,
+    pub overlay: usize,
+}
+
+impl Quad {
+    pub fn image(tile: &super::images::Tile<'_>) -> Self {
+        Self {
+            rect: tile.rect,
+            uv: tile.uv,
+            kind: 3,
+            ..Self::zeroed()
+        }
+    }
+}
+
 pub(super) fn color(rgb: u32) -> [f32; 4] {
     [
         ((rgb >> 16) & 255) as f32 / 255.0,
@@ -57,6 +73,9 @@ impl Scene<'_> {
         columns: usize,
         rgb: u32,
     ) -> Option<()> {
+        if ch == crate::graphics::MARKER {
+            return Some(());
+        }
         self.renderer.cache_glyph(ch, font);
         let Some(image) = self.renderer.glyphs[&(ch, font)].as_ref() else {
             return Some(());
@@ -102,7 +121,7 @@ pub(super) fn build(
     terminal: &Terminal,
     size: (u32, u32),
     preedit: &str,
-) -> Option<Vec<Quad>> {
+) -> Option<Frame> {
     let end = (
         (size.0 as usize).saturating_sub(renderer.padding.0),
         (size.1 as usize).saturating_sub(renderer.padding.1),
@@ -132,6 +151,9 @@ pub(super) fn build(
             let (fg, _) = terminal.colors(style);
             let columns = text.columns();
             for ch in text.chars().filter(|c| *c != ' ') {
+                if text.chars().next() == Some(crate::graphics::MARKER) {
+                    break;
+                }
                 scene.glyph(ch, cell.style().font(), (x, y), columns, fg)?;
             }
             let (left, top) = scene.renderer.cell_origin(x, y);
@@ -149,6 +171,7 @@ pub(super) fn build(
             });
         }
     }
+    let overlay = scene.quads.len();
     let (mut x, y) = terminal.cursor;
     for ch in preedit.chars() {
         if x >= terminal.cols() {
@@ -160,7 +183,7 @@ pub(super) fn build(
             FontStyle::default(),
             (x, y),
             columns,
-            terminal.theme().palette[6],
+            super::PREEDIT_COLOR,
         )?;
         x += columns;
     }
@@ -176,6 +199,9 @@ pub(super) fn build(
         {
             let (_, bg) = terminal.colors(cell.style());
             for ch in text.chars().filter(|c| *c != ' ') {
+                if text.chars().next() == Some(crate::graphics::MARKER) {
+                    break;
+                }
                 scene.glyph(
                     ch,
                     cell.style().font(),
@@ -186,5 +212,8 @@ pub(super) fn build(
             }
         }
     }
-    Some(scene.quads)
+    Some(Frame {
+        quads: scene.quads,
+        overlay,
+    })
 }

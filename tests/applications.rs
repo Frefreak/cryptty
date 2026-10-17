@@ -299,3 +299,232 @@ keyboard:
         assert!(screen(&terminal).contains("SHELL_AFTER"));
     }
 }
+
+#[test]
+#[ignore = "requires tmux on PATH and a native PTY"]
+fn tmux_image_sender_survives_pane_switch_resize_and_clear() {
+    use cryptty::graphics::Placeholder;
+    let fixture = Fixture::new("images");
+    let config = fixture.directory.join("tmux.conf");
+    std::fs::write(
+        &config,
+        concat!(
+            "set -g allow-passthrough off\n",
+            "set -g status off\n",
+            "set -g default-terminal tmux-256color\n",
+        ),
+    )
+    .unwrap();
+    let image = fixture.directory.join("image.png");
+    image::RgbaImage::from_fn(32, 32, |x, y| {
+        image::Rgba([x as u8 * 7, y as u8 * 7, 128, 255])
+    })
+    .save(&image)
+    .unwrap();
+    let script = fixture.directory.join("show.sh");
+    std::fs::write(
+        &script,
+        format!(
+            concat!(
+                "#!/bin/sh\ntmux split-window -h /bin/sh\n",
+                "'{}' image '{}'\nprintf IMAGE_READY\nread done\n"
+            ),
+            env!("CARGO_BIN_EXE_cryptty"),
+            image.display()
+        ),
+    )
+    .unwrap();
+    let command: Vec<OsString> = vec![
+        "tmux".into(),
+        "-u".into(),
+        "-L".into(),
+        fixture.socket.clone().into(),
+        "-f".into(),
+        config.into_os_string(),
+        "new-session".into(),
+        "/bin/sh".into(),
+        script.into_os_string(),
+    ];
+    let mut pty = Pty::spawn(
+        &command,
+        PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 800,
+            pixel_height: 480,
+        },
+        || {},
+    )
+    .unwrap();
+    let mut terminal = Terminal::new(80, 24);
+    terminal.cell_pixels = (10, 20);
+    let mut phase = 0;
+    drive(&mut pty, &mut terminal, |pty, terminal| {
+        let visible = terminal.rows.iter().any(|row| {
+            row.iter()
+                .any(|cell| Placeholder::read(cell, None).is_some())
+        });
+        let ready = screen(terminal).contains("IMAGE_READY");
+        match phase {
+            0 if ready && visible => {
+                assert_eq!(terminal.graphics.images.len(), 1);
+                let option = |args: &[&str]| {
+                    let output = Command::new("tmux")
+                        .args(["-L", &fixture.socket])
+                        .args(args)
+                        .env_remove("TMUX")
+                        .output()
+                        .unwrap();
+                    assert!(output.status.success());
+                    String::from_utf8(output.stdout).unwrap()
+                };
+                assert_eq!(
+                    option(&[
+                        "show-options",
+                        "-pAv",
+                        "-t",
+                        "0:0.0",
+                        "allow-passthrough"
+                    ]),
+                    "on\n"
+                );
+                assert_eq!(
+                    option(&["show-options", "-gv", "allow-passthrough"]),
+                    "off\n"
+                );
+                assert_eq!(
+                    option(&[
+                        "show-options",
+                        "-pAv",
+                        "-t",
+                        "0:0.1",
+                        "allow-passthrough"
+                    ]),
+                    "off\n"
+                );
+                phase = 1;
+                fixture.tmux(&["new-window", "-n", "other", "/bin/sh"]);
+                assert_eq!(
+                    option(&[
+                        "show-options",
+                        "-pAv",
+                        "-t",
+                        "0:1.0",
+                        "allow-passthrough"
+                    ]),
+                    "off\n"
+                );
+            }
+            1 if !visible && !ready => {
+                phase = 2;
+                fixture.tmux(&["select-window", "-t", "0"]);
+            }
+            2 if ready && visible => {
+                phase = 3;
+                terminal.resize(60, 20);
+                pty.resize(PtySize {
+                    rows: 20,
+                    cols: 60,
+                    pixel_width: 600,
+                    pixel_height: 400,
+                })
+                .unwrap();
+                fixture.tmux(&["refresh-client"]);
+            }
+            3 if ready && visible => {
+                phase = 4;
+                fixture.tmux(&["send-keys", "-t", "0", "Enter"]);
+                fixture.tmux(&["kill-server"]);
+            }
+            _ => (),
+        }
+    });
+    assert_eq!(phase, 4, "image did not survive tmux lifecycle");
+}
+
+#[test]
+#[ignore = "requires tmux on PATH and a native PTY"]
+fn image_pane_preserves_paths_and_closes_on_enter() {
+    let fixture = Fixture::new("image-pane");
+    let config = fixture.directory.join("tmux.conf");
+    std::fs::write(
+        &config,
+        concat!(
+            "set -g allow-passthrough off\nset -g status off\n",
+            "set -g remain-on-exit on\n"
+        ),
+    )
+    .unwrap();
+    let image = fixture.directory.join("a ' $(exit 73).png");
+    image::RgbaImage::from_pixel(16, 16, image::Rgba([70, 90, 130, 255]))
+        .save(&image)
+        .unwrap();
+    let script = fixture.directory.join("preview.sh");
+    std::fs::write(
+        &script,
+        concat!(
+            "#!/bin/sh\n",
+            "\"$1\" image --pane \"$2\" > \"$3\"\n",
+            "printf PREVIEW_LAUNCHED\nread done\n"
+        ),
+    )
+    .unwrap();
+    let report = fixture.directory.join("launch.txt");
+    let command: Vec<OsString> = vec![
+        "tmux".into(),
+        "-u".into(),
+        "-L".into(),
+        fixture.socket.clone().into(),
+        "-f".into(),
+        config.into_os_string(),
+        "new-session".into(),
+        "/bin/sh".into(),
+        script.into_os_string(),
+        env!("CARGO_BIN_EXE_cryptty").into(),
+        image.into_os_string(),
+        report.clone().into_os_string(),
+    ];
+    let mut pty = Pty::spawn(
+        &command,
+        PtySize {
+            rows: 24,
+            cols: 80,
+            pixel_width: 800,
+            pixel_height: 480,
+        },
+        || {},
+    )
+    .unwrap();
+    let mut terminal = Terminal::new(80, 24);
+    let mut phase = 0;
+    drive(&mut pty, &mut terminal, |_, terminal| {
+        let text = screen(terminal);
+        if phase == 0 && text.contains("Press Enter to close") {
+            assert_eq!(terminal.graphics.images.len(), 1);
+            assert!(
+                std::fs::read_to_string(&report)
+                    .unwrap()
+                    .contains("Opened image preview in pane")
+            );
+            phase = 1;
+            fixture.tmux(&["send-keys", "-t", "0:0.1", "Enter"]);
+        } else if phase == 1
+            && text.contains("PREVIEW_LAUNCHED")
+            && !text.contains("Press Enter to close")
+        {
+            let output = Command::new("tmux")
+                .args(["-L", &fixture.socket, "list-panes", "-F", "#{pane_id}"])
+                .env_remove("TMUX")
+                .output()
+                .unwrap();
+            assert!(output.status.success());
+            assert_eq!(
+                String::from_utf8(output.stdout).unwrap().lines().count(),
+                1
+            );
+            phase = 2;
+            fixture.tmux(&["kill-server"]);
+        }
+    });
+    assert_eq!(phase, 2, "preview did not open and close");
+}

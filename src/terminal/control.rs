@@ -210,6 +210,12 @@ impl Terminal {
             'c' if first == 0 => self.reply("\x1b[?1;0c"),
             'n' if first == 5 => self.reply("\x1b[0n"),
             'n' if first == 6 => self.report_cursor(false),
+            't' if first == 16 => {
+                self.reply(&format!(
+                    "\x1b[6;{};{}t",
+                    self.cell_pixels.1, self.cell_pixels.0
+                ));
+            }
             't' if first == 18 => {
                 self.reply(format!(
                     "\x1b[8;{};{}t",

@@ -29,7 +29,7 @@ fn insert_missing(text: &str, defaults: &Value) -> Result<String> {
         return Ok(text.to_string());
     };
     let mut output = text.to_string();
-    insert_comments(&mut output, &missing, &[], 0)?;
+    insert_comments(&mut output, &missing, &[], "# ")?;
     Ok(output)
 }
 
@@ -37,7 +37,7 @@ fn insert_comments(
     text: &mut String,
     missing: &Value,
     path: &[String],
-    indent: usize,
+    prefix: &str,
 ) -> Result<()> {
     let fields = missing.as_mapping().expect("Missing defaults are a map");
     let mut remaining = Mapping::new();
@@ -45,9 +45,9 @@ fn insert_comments(
         let mut child_path = path.to_vec();
         child_path.push(key.as_str().unwrap().to_string());
         if value.is_mapping()
-            && let Some((_, child_indent)) = block_position(text, &child_path)
+            && let Some((_, child_prefix)) = block_position(text, &child_path)
         {
-            insert_comments(text, value, &child_path, child_indent)?;
+            insert_comments(text, value, &child_path, &child_prefix)?;
         } else {
             remaining.insert(key.clone(), value.clone());
         }
@@ -62,8 +62,7 @@ fn insert_comments(
         comments.push('\n');
     }
     for line in serde_yaml_ng::to_string(&remaining)?.lines() {
-        comments.push_str(&" ".repeat(indent));
-        comments.push_str("# ");
+        comments.push_str(prefix);
         comments.push_str(line);
         comments.push('\n');
     }
@@ -71,23 +70,43 @@ fn insert_comments(
     Ok(())
 }
 
-fn block_position(text: &str, target: &[String]) -> Option<(usize, usize)> {
+fn yaml_line(line: &str) -> (&str, usize, Option<usize>) {
+    let outer = line.len() - line.trim_start().len();
+    match line.trim_start().strip_prefix("# ") {
+        Some(yaml) => (
+            yaml,
+            outer + yaml.len() - yaml.trim_start().len(),
+            Some(outer),
+        ),
+        None => (line, outer, None),
+    }
+}
+
+fn block_position(text: &str, target: &[String]) -> Option<(usize, String)> {
+    find_block(text, target, false).or_else(|| find_block(text, target, true))
+}
+
+fn find_block(
+    text: &str,
+    target: &[String],
+    include_comments: bool,
+) -> Option<(usize, String)> {
     let mut parents: Vec<(usize, String)> = Vec::new();
     let mut offset = 0;
     for line in text.split_inclusive('\n') {
         offset += line.len();
-        if line.trim_start().starts_with('#') || line.trim().is_empty() {
+        let (yaml, indent, comment_outer) = yaml_line(line);
+        if comment_outer.is_some() && !include_comments {
             continue;
         }
-        let indent = line.len() - line.trim_start().len();
-        while parents.last().is_some_and(|(level, _)| *level >= indent) {
-            parents.pop();
-        }
-        let Ok(mapping) = serde_yaml_ng::from_str::<Mapping>(line) else {
+        let Ok(mapping) = serde_yaml_ng::from_str::<Mapping>(yaml) else {
             continue;
         };
         if mapping.len() != 1 {
             continue;
+        }
+        while parents.last().is_some_and(|(level, _)| *level >= indent) {
+            parents.pop();
         }
         let (key, value) = mapping.into_iter().next().unwrap();
         let Some(key) = key.as_str() else { continue };
@@ -97,10 +116,18 @@ fn block_position(text: &str, target: &[String]) -> Option<(usize, usize)> {
                 let child_indent = text[offset..]
                     .lines()
                     .find(|line| !line.trim().is_empty())
-                    .map(|line| line.len() - line.trim_start().len())
+                    .map(|line| yaml_line(line).1)
                     .filter(|child| *child > indent)
                     .unwrap_or(indent + 2);
-                return Some((offset, child_indent));
+                let prefix = match comment_outer {
+                    Some(outer) => format!(
+                        "{}# {}",
+                        " ".repeat(outer),
+                        " ".repeat(child_indent - outer)
+                    ),
+                    None => format!("{}# ", " ".repeat(child_indent)),
+                };
+                return Some((offset, prefix));
             }
         }
     }
@@ -110,6 +137,7 @@ fn block_position(text: &str, target: &[String]) -> Option<(usize, usize)> {
 fn commented_fields(text: &str) -> BTreeMap<Vec<String>, Vec<Value>> {
     let mut fields: BTreeMap<Vec<String>, Vec<Value>> = BTreeMap::new();
     let mut parents: Vec<(usize, String)> = Vec::new();
+    let mut active_parents = Vec::new();
     let lines: Vec<_> = text.lines().collect();
     for (index, &line) in lines.iter().enumerate() {
         let (yaml, commented) = match line.trim_start().strip_prefix("# ") {
@@ -121,6 +149,9 @@ fn commented_fields(text: &str) -> BTreeMap<Vec<String>, Vec<Value>> {
         };
         if mapping.len() != 1 {
             continue;
+        }
+        if !commented {
+            parents.clone_from(&active_parents);
         }
         let indent = line.len() - line.trim_start().len()
             + if commented {
@@ -167,6 +198,9 @@ fn commented_fields(text: &str) -> BTreeMap<Vec<String>, Vec<Value>> {
                 parents.iter().map(|(_, k)| k.clone()).collect();
             path.push(key.to_string());
             fields.entry(path).or_default().push(value);
+        }
+        if !commented {
+            active_parents.clone_from(&parents);
         }
     }
     fields
@@ -273,6 +307,66 @@ mod tests {
     }
 
     #[test]
+    fn prose_comments_do_not_hide_active_nested_blocks() {
+        let defaults =
+            serde_yaml_ng::from_str("window: {padding: {x: 2, y: 2}}").unwrap();
+        let text = "window:\n# Note:\n  padding:\n    x: 0\n";
+        let updated = insert_missing(text, &defaults).unwrap();
+        assert_eq!(
+            updated,
+            "window:\n# Note:\n  padding:\n    # y: 2\n    x: 0\n"
+        );
+        assert_eq!(insert_missing(&updated, &defaults).unwrap(), updated);
+    }
+
+    #[test]
+    fn new_defaults_extend_commented_parents_without_duplicate_sections() {
+        let defaults = serde_yaml_ng::from_str(
+            "window: {option_as_alt: only_left, padding: {x: 2, y: 2}}\n\
+             selection: {word_characters: '/\\._-~:@%+=,#?'}",
+        )
+        .unwrap();
+        let text = concat!(
+            "# window:\n#   option_as_alt: only_left\n",
+            "# selection:\n#   word_characters: /\\._-~:@%+=,#?\n",
+        );
+        let updated = insert_missing(text, &defaults).unwrap();
+        assert_eq!(
+            updated,
+            concat!(
+                "# window:\n#   padding:\n#     x: 2\n#     y: 2\n",
+                "#   option_as_alt: only_left\n",
+                "# selection:\n#   word_characters: /\\._-~:@%+=,#?\n",
+            )
+        );
+        assert_eq!(insert_missing(&updated, &defaults).unwrap(), updated);
+    }
+
+    #[test]
+    fn nested_commented_blocks_keep_their_comment_indentation() {
+        let defaults =
+            serde_yaml_ng::from_str("window: {padding: {x: 2, y: 2}}").unwrap();
+        for (text, expected) in [
+            (
+                "# window:\n#   padding:\n#     x: 2\n",
+                "# window:\n#   padding:\n#     y: 2\n#     x: 2\n",
+            ),
+            (
+                "window:\n  # padding:\n  #   x: 2\n  option_as_alt: none\n",
+                "window:\n  # padding:\n  #   y: 2\n  #   x: 2\n  option_as_alt: none\n",
+            ),
+        ] {
+            let updated = insert_missing(text, &defaults).unwrap();
+            assert_eq!(updated, expected);
+            assert_eq!(insert_missing(&updated, &defaults).unwrap(), updated);
+            assert_eq!(
+                serde_yaml_ng::from_str::<Value>(text).unwrap(),
+                serde_yaml_ng::from_str::<Value>(&updated).unwrap()
+            );
+        }
+    }
+
+    #[test]
     fn documented_defaults_match_runtime_defaults() {
         let documented: crate::config::Config =
             serde_yaml_ng::from_value(values().unwrap()).unwrap();
@@ -289,5 +383,9 @@ mod tests {
             runtime.window.padding.physical(1.0)
         );
         assert_eq!(documented.colors.theme(), runtime.colors.theme());
+        assert_eq!(
+            documented.selection.word_characters,
+            runtime.selection.word_characters
+        );
     }
 }

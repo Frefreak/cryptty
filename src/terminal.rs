@@ -426,6 +426,10 @@ pub enum Effect {
 }
 
 pub struct Terminal {
+    pub graphics: crate::graphics::Graphics,
+    image_stream: crate::graphics::stream::Stream,
+    pub cell_pixels: (u32, u32),
+    pub word_characters: String,
     theme: Theme,
     initial_theme: Theme,
     palette: [u32; 256],
@@ -493,6 +497,11 @@ impl Terminal {
         };
         let scroll_bottom = rows.len() - 1;
         Self {
+            graphics: Default::default(),
+            image_stream: Default::default(),
+            cell_pixels: (8, 16),
+            word_characters: crate::config::Selection::default()
+                .word_characters,
             theme,
             initial_theme: theme,
             palette: std::array::from_fn(|i| {
@@ -698,18 +707,28 @@ impl Terminal {
         }
         // Detach the parser while it calls back into the terminal model.
         let mut parser = self.parser.take().expect("parser outside feed");
+        let mut stream = std::mem::take(&mut self.image_stream);
         let mut performer = parser::Buffered::new(self);
-        let mut bytes = bytes;
-        while let Some(index) = memchr::memchr2(0x18, 0x1a, bytes) {
-            parser.advance(&mut performer, &bytes[..index]);
-            performer.flush();
-            performer.terminal.cancelling = true;
-            parser.advance(&mut performer, &bytes[index..index + 1]);
-            performer.terminal.cancelling = false;
-            bytes = &bytes[index + 1..];
-        }
-        parser.advance(&mut performer, bytes);
+        stream.feed(bytes, |event| match event {
+            crate::graphics::stream::Event::Text(mut bytes) => {
+                while let Some(index) = memchr::memchr2(0x18, 0x1a, bytes) {
+                    parser.advance(&mut performer, &bytes[..index]);
+                    performer.flush();
+                    performer.terminal.cancelling = true;
+                    parser.advance(&mut performer, &bytes[index..index + 1]);
+                    performer.terminal.cancelling = false;
+                    bytes = &bytes[index + 1..];
+                }
+                parser.advance(&mut performer, bytes);
+            }
+            crate::graphics::stream::Event::Graphics(command) => {
+                performer.flush();
+                let reply = performer.terminal.graphics.command(command);
+                performer.terminal.replies.extend(reply);
+            }
+        });
         performer.flush();
+        self.image_stream = stream;
         self.parser = Some(parser);
         if let (Some(text), Some(range)) = (selected, self.selection)
             && self.selected_text(range) != text
@@ -1120,6 +1139,8 @@ impl Terminal {
     }
 
     fn reset(&mut self) {
+        let word_characters = std::mem::take(&mut self.word_characters);
+        let cell_pixels = self.cell_pixels;
         let parser = self.parser.take();
         let replies = std::mem::take(&mut self.replies);
         let effects = std::mem::take(&mut self.effects);
@@ -1127,6 +1148,8 @@ impl Terminal {
         *self =
             Self::with_theme(self.cols(), self.rows.len(), self.initial_theme);
         self.parser = parser;
+        self.word_characters = word_characters;
+        self.cell_pixels = cell_pixels;
         self.replies = replies;
         self.effects = effects;
         self.color_revision = revision;

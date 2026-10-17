@@ -111,13 +111,23 @@ impl Terminal {
         else {
             return TextRange::between(position, position);
         };
-        let whitespace = |i: usize| cells[i].2.base().is_whitespace();
+        let class = |i: usize| {
+            let ch = cells[i].2.base();
+            if ch.is_whitespace() {
+                0
+            } else if ch.is_alphanumeric() || self.word_characters.contains(ch)
+            {
+                1
+            } else {
+                2
+            }
+        };
         let mut start = index;
-        while start > 0 && whitespace(start - 1) == whitespace(index) {
+        while start > 0 && class(start - 1) == class(index) {
             start -= 1;
         }
         let mut end = index + 1;
-        while end < cells.len() && whitespace(end) == whitespace(index) {
+        while end < cells.len() && class(end) == class(index) {
             end += 1;
         }
         let text: String = cells[start..end]

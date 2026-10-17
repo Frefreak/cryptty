@@ -39,8 +39,9 @@ fn shade(in: VertexOutput, channel: u32) -> vec4<f32> {
     if in.kind == 0u {
         return in.color;
     }
-    let texel = textureLoad(atlas, vec2<i32>(in.uv), 0);
-    if in.kind == 2u {
+    let offset = select(vec2(0.0), vec2(0.0001), in.kind == 3u);
+    let texel = textureLoad(atlas, vec2<i32>(in.uv + offset), 0);
+    if in.kind >= 2u {
         return texel;
     }
     return vec4(in.color.rgb, texel[channel]);

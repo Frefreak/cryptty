@@ -20,6 +20,7 @@ mod generated;
 pub mod gpu;
 #[cfg(test)]
 mod gpu_tests;
+mod images;
 #[cfg(target_os = "macos")]
 mod native_fallback;
 #[cfg(target_os = "macos")]
@@ -32,6 +33,7 @@ mod scene;
 mod swash_tests;
 
 const CACHE_LIMIT: usize = 4096;
+const PREEDIT_COLOR: u32 = 0x6366f1;
 
 pub struct Renderer {
     rasterizer: font::Rasterizer,
@@ -45,6 +47,7 @@ pub struct Renderer {
     pub pixels: Vec<u32>,
     previous: std::collections::VecDeque<crate::terminal::Row>,
     color_revision: u64,
+    image_revision: u64,
     text_blink_phase: u8,
     old_cursor: Option<(usize, usize)>,
     old_preedit_row: Option<usize>,
@@ -82,6 +85,7 @@ impl Renderer {
             pixels: Vec::new(),
             previous: std::collections::VecDeque::new(),
             color_revision: 0,
+            image_revision: 0,
             text_blink_phase: 0,
             old_cursor: None,
             old_preedit_row: None,
@@ -131,6 +135,10 @@ impl Renderer {
             self.pixels = vec![terminal.theme().background; width * height];
             self.invalidate();
         }
+        if self.image_revision != terminal.graphics.revision {
+            self.image_revision = terminal.graphics.revision;
+            self.invalidate();
+        }
         if self.color_revision != terminal.color_revision
             || self.text_blink_phase != terminal.text_blink_phase
         {
@@ -166,7 +174,7 @@ impl Renderer {
                     x,
                     y,
                     columns,
-                    terminal.theme().palette[6],
+                    PREEDIT_COLOR,
                 );
                 x += columns;
             }
@@ -184,6 +192,9 @@ impl Renderer {
             {
                 let (_, bg) = terminal.colors(cell.style());
                 for ch in text.chars().filter(|c| *c != ' ') {
+                    if text.chars().next() == Some(crate::graphics::MARKER) {
+                        break;
+                    }
                     self.paint_char(
                         ch,
                         cell.style().font(),
@@ -226,6 +237,9 @@ impl Renderer {
                 let (fg, _) = terminal.colors(style);
                 let columns = text.columns();
                 for ch in text.chars().filter(|c| *c != ' ') {
+                    if text.chars().next() == Some(crate::graphics::MARKER) {
+                        break;
+                    }
                     self.paint_char(ch, cell.style().font(), x, y, columns, fg);
                 }
                 let (left, _) = self.cell_origin(x, y);
@@ -246,6 +260,34 @@ impl Renderer {
                         );
                     },
                 );
+            }
+        }
+        for tile in images::tiles(
+            terminal,
+            row,
+            (self.cell_width, self.cell_height),
+            self.cell_origin(0, y),
+            self.content_end(),
+        ) {
+            let [x, y, w, h] = tile.rect;
+            let [u, v, uw, vh] = tile.uv;
+            for py in 0..(h - 0.5).ceil().max(0.0) as usize {
+                for px in 0..(w - 0.5).ceil().max(0.0) as usize {
+                    let sx = (u + (px as f32 + 0.5) * uw / w + 0.0001) as u32;
+                    let sy = (v + (py as f32 + 0.5) * vh / h + 0.0001) as u32;
+                    if sx >= tile.image.width || sy >= tile.image.height {
+                        continue;
+                    }
+                    let at = (sy * tile.image.width + sx) as usize * 4;
+                    let rgba = &tile.image.rgba[at..at + 4];
+                    let index =
+                        (y as usize + py) * self.width + x as usize + px;
+                    let rgb = u32::from(rgba[0]) << 16
+                        | u32::from(rgba[1]) << 8
+                        | u32::from(rgba[2]);
+                    self.pixels[index] =
+                        blend(self.pixels[index], rgb, rgba[3]);
+                }
             }
         }
     }

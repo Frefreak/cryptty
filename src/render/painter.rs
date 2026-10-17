@@ -9,6 +9,8 @@ pub(super) struct Painter {
     bindings: wgpu::BindGroup,
     pipelines: Vec<wgpu::RenderPipeline>,
     vertices: wgpu::Buffer,
+    layout: wgpu::BindGroupLayout,
+    images: std::collections::BTreeMap<u32, super::images::GpuImage>,
 }
 
 impl Painter {
@@ -72,6 +74,8 @@ impl Painter {
             bindings,
             pipelines,
             vertices,
+            layout,
+            images: Default::default(),
         }
     }
 
@@ -90,7 +94,7 @@ impl Painter {
         size: (u32, u32),
         preedit: &str,
     ) -> Result<()> {
-        let quads = scene::build(
+        let frame = scene::build(
             renderer,
             &mut self.atlas,
             queue,
@@ -110,6 +114,37 @@ impl Painter {
             )
         })
         .context("Visible glyphs exceed GPU atlas capacity")?;
+        let mut tiles: Vec<_> = terminal
+            .rows
+            .iter()
+            .enumerate()
+            .flat_map(|(y, row)| {
+                super::images::tiles(
+                    terminal,
+                    row,
+                    (renderer.cell_width, renderer.cell_height),
+                    renderer.cell_origin(0, y),
+                    (
+                        (size.0 as usize).saturating_sub(renderer.padding.0),
+                        (size.1 as usize).saturating_sub(renderer.padding.1),
+                    ),
+                )
+            })
+            .collect();
+        tiles.sort_by_key(|tile| tile.id);
+        super::images::prepare(
+            &mut self.images,
+            terminal,
+            device,
+            queue,
+            &self.layout,
+            &self.viewport,
+            &tiles,
+        )?;
+        let overlay = frame.overlay;
+        let mut quads = frame.quads;
+        let text_end = quads.len();
+        quads.extend(tiles.iter().map(scene::Quad::image));
         let bytes = bytemuck::cast_slice(&quads);
         if bytes.len() as u64 > self.vertices.size() {
             self.vertices =
@@ -149,7 +184,22 @@ impl Painter {
             pass.set_vertex_buffer(0, self.vertices.slice(..));
             for pipeline in &self.pipelines {
                 pass.set_pipeline(pipeline);
-                pass.draw(0..6, 0..quads.len() as u32);
+                pass.set_bind_group(0, &self.bindings, &[]);
+                pass.draw(0..6, 0..overlay as u32);
+                let mut start = 0;
+                while start < tiles.len() {
+                    let id = tiles[start].id;
+                    let end =
+                        start + tiles[start..].partition_point(|t| t.id == id);
+                    pass.set_bind_group(0, &self.images[&id].bindings, &[]);
+                    pass.draw(
+                        0..6,
+                        (text_end + start) as u32..(text_end + end) as u32,
+                    );
+                    start = end;
+                }
+                pass.set_bind_group(0, &self.bindings, &[]);
+                pass.draw(0..6, overlay as u32..text_end as u32);
             }
         }
         queue.submit([encoder.finish()]);

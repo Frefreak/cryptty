@@ -22,6 +22,9 @@ window:
     y: 2
 keyboard:
   bindings: []
+selection:
+  # Additional word characters beside Unicode letters and digits.
+  word_characters: '/\._-~:@%+=,#?'
 colors:
   primary:
     foreground: '#f8f8f2'

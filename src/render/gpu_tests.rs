@@ -39,6 +39,24 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
         terminal.feed(row.as_bytes());
         terminal.feed(b"\r\n");
     }
+    terminal.feed(b"\x1b[12;3H");
+    let mut image_bytes = Vec::new();
+    crate::graphics::sender::emit(
+        &mut image_bytes,
+        &crate::graphics::Raster {
+            width: 2,
+            height: 2,
+            rgba: vec![
+                255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 255, 255, 255, 0, 0,
+            ],
+        },
+        42,
+        3,
+        2,
+        false,
+    )
+    .unwrap();
+    terminal.feed(&image_bytes);
     terminal.feed(b"\x1b[H");
     let mapped_family = if cfg!(target_os = "macos") {
         "Menlo"

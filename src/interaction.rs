@@ -155,13 +155,15 @@ impl View {
             self.renderer.invalidate();
             self.window.request_redraw();
         }
-        self.window.set_cursor(if link.is_some() {
-            CursorIcon::Pointer
-        } else if available {
-            CursorIcon::Text
-        } else {
-            CursorIcon::Default
-        });
+        self.window.set_cursor(
+            if link.is_some() && self.modifiers.control_key() {
+                CursorIcon::Pointer
+            } else if available {
+                CursorIcon::Text
+            } else {
+                CursorIcon::Default
+            },
+        );
     }
 
     fn selection_position(&self) -> Position {

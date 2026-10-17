@@ -89,8 +89,12 @@ impl App {
         )?;
         let size = window.inner_size();
         let (cols, rows) = renderer.grid_size(size.width, size.height);
-        let terminal =
+        let mut terminal =
             Terminal::with_theme(cols, rows, self.config.colors.theme());
+        terminal.word_characters =
+            self.config.selection.word_characters.clone();
+        terminal.cell_pixels =
+            (renderer.cell_width as u32, renderer.cell_height as u32);
         let proxy = self.proxy.clone();
         let pty = pty::Pty::spawn(
             &self.command,
@@ -166,6 +170,10 @@ impl View {
             return Ok(());
         }
         let (cols, rows) = self.renderer.grid_size(size.width, size.height);
+        self.terminal.cell_pixels = (
+            self.renderer.cell_width as u32,
+            self.renderer.cell_height as u32,
+        );
         self.terminal.resize(cols, rows);
         self.pty.resize(pty_size(cols, rows, &self.renderer))?;
         self.renderer.invalidate();
@@ -440,6 +448,12 @@ fn pty_size(cols: usize, rows: usize, renderer: &Renderer) -> PtySize {
 fn main() -> Result<()> {
     let (renderer_choice, command) =
         match options::parse(std::env::args_os().skip(1))? {
+            Action::Image { paths, pane } => {
+                if pane {
+                    return cryptty::graphics::sender::open_pane(&paths);
+                }
+                return cryptty::graphics::sender::run(&paths);
+            }
             Action::Help => {
                 println!("{}", options::HELP);
                 return Ok(());

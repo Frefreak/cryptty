@@ -18,6 +18,8 @@ These commands require Rust, uv, and the Xcode Command Line Tools.
 The app contains a native launcher and a placeholder terminal icon, with
 an ad-hoc signature for local use. It opens the inherited `$SHELL` as a
 login shell in your home directory. Repeat the install command to update.
+When `LC_ALL`, `LC_CTYPE`, and `LANG` are empty or unset, the launcher sets
+`LANG=en_US.UTF-8` so programs such as tmux recognize Unicode support.
 For a custom destination, use `./scripts/build-macos-app --destination PATH`;
 add `--install` to register that location with macOS.
 The app runs independently of this checkout and of uv.
@@ -107,9 +109,18 @@ Beam cursors scale to 15% of one cell's width, with a one-pixel minimum.
 Drag to select and copy to the system clipboard. Paste with Ctrl-Shift-V,
 Shift-Insert, or middle-click on both platforms. During application mouse
 capture, use Shift-middle-click to paste from the system clipboard.
-Double-click selects a whitespace-delimited
-word; triple-click selects a logical line, including soft-wrapped rows.
+Double-click selects a word; triple-click selects a logical line, including
+soft-wrapped rows.
 Dragging after either click extends the selection by words or lines.
+Words contain Unicode letters and digits plus configurable punctuation:
+
+```yaml
+selection:
+  word_characters: '/\._-~:@%+=,#?'
+```
+
+Other characters, including tmux pane separators, form word boundaries.
+Reload with Ctrl+Shift+R after changing this setting.
 Selection survives unrelated output and follows scrolling while its text
 remains visible. Overwriting the selected text, switching screens, resizing,
 starting a new selection, or pasting clears it. Copying retains plain text.
@@ -124,6 +135,11 @@ Applications can copy text through OSC 52 to the system clipboard.
 Resizing reflows primary-screen text and retains up to 10,000 history rows
 for resize recovery. Alternate-screen applications retain a fixed grid and
 receive the new size to redraw. Scrollback navigation remains with tmux.
+
+`cryptty image FILE...` displays PNG/JPEG images inline, including through
+tmux, enabling passthrough for the current pane automatically.
+See [image usage and protocol scope](docs/images.md).
+Add `--pane` to open a right-side tmux preview; press Enter to close it.
 
 Configuration lives in `$XDG_CONFIG_HOME/cryptty/cryptty.yaml`, or
 `~/.config/cryptty/cryptty.yaml` when `XDG_CONFIG_HOME` is unset.
