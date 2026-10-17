@@ -1,12 +1,16 @@
 use std::sync::OnceLock;
 
 use anyhow::{Context, Result, ensure};
+use cryptty::config::OptionAsAlt;
 use objc2::runtime::{AnyClass, AnyObject, ClassBuilder, Sel};
 use objc2::{msg_send, sel};
 use objc2_app_kit::{NSApplication, NSEventModifierFlags, NSEventType};
 use objc2_foundation::{
-    MainThreadMarker, NSAttributedString, NSObject, NSObjectProtocol, NSRange,
-    NSString,
+    MainThreadMarker, NSAttributedString, NSNumber, NSObject, NSObjectProtocol,
+    NSRange, NSString,
+};
+use winit::platform::macos::{
+    OptionAsAlt as NativeOptionAsAlt, WindowExtMacOS,
 };
 use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use winit::window::Window;
@@ -52,6 +56,45 @@ pub fn install(window: &Window) -> Result<()> {
     Ok(())
 }
 
+static OPTION_MASK_KEY: u8 = 0;
+
+pub fn configure(window: &Window, option: OptionAsAlt) {
+    MainThreadMarker::new().expect("Input configuration runs on main thread");
+    let native = match option {
+        OptionAsAlt::None => NativeOptionAsAlt::None,
+        OptionAsAlt::OnlyLeft => NativeOptionAsAlt::OnlyLeft,
+        OptionAsAlt::OnlyRight => NativeOptionAsAlt::OnlyRight,
+        OptionAsAlt::Both => NativeOptionAsAlt::Both,
+    };
+    let handle = window.window_handle().expect("Live AppKit window");
+    let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
+        unreachable!("Input adapter requires AppKit");
+    };
+    let mask = NSNumber::new_u64(option_mask(option));
+    // Retaining the mask on the view keeps its lifetime and policy per window.
+    unsafe {
+        objc2::ffi::objc_setAssociatedObject(
+            handle.ns_view.as_ptr().cast(),
+            (&OPTION_MASK_KEY as *const u8).cast(),
+            (&*mask as *const NSNumber).cast_mut().cast(),
+            objc2::ffi::OBJC_ASSOCIATION_RETAIN_NONATOMIC,
+        );
+    }
+    window.set_option_as_alt(native);
+}
+
+fn option_mask(option: OptionAsAlt) -> u64 {
+    // NX_DEVICELALTKEYMASK and NX_DEVICERALTKEYMASK identify each side.
+    match option {
+        OptionAsAlt::None => 0,
+        OptionAsAlt::OnlyLeft => 0x20,
+        OptionAsAlt::OnlyRight => 0x40,
+        OptionAsAlt::Both => {
+            NSEventModifierFlags::NSEventModifierFlagOption.0 as u64
+        }
+    }
+}
+
 unsafe extern "C" fn insert_text(
     view: *mut AnyObject,
     _selector: Sel,
@@ -76,10 +119,23 @@ unsafe extern "C" fn insert_text(
     let event = NSApplication::sharedApplication(mtm).currentEvent();
     if let Some(event) = event {
         let key_down = unsafe { event.r#type() } == NSEventType::KeyDown;
-        let shortcut = unsafe { event.modifierFlags() }.intersects(
-            NSEventModifierFlags::NSEventModifierFlagControl
-                | NSEventModifierFlags::NSEventModifierFlagCommand,
-        );
+        let flags = unsafe { event.modifierFlags() };
+        // The association is retained by this live view and read on main.
+        let mask = unsafe {
+            objc2::ffi::objc_getAssociatedObject(
+                (view as *const AnyObject).cast(),
+                (&OPTION_MASK_KEY as *const u8).cast(),
+            )
+            .cast::<NSNumber>()
+            .as_ref()
+        }
+        .map_or(0, NSNumber::as_u64);
+        let option_shortcut = flags.0 as u64 & mask != 0;
+        let shortcut = option_shortcut
+            || flags.intersects(
+                NSEventModifierFlags::NSEventModifierFlagControl
+                    | NSEventModifierFlags::NSEventModifierFlagCommand,
+            );
         let original = unsafe { event.characters() }.map(|s| s.to_string());
         if key_down
             && !marked

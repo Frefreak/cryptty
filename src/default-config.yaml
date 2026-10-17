@@ -15,6 +15,8 @@ font:
         - U+FF00-U+FFEF
         - U+20000-U+3FFFF
 window:
+  # macOS only: none, only_left, only_right, or both.
+  option_as_alt: only_left
   padding:
     x: 2
     y: 2

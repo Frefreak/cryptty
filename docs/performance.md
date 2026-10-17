@@ -653,3 +653,155 @@ a release build, formatting, and fresh independent review. On October 16,
 the user tested the rebuilt application and confirmed that it felt more
 stable. This provides qualitative desktop acceptance of the improvement;
 the exact workload and separate resize result were not recorded.
+
+## macOS comparison with Alacritty, 2026-10-17
+
+Cryptty completes Unicode and OSC 8 output faster in this comparison.
+Alacritty has lower median completion times for plain text, SGR colors,
+truecolor, and cursor edits, and lower reply p99 in every latency condition.
+Cryptty has a lower median reply latency during continuous output, with
+larger slow outliers.
+
+This compares Cryptty `735367f` built with `cargo build --release --locked`
+without PGO against Alacritty 0.15.1 (`0c405d5`) on macOS 26.6 (25G72),
+Apple M4 Pro. Cryptty selected Metal AutoVsync. Both use Fantasque at 19 pt,
+a 94 by 27 grid, two-pixel padding settings, and 10,000 history rows.
+Explicit Cryptty font mappings are disabled for this comparison; both use
+system fallback. Exact fallback faces and physical cell sizes may differ.
+
+[Raw runs, binary hashes, configs, and harnesses][macos-comparison]
+retain the complete clean retry. Pilot and interrupted runs are excluded.
+No compilation or tests ran alongside these measurements. Other desktop
+applications remained available; focus, occlusion, and display scale were
+not instrumented.
+
+[macos-comparison]: benchmarks/2026-10-17-macos-comparison.json
+
+### Throughput
+
+Five alternating trials per terminal, 1,048,576 lines per workload, with
+16,384 warmup lines before each workload. Workload order rotates by trial.
+DSR replies mark completion; grid and final cursor checks pass in every run.
+Values below show median seconds and the minimum–maximum range.
+
+| Workload | Cryptty median | Range | Alacritty median | Range |
+| --- | ---: | ---: | ---: | ---: |
+| Plain text | 0.671 | 0.567–0.985 | 0.492 | 0.484–0.501 |
+| SGR colors | 0.500 | 0.456–0.719 | 0.466 | 0.442–0.474 |
+| Unicode | 0.292 | 0.271–0.352 | 0.496 | 0.481–0.502 |
+| OSC 8 links | 0.410 | 0.378–0.472 | 0.669 | 0.652–0.684 |
+| Truecolor | 1.049 | 0.848–1.117 | 0.550 | 0.529–0.586 |
+| Cursor edits | 0.738 | 0.641–0.821 | 0.688 | 0.678–0.695 |
+
+### PTY reply latency
+
+Three trials yield 1,500 measured samples per condition and terminal,
+following 30 warmup samples per trial. Values are median / p99 milliseconds;
+p99 uses nearest rank over the pooled samples. The timer begins after
+acquiring the producer lock and ends when the cursor reply arrives.
+
+| Condition | Cryptty | Alacritty |
+| --- | ---: | ---: |
+| Idle | 11.864 / 14.948 | 0.122 / 0.913 |
+| 16 MiB/s output | 0.918 / 12.051 | 0.109 / 3.864 |
+| Continuous output | 0.223 / 8.746 | 1.424 / 2.628 |
+
+Including producer-lock wait gives these request p99 values in milliseconds:
+
+| Condition | Cryptty | Alacritty |
+| --- | ---: | ---: |
+| Idle | 14.952 | 0.914 |
+| 16 MiB/s output | 12.533 | 5.775 |
+| Continuous output | 11.003 | 3.892 |
+
+The paced producer achieved approximately 16 MiB/s in all runs.
+Continuous output yields after each 57 KiB block so probes can acquire the
+producer lock. It achieved 76–89 MiB/s in Cryptty and 114–117 MiB/s in
+Alacritty. These rates describe this query-interleaved workload.
+
+Cryptty idle reply p99 was 14.90–15.04 ms across the three individual trials.
+The comparison establishes the response-time difference; it does not
+identify its cause. Frame presentation and physical input/display latency
+lie outside these timers.
+
+## macOS GPU frame pacing, 2026-10-17
+
+Pending macOS GPU redraws now wait at least one reported monitor refresh
+interval after the previous draw completes. This wait uses the event-loop
+redraw deadline, allowing PTY processing to continue between frames. Metal
+retains AutoVsync. Missing or zero refresh rates fall back to 60 Hz.
+Software rendering and Linux keep their existing coalescing deadlines.
+
+The 2 ms quiet period and 5 ms coalescing limit still apply within the frame
+schedule; the next frame's availability can extend the actual deadline.
+Rendering time is additional to the refresh interval. This pacing does not
+align frames to vsync. OS redraw requests without pending coalesced output
+can still draw immediately.
+
+### Evidence and controls
+
+An instrumented baseline measured 819 frames during the latency workload.
+Frame acquisition took 10.789 ms median and about 13.97 ms p99; painting
+had a 0.496 ms median, and presentation a 0.025 ms median. The acquisition
+measurement surrounds `get_current_texture()`, which reaches Metal's
+`nextDrawable()` in the installed wgpu backend. Logging overhead applies.
+
+A supported Metal Immediate-mode control retained roughly 15 ms idle reply
+p99 across three trials. The retained patch instead paces pending redraws
+with synchronized presentation preserved.
+
+[Raw runs, controls, diagnostic source, configs, and harnesses][macos-pacing]
+record the measurements. The baseline uses Cryptty `735367f`; the candidate
+adds the archived source patch. Both use normal release builds without PGO,
+a 94 by 27 grid, Fantasque at 19 pt, system fallback, and 10,000 history
+rows on the same M4 Pro macOS host. No build or tests ran during timing.
+
+[macos-pacing]: benchmarks/2026-10-17-macos-pacing.json
+
+### Paired throughput
+
+Five alternating trials per build, 1,048,576 lines per workload, rotating
+workload order. Values show median seconds; lower is better. All grid and
+final cursor checks passed.
+
+| Workload | Before | Paced | Speedup |
+| --- | ---: | ---: | ---: |
+| Plain text | 0.737 | 0.289 | 2.55x |
+| SGR colors | 0.571 | 0.213 | 2.68x |
+| Unicode | 0.402 | 0.273 | 1.47x |
+| OSC 8 links | 0.382 | 0.344 | 1.11x |
+| Truecolor | 1.018 | 0.343 | 2.97x |
+| Cursor edits | 0.990 | 0.333 | 2.97x |
+
+Unicode and OSC 8 baseline timings varied substantially; their ranges
+were 0.269–0.588 s and 0.314–0.708 s, respectively. Treat these median
+improvements as workload observations, without assuming fixed speedups.
+
+### Paired PTY reply latency
+
+Three trials per build, 500 measured samples per condition per trial,
+following 30 warmup samples. Values show pooled median / nearest-rank p99
+in milliseconds; timing starts after acquiring the producer lock.
+
+| Condition | Before | Paced |
+| --- | ---: | ---: |
+| Idle | 11.589 / 15.057 | 0.093 / 0.567 |
+| 16 MiB/s output | 1.175 / 12.006 | 0.098 / 1.535 |
+| Continuous output | 0.219 / 8.610 | 0.039 / 0.864 |
+
+Including producer-lock wait, request p99 was 15.063 → 0.591 ms at idle,
+12.310 → 2.325 ms with paced output, and 11.940 → 14.237 ms with continuous
+output. The continuous-output request tail includes contention before the
+query enters the terminal and increased despite the lower reply latency.
+Achieved continuous output rose from 72–90 to 134–192 MiB/s. The producer
+yields after every 57 KiB block; these rates describe this workload.
+
+Physical key-to-photon latency, visual smoothness, and power consumption
+remain unmeasured. The measurements ran in a normal desktop session; focus,
+occlusion, and display scale were not instrumented. Native runs confirm
+Metal AutoVsync selection and successful PTY processing.
+
+Validation: macOS test suite, release build, formatting, and Linux
+all-target compilation passed. Independent review found no blocking issue.
+Clippy completed with warnings in unchanged code; `-D warnings` fails on
+those existing diagnostics.

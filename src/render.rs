@@ -175,7 +175,7 @@ impl Renderer {
             let (x, y, columns, shape) = cursor_layout(terminal, preedit);
             let (left, top) = self.cell_origin(x, y);
             let [dx, dy, w, h] =
-                cursor_rect(shape, self.cell_width * columns, self.cell_height);
+                cursor_rect(shape, self.cell_width, self.cell_height, columns);
             self.solid(left + dx, top + dy, w, h, terminal.theme().cursor);
             let cell = &terminal.rows[y][x];
             if shape == CursorShape::Block

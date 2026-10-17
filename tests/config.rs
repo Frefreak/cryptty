@@ -10,6 +10,29 @@ const DEFAULT_PIXELS_AT_1_5X: f32 = if cfg!(target_os = "macos") {
 };
 
 #[test]
+fn option_as_alt_defaults_and_explicit_modes_parse() {
+    use cryptty::config::OptionAsAlt;
+
+    assert_eq!(
+        Config::parse("").unwrap().window.option_as_alt,
+        OptionAsAlt::OnlyLeft,
+    );
+    for (name, expected) in [
+        ("none", OptionAsAlt::None),
+        ("only_left", OptionAsAlt::OnlyLeft),
+        ("only_right", OptionAsAlt::OnlyRight),
+        ("both", OptionAsAlt::Both),
+    ] {
+        let text = format!("window: {{option_as_alt: {name}}}");
+        assert_eq!(
+            Config::parse(&text).unwrap().window.option_as_alt,
+            expected
+        );
+    }
+    assert!(Config::parse("window: {option_as_alt: left}").is_err());
+}
+
+#[test]
 fn keyboard_bindings_match_exact_modifiers_and_preserve_escape_bytes() {
     use winit::keyboard::{Key, ModifiersState as M, NamedKey};
     let config = Config::parse(

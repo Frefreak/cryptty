@@ -1,0 +1,138 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = []
+# ///
+"""Build an ad-hoc-signed macOS application bundle; optionally install it."""
+
+import argparse
+import json
+from pathlib import Path
+import plistlib
+import shutil
+import subprocess
+import sys
+import tempfile
+
+IDENTIFIER = "org.cryptty"
+REGISTER = Path(
+    "/System/Library/Frameworks/CoreServices.framework/Frameworks/"
+    "LaunchServices.framework/Support/lsregister"
+)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--install", action="store_true")
+    parser.add_argument(
+        "--destination", type=Path,
+    )
+    args = parser.parse_args()
+    if sys.platform != "darwin":
+        parser.error("this installer requires macOS")
+    root = Path(__file__).resolve().parent.parent
+    destination = args.destination or (
+        Path.home() / "Applications/Cryptty.app" if args.install
+        else root / "target/macos/Cryptty.app"
+    )
+    destination = destination.expanduser().absolute()
+    if destination.suffix != ".app" or destination.is_symlink():
+        parser.error("--destination must be a regular .app directory")
+    if destination.exists():
+        info = destination / "Contents/Info.plist"
+        try:
+            current = plistlib.loads(info.read_bytes())
+        except (OSError, plistlib.InvalidFileException):
+            parser.error("destination contains an unrecognized application")
+        if current.get("CFBundleIdentifier") != IDENTIFIER:
+            parser.error("destination belongs to another application")
+    compiler = subprocess.check_output(["rustc", "-vV"], text=True)
+    host = next(line.removeprefix("host: ")
+                for line in compiler.splitlines() if line.startswith("host: "))
+    build = subprocess.run(
+        ["cargo", "build", "--release", "--locked", "--target", host,
+         "--message-format=json-render-diagnostics"],
+        cwd=root, check=True, stdout=subprocess.PIPE, text=True,
+    )
+    artifacts = [json.loads(line) for line in build.stdout.splitlines()]
+    executable = next(Path(item["executable"]) for item in artifacts
+                      if item.get("reason") == "compiler-artifact"
+                      and item.get("target", {}).get("name") == "cryptty"
+                      and item.get("executable"))
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(
+        prefix=".cryptty-install-", dir=destination.parent,
+    ) as temporary:
+        staging = Path(temporary) / "Cryptty.app"
+        contents = staging / "Contents"
+        (contents / "MacOS").mkdir(parents=True)
+        (contents / "Resources").mkdir()
+        # Preserve the process name used by per-app keyboard rules.
+        binary = contents / "MacOS/cryptty"
+        shutil.copy2(executable, binary)
+        launcher = contents / "MacOS/cryptty-launcher"
+        subprocess.run(
+            ["xcrun", "clang", "-O2", "-Wall", "-Wextra", "-Werror",
+             str(root / "scripts/macos-launcher.c"), "-o", str(launcher)],
+            check=True,
+        )
+        script = contents / "Resources/launch.sh"
+        script.write_text(
+            "#!/bin/sh\nset -eu\n"
+            ': "${SHELL:?SHELL must name your preferred shell}"\n'
+            'bundle_bin=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\n'
+            'cd "$HOME"\n'
+            'exec "$bundle_bin/../MacOS/cryptty" -- "$SHELL" -l\n'
+        )
+        iconset = Path(temporary) / "Cryptty.iconset"
+        iconset.mkdir()
+        for points in (16, 32, 128, 256, 512):
+            for scale in (1, 2):
+                pixels = str(points * scale)
+                suffix = "@2x" if scale == 2 else ""
+                icon = iconset / f"icon_{points}x{points}{suffix}.png"
+                subprocess.run(
+                    ["sips", "-z", pixels, pixels,
+                     str(root / "assets/cryptty.png"), "--out", str(icon)],
+                    check=True, stdout=subprocess.DEVNULL,
+                )
+        subprocess.run(
+            ["iconutil", "-c", "icns", str(iconset), "-o",
+             str(contents / "Resources/Cryptty.icns")], check=True,
+        )
+        (contents / "Info.plist").write_bytes(plistlib.dumps({
+            "CFBundleIdentifier": IDENTIFIER,
+            "CFBundleName": "Cryptty",
+            "CFBundleDisplayName": "Cryptty",
+            "CFBundleExecutable": "cryptty-launcher",
+            "CFBundleIconFile": "Cryptty.icns",
+            "CFBundlePackageType": "APPL",
+            "CFBundleShortVersionString": "0.1.0",
+            "CFBundleVersion": "1",
+            "NSHighResolutionCapable": True,
+            "LSApplicationCategoryType": "public.app-category.developer-tools",
+        }))
+        for target in (binary, staging):
+            subprocess.run(["codesign", "--force", "--sign", "-", str(target)],
+                           check=True)
+        subprocess.run(["codesign", "--verify", "--deep", "--strict",
+                        str(staging)], check=True)
+        previous = Path(temporary) / "previous.app"
+        if destination.exists():
+            destination.rename(previous)
+        try:
+            staging.rename(destination)
+        except OSError:
+            if previous.exists():
+                previous.rename(destination)
+            raise
+    if args.install:
+        subprocess.run([str(REGISTER), "-f", str(destination)], check=True)
+        subprocess.run(["mdimport", str(destination)], check=True)
+        print(f"Installed {destination}; launch with Spotlight: Cryptty")
+    else:
+        print(f"Built {destination}")
+
+
+if __name__ == "__main__":
+    main()

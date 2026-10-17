@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Cryptty
+GenericName=Terminal Emulator
+Comment=A small terminal for macOS and Linux
+Exec=cryptty
+TryExec=cryptty
+Icon=cryptty
+Terminal=false
+Categories=System;TerminalEmulator;
+Keywords=shell;prompt;command;terminal;
+StartupNotify=false

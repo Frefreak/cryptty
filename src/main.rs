@@ -76,6 +76,8 @@ impl App {
         window.set_cursor(CursorIcon::Text);
         #[cfg(target_os = "macos")]
         macos_input::install(&window)?;
+        #[cfg(target_os = "macos")]
+        macos_input::configure(&window, self.config.window.option_as_alt);
         let display =
             display::Display::new(window.clone(), self.renderer_choice)?;
         let renderer = Renderer::with_options(
@@ -194,7 +196,10 @@ impl View {
             &self.terminal,
             &self.preedit,
         )?;
-        self.redraw.presented();
+        self.redraw.presented(
+            Instant::now(),
+            self.display.frame_interval(&self.window),
+        );
         let (x, y) = self.terminal.cursor;
         let (left, top) = self.renderer.cell_origin(x, y);
         self.window.set_ime_cursor_area(

@@ -31,11 +31,17 @@ pub(super) fn cursor_rect(
     shape: CursorShape,
     w: usize,
     h: usize,
+    columns: usize,
 ) -> [usize; 4] {
     match shape {
-        CursorShape::Block => [0, 0, w, h],
-        CursorShape::Underline => [0, h.saturating_sub(2), w, h.min(2)],
-        CursorShape::Beam => [0, 0, w.min(2), h],
+        CursorShape::Block => [0, 0, w * columns, h],
+        CursorShape::Underline => {
+            [0, h.saturating_sub(2), w * columns, h.min(2)]
+        }
+        CursorShape::Beam => {
+            let thickness = ((w as f32 * 0.15).round() as usize).max(1);
+            [0, 0, thickness.min(w), h]
+        }
     }
 }
 

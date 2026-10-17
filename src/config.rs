@@ -214,6 +214,17 @@ impl FontSize {
 #[serde(default, deny_unknown_fields)]
 pub struct Window {
     pub padding: Padding,
+    pub option_as_alt: OptionAsAlt,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum OptionAsAlt {
+    None,
+    #[default]
+    OnlyLeft,
+    OnlyRight,
+    Both,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize)]

@@ -167,7 +167,7 @@ pub(super) fn build(
     if terminal.cursor_drawn() {
         let (x, y, columns, shape) = cursor_layout(terminal, preedit);
         let (left, top) = scene.renderer.cell_origin(x, y);
-        let [dx, dy, cw, ch] = cursor_rect(shape, w * columns, h);
+        let [dx, dy, cw, ch] = cursor_rect(shape, w, h, columns);
         scene.solid(left + dx, top + dy, cw, ch, terminal.theme().cursor);
         let cell = &terminal.rows[y][x];
         if shape == CursorShape::Block

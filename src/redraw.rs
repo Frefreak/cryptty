@@ -6,6 +6,7 @@ const MAX_DELAY: Duration = Duration::from_millis(5);
 #[derive(Default)]
 pub(super) struct Redraw {
     pending: Option<Pending>,
+    next_frame: Option<Instant>,
 }
 
 struct Pending {
@@ -23,11 +24,15 @@ impl Redraw {
     }
 
     pub(super) fn deadline(&self) -> Option<Instant> {
-        self.pending.as_ref().map(|p| p.deadline)
+        self.pending.as_ref().map(|p| {
+            self.next_frame
+                .map_or(p.deadline, |next| p.deadline.max(next))
+        })
     }
 
-    pub(super) fn presented(&mut self) {
+    pub(super) fn presented(&mut self, now: Instant, interval: Duration) {
         self.pending = None;
+        self.next_frame = now.checked_add(interval);
     }
 }
 
@@ -46,7 +51,7 @@ mod tests {
             assert_eq!(redraw.deadline(), Some(now + QUIET_PERIOD));
         }
         assert_eq!(redraw.deadline(), Some(start + Duration::from_millis(4)));
-        redraw.presented();
+        redraw.presented(start, Duration::ZERO);
         assert_eq!(redraw.deadline(), None);
         let later = start + Duration::from_secs(1);
         redraw.defer(later);
@@ -63,5 +68,22 @@ mod tests {
             assert!(redraw.deadline().unwrap() <= start + MAX_DELAY);
         }
         assert_eq!(redraw.deadline(), Some(start + MAX_DELAY));
+    }
+
+    #[test]
+    fn frame_pacing_preserves_pending_output_until_the_next_frame() {
+        let start = Instant::now();
+        let interval = Duration::from_millis(16);
+        let mut redraw = Redraw::default();
+        redraw.presented(start, interval);
+        assert_eq!(redraw.deadline(), None);
+        for millis in 1..16 {
+            redraw.defer(start + Duration::from_millis(millis));
+            assert_eq!(redraw.deadline(), Some(start + interval));
+        }
+        redraw.presented(start + interval, interval);
+        assert_eq!(redraw.deadline(), None);
+        redraw.defer(start + Duration::from_millis(40));
+        assert_eq!(redraw.deadline(), Some(start + Duration::from_millis(42)));
     }
 }

@@ -32,6 +32,11 @@ impl View {
         };
         self.pty.resize(pty_size(cols, rows, &renderer))?;
 
+        #[cfg(target_os = "macos")]
+        crate::macos_input::configure(
+            &self.window,
+            config.window.option_as_alt,
+        );
         self.renderer = renderer;
         self.display.clear_glyphs();
         self.terminal.resize(cols, rows);
@@ -140,7 +145,10 @@ mod tests {
                     assert!(text.starts_with("keep"));
                     let rows = view.terminal.rows.clone();
                     let cursor = view.terminal.cursor;
-                    view.redraw.presented();
+                    view.redraw.presented(
+                        std::time::Instant::now(),
+                        std::time::Duration::ZERO,
+                    );
                     view.draw().unwrap();
                     let size = view.window.inner_size();
                     view.renderer.draw(

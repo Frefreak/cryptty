@@ -1,5 +1,6 @@
 use std::num::NonZeroU32;
 use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Result;
 use cryptty::{
@@ -43,6 +44,21 @@ impl Display {
             backend: Some(backend),
             automatic: choice == RendererChoice::Auto,
         })
+    }
+
+    pub fn frame_interval(&self, window: &Window) -> Duration {
+        // Leave the event loop available while Metal recycles its drawables.
+        #[cfg(target_os = "macos")]
+        if matches!(self.backend, Some(Backend::Gpu(_))) {
+            let millihertz = window
+                .current_monitor()
+                .and_then(|monitor| monitor.refresh_rate_millihertz())
+                .filter(|rate| *rate > 0)
+                .unwrap_or(60_000);
+            return Duration::from_secs_f64(1000.0 / f64::from(millihertz));
+        }
+        let _ = window;
+        Duration::ZERO
     }
 
     pub fn clear_glyphs(&mut self) {

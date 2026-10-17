@@ -7,6 +7,32 @@ cargo build --release --locked
 ./target/release/cryptty
 ```
 
+On macOS, build or install an application searchable as **Cryptty**:
+
+```fish
+make macos-app       # Build target/macos/Cryptty.app
+make install-macos   # Install ~/Applications/Cryptty.app
+```
+
+These commands require Rust, uv, and the Xcode Command Line Tools.
+The app contains a native launcher and a placeholder terminal icon, with
+an ad-hoc signature for local use. It opens the inherited `$SHELL` as a
+login shell in your home directory. Repeat the install command to update.
+For a custom destination, use `./scripts/build-macos-app --destination PATH`;
+add `--install` to register that location with macOS.
+The app runs independently of this checkout and of uv.
+
+On Linux, install the binary, desktop entry, and placeholder icon:
+
+```fish
+make install-linux
+```
+
+The default prefix is `~/.local`; ensure `~/.local/bin` is on your desktop
+session's `PATH`. Override with `make install-linux PREFIX=/your/prefix`.
+The desktop entry lives in `assets/cryptty.desktop` for distribution packaging.
+Run `make help` for the available targets.
+
 For profile-guided optimization (PGO), train and build with one command:
 
 ```fish
@@ -69,6 +95,15 @@ See [supported sequences and checks](docs/terminal-compatibility.md).
 Output and resize redraws use a 2 ms quiet period, capped at 5 ms from the
 first pending update, to combine closely spaced changes. PTY processing
 and input delivery remain immediate; visible updates can share this delay.
+On macOS, pending GPU redraws also wait for the next refresh interval to
+keep the event loop available between frames.
+Left Option acts as Alt on macOS, including Alt+h/j/k/l for configured
+tmux/Vim navigation. Other Option keys use macOS character mapping;
+ordinary Alt-modified key events retain the terminal's Escape prefix.
+Set `window.option_as_alt` to `none`, `only_left` (default), `only_right`,
+or `both` to change this; Ctrl+Shift+R applies it to the current window.
+Linux ignores this setting.
+Beam cursors scale to 15% of one cell's width, with a one-pixel minimum.
 Drag to select and copy to the system clipboard. Paste with Ctrl-Shift-V,
 Shift-Insert, or middle-click on both platforms. During application mouse
 capture, use Shift-middle-click to paste from the system clipboard.
