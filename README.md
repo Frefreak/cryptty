@@ -103,10 +103,18 @@ font:
   size: 19
 ```
 
-Font size uses points. On startup, Cryptty appends default comments for
+Font size uses points. On startup and reload, Cryptty appends comments for
 missing fields. A matching comment under the same keys prevents a
 repeat notice. Existing values and comments stay intact. No block markers
 or version metadata are required.
+
+Press **Ctrl+Shift+R** to reload the configuration in the current window.
+Font settings, padding, colors, and keyboard bindings apply immediately;
+the shell and terminal contents stay in place. Reload reapplies the color
+palette and OSC color reset defaults. A failed reload retains the active
+settings, adds `config reload failed` to the window title, and reports the
+error to stderr. A successful retry clears that title message. Explicit
+text bindings retain precedence over built-in shortcuts.
 
 On macOS, fonts use CoreText through crossfont and follow the system's
 font-smoothing setting. On Linux, fonts use Swash; `font.hinting` applies
@@ -170,11 +178,11 @@ requires exactly the listed modifiers; an omitted list means none. Later
 bindings take priority. Empty text consumes the key without sending bytes.
 YAML double-quoted strings support escapes such as `\u001b`, `\r`, and `\n`.
 Bindings repeat while held and retain their initial match until release.
-Text composition takes priority. Restart Cryptty after changing bindings.
+Text composition takes priority. Press Ctrl+Shift+R after changing bindings.
 The example sends `ESC` plus Return and works through tmux with
 `extended-keys off`; the isolated PTY test verifies the emitted bytes.
-Bindings currently send text; action bindings and live reload remain
-outside this implementation.
+Bindings currently send text. Action bindings and automatic file watching
+remain outside this implementation.
 
 See [performance experiments and measurements](docs/performance.md).
 See [milestone status and remaining work](docs/roadmap.md).

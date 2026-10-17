@@ -28,6 +28,7 @@ mod keyboard_input;
 mod macos_input;
 mod notifications;
 mod redraw;
+mod reload;
 
 struct View {
     display: display::Display,
@@ -48,6 +49,7 @@ struct View {
     notifications: notifications::Notifications,
     displayed_title: String,
     backlog_full: bool,
+    config_reload_failed: bool,
 }
 
 struct App {
@@ -114,6 +116,7 @@ impl App {
             notifications: notifications::Notifications::default(),
             displayed_title: "Cryptty".into(),
             backlog_full: false,
+            config_reload_failed: false,
         });
         self.view.as_mut().unwrap().draw()?;
         self.view.as_ref().unwrap().window.set_visible(true);
@@ -137,11 +140,13 @@ impl View {
     }
 
     fn update_title(&mut self) {
-        let title = if self.backlog_full {
-            format!("{} — input backlog full", self.terminal.title)
-        } else {
-            self.terminal.title.clone()
-        };
+        let mut title = self.terminal.title.clone();
+        if self.backlog_full {
+            title.push_str(" — input backlog full");
+        }
+        if self.config_reload_failed {
+            title.push_str(" — config reload failed");
+        }
         if title != self.displayed_title {
             self.window.set_title(&title);
             self.displayed_title = title;

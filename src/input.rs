@@ -32,6 +32,7 @@ pub fn encode_key(
 pub enum Shortcut {
     Paste,
     NewWindow,
+    ReloadConfig,
 }
 
 pub fn shortcut(key: &Key, modifiers: ModifiersState) -> Option<Shortcut> {
@@ -50,6 +51,9 @@ pub fn shortcut(key: &Key, modifiers: ModifiersState) -> Option<Shortcut> {
         }
         if text.eq_ignore_ascii_case("n") {
             return Some(Shortcut::NewWindow);
+        }
+        if text.eq_ignore_ascii_case("r") {
+            return Some(Shortcut::ReloadConfig);
         }
     }
     None

@@ -341,3 +341,49 @@ fn batched_erasure_matches_cellwise_erasure_and_later_writes() {
         }
     }
 }
+
+#[test]
+fn theme_reload_preserves_content_and_updates_color_reset_defaults() {
+    let mut terminal = Terminal::new(8, 2);
+    terminal.feed(b"one\r\ntwo\r\nthree\x1b[?1049hALT");
+    terminal.feed(b"\x1b]4;42;#abcdef\x07");
+    let rows = terminal.rows.clone();
+    let history = terminal.history.clone();
+    let inactive = terminal.inactive.rows.clone();
+    let cursor = terminal.cursor;
+    let revision = terminal.color_revision;
+    let mut theme = Theme {
+        foreground: 0x112233,
+        background: 0x223344,
+        cursor: 0x334455,
+        ..Theme::default()
+    };
+    theme.palette[1] = 0x445566;
+    terminal.set_theme(theme);
+    assert_eq!(terminal.rows, rows);
+    assert_eq!(terminal.history, history);
+    assert_eq!(terminal.inactive.rows, inactive);
+    assert_eq!(terminal.cursor, cursor);
+    assert!(terminal.alternate);
+    assert_ne!(terminal.color_revision, revision);
+    assert_eq!(terminal.color(Color::Foreground), 0x112233);
+    assert_eq!(terminal.color(Color::Background), 0x223344);
+    assert_eq!(terminal.theme().cursor, 0x334455);
+    assert_eq!(terminal.color(Color::Indexed(1)), 0x445566);
+    assert_eq!(terminal.color(Color::Indexed(42)), indexed_color(42));
+
+    terminal.feed(
+        concat!(
+            "\x1b]10;#ffffff\x07\x1b]11;#ffffff\x07",
+            "\x1b]12;#ffffff\x07\x1b]4;1;#ffffff\x07",
+            "\x1b]110\x07\x1b]111\x07\x1b]112\x07\x1b]104;1\x07",
+        )
+        .as_bytes(),
+    );
+    assert_eq!(terminal.color(Color::Foreground), 0x112233);
+    assert_eq!(terminal.color(Color::Background), 0x223344);
+    assert_eq!(terminal.theme().cursor, 0x334455);
+    assert_eq!(terminal.color(Color::Indexed(1)), 0x445566);
+    terminal.feed(b"\x1bc");
+    assert_eq!(terminal.color(Color::Background), 0x223344);
+}

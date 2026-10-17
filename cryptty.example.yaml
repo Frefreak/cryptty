@@ -1,4 +1,4 @@
-# User configuration. Restart Cryptty after editing.
+# User configuration. Press Ctrl+Shift+R after editing.
 font:
   hinting: false
   # Optional font selection for separate Unicode ranges:

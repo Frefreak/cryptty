@@ -552,6 +552,19 @@ impl Terminal {
         &self.theme
     }
 
+    pub fn set_theme(&mut self, theme: Theme) {
+        self.theme = theme;
+        self.initial_theme = theme;
+        self.palette = std::array::from_fn(|i| {
+            if i < 16 {
+                theme.palette[i]
+            } else {
+                indexed_color(i as u8)
+            }
+        });
+        self.color_revision = self.color_revision.wrapping_add(1);
+    }
+
     pub fn cols(&self) -> usize {
         self.tabs.len()
     }

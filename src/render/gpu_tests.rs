@@ -72,6 +72,13 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
             (256, 90, "", 6),
             (1, 1, "中", 6),
         ] {
+            if shape == 4 {
+                let mut theme = *terminal.theme();
+                theme.foreground = 0xbbaa99;
+                theme.background = 0x123456;
+                theme.palette[1] = 0x55aa77;
+                terminal.set_theme(theme);
+            }
             terminal.feed(format!("\x1b[{shape} q").as_bytes());
             terminal.text_blink_phase = shape % 4;
             terminal.selection = Some(TextRange::between(

@@ -13,6 +13,21 @@ fn clipboard_and_new_window_shortcuts_are_platform_independent() {
         shortcut(&Key::Character("n".into()), modifiers),
         Some(Shortcut::NewWindow)
     );
+    for key in ["r", "R"] {
+        assert_eq!(
+            shortcut(&Key::Character(key.into()), modifiers),
+            Some(Shortcut::ReloadConfig)
+        );
+        assert_eq!(shortcut(&Key::Character(key.into()), M::CONTROL), None);
+        assert_eq!(
+            shortcut(&Key::Character(key.into()), modifiers | M::ALT),
+            None
+        );
+        assert_eq!(
+            shortcut(&Key::Character(key.into()), modifiers | M::SUPER),
+            None
+        );
+    }
     assert_eq!(shortcut(&Key::Character("c".into()), modifiers), None);
     assert_eq!(shortcut(&Key::Character("n".into()), M::CONTROL), None);
     assert_eq!(

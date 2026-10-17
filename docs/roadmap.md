@@ -12,6 +12,7 @@ desktop acceptance have separate status below.
 | Font mapping and normalization | Implemented, tested | Visual checks, timing |
 | Kitty and Xterm mode 2 | Implemented, PTY tested | Desktop input lifecycle |
 | Configurable text bindings | Implemented, tmux tested | Codex physical input |
+| Manual configuration reload | Ctrl+Shift+R implemented | Desktop validation |
 | Generated boxes and blocks | Implemented, pixel tested | Desktop comparison |
 | Cursor height | Extra top pixel removed | Desktop appearance check |
 | Output/resize coalescing | User confirmed improvement | Display latency measurement |
@@ -111,7 +112,8 @@ through legacy tmux input with `extended-keys off`; the isolated test
 checks exact bytes, ordinary Enter, and Ctrl+B detach. Bindings support
 exact modifier matching, later-entry precedence, and captured repeats
 until release. Active text composition suppresses bound output.
-Configuration changes require a restart. See the README for syntax and
+Ctrl+Shift+R reloads configuration in the current window. See the README
+for syntax and
 [terminal compatibility](terminal-compatibility.md) for
 current keyboard boundaries and the [Kitty protocol][k] for the wire format.
 
@@ -125,7 +127,7 @@ IME composition, focus changes with modifiers held, and suspend/resume.
 Linux lock bits currently track local Caps Lock and Num Lock presses;
 initial state and changes while unfocused require implementation work.
 Xterm modes 1 and 3 remain unsupported. Text bindings currently send bytes;
-action bindings and live configuration reload fall outside their scope.
+action bindings and automatic file watching fall outside their scope.
 
 ## Validate font mappings on macOS
 

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use anyhow::Result;
 use winit::event::{ElementState, KeyEvent};
@@ -10,9 +10,14 @@ use cryptty::input::{self, kitty::KeyInput};
 
 use crate::View;
 
+enum Consumed {
+    Paste,
+    OneShot,
+}
+
 #[derive(Default)]
 pub(super) struct State {
-    consumed: HashSet<PhysicalKey>,
+    consumed: HashMap<PhysicalKey, Consumed>,
     bound_keys: HashMap<PhysicalKey, Vec<u8>>,
     held_modifiers: HashMap<PhysicalKey, ModifiersState>,
     locks: u8,
@@ -23,6 +28,24 @@ impl State {
         self.consumed.clear();
         self.bound_keys.clear();
         self.held_modifiers.clear();
+    }
+
+    fn consume_shortcut_event(
+        &mut self,
+        physical: PhysicalKey,
+        state: ElementState,
+        repeat: bool,
+    ) -> bool {
+        match state {
+            ElementState::Released => self.consumed.remove(&physical).is_some(),
+            ElementState::Pressed => {
+                repeat
+                    && matches!(
+                        self.consumed.get(&physical),
+                        Some(Consumed::OneShot)
+                    )
+            }
+        }
     }
 
     fn binding_input(
@@ -111,8 +134,11 @@ impl View {
             state: event.state,
             repeat: event.repeat,
         };
-        if !pressed && self.keyboard_input.consumed.remove(&event.physical_key)
-        {
+        if self.keyboard_input.consume_shortcut_event(
+            event.physical_key,
+            event.state,
+            event.repeat,
+        ) {
             return Ok(());
         }
         if pressed {
@@ -133,13 +159,23 @@ impl View {
             if let Some(shortcut) =
                 input::shortcut(&event.logical_key, self.modifiers)
             {
-                self.keyboard_input.consumed.insert(event.physical_key);
+                let consumed = match shortcut {
+                    input::Shortcut::Paste => Consumed::Paste,
+                    _ => Consumed::OneShot,
+                };
+                self.keyboard_input
+                    .consumed
+                    .insert(event.physical_key, consumed);
                 match shortcut {
                     input::Shortcut::Paste => self.paste(),
                     input::Shortcut::NewWindow if !event.repeat => {
                         self.new_window()
                     }
                     input::Shortcut::NewWindow => (),
+                    input::Shortcut::ReloadConfig if !event.repeat => {
+                        self.reload_config();
+                    }
+                    input::Shortcut::ReloadConfig => (),
                 }
                 self.window.request_redraw();
                 return Ok(());
@@ -149,7 +185,9 @@ impl View {
                 && !self.modifiers.control_key()
                 && !self.modifiers.super_key()
             {
-                self.keyboard_input.consumed.insert(event.physical_key);
+                self.keyboard_input
+                    .consumed
+                    .insert(event.physical_key, Consumed::OneShot);
                 if !event.repeat {
                     let fullscreen = if self.window.fullscreen().is_some() {
                         None
@@ -187,6 +225,51 @@ mod tests {
     use super::*;
     use cryptty::config::Config;
     use winit::keyboard::{KeyCode, KeyLocation};
+
+    #[test]
+    fn shortcut_repeats_stay_consumed_until_release() {
+        let key = PhysicalKey::Code(KeyCode::KeyR);
+        let mut state = State::default();
+        assert!(!state.consume_shortcut_event(
+            key,
+            ElementState::Pressed,
+            false
+        ));
+        state.consumed.insert(key, Consumed::OneShot);
+        assert!(state.consume_shortcut_event(key, ElementState::Pressed, true));
+        assert!(state.consume_shortcut_event(
+            key,
+            ElementState::Released,
+            false
+        ));
+        assert!(!state.consume_shortcut_event(
+            key,
+            ElementState::Pressed,
+            false
+        ));
+        assert!(!state.consume_shortcut_event(
+            key,
+            ElementState::Released,
+            false
+        ));
+    }
+
+    #[test]
+    fn paste_shortcuts_keep_their_repeat_behavior() {
+        let key = PhysicalKey::Code(KeyCode::KeyV);
+        let mut state = State::default();
+        state.consumed.insert(key, Consumed::Paste);
+        assert!(!state.consume_shortcut_event(
+            key,
+            ElementState::Pressed,
+            true
+        ));
+        assert!(state.consume_shortcut_event(
+            key,
+            ElementState::Released,
+            false
+        ));
+    }
 
     #[test]
     fn binding_choice_survives_modifier_changes_until_release() {
