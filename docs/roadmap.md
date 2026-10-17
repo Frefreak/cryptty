@@ -1,193 +1,100 @@
 # Terminal milestones and remaining work
 
-Status as of October 16, 2026. Implementation, automated validation, and
-desktop acceptance have separate status below.
+Status as of October 17, 2026. Completed implementation and remaining
+runtime acceptance are tracked separately. Historical measurements and
+validation counts remain in [performance.md](performance.md).
 
-## Milestone status
+## Completed milestones
 
-| Area | Status | Remaining work |
-| --- | --- | --- |
-| Terminal core and interaction | Implemented, tested | Desktop acceptance |
-| GPU and optimization stages 1–17 | Implemented, measured | macOS regressions |
-| Font mapping and normalization | Implemented, tested | Visual checks, timing |
-| Kitty and Xterm mode 2 | Implemented, PTY tested | Desktop input lifecycle |
-| Configurable text bindings | Implemented, tmux tested | Codex physical input |
-| Manual configuration reload | Ctrl+Shift+R implemented | Desktop validation |
-| Generated boxes and blocks | Implemented, pixel tested | Desktop comparison |
-| Cursor height | Extra top pixel removed | Desktop appearance check |
-| Output/resize coalescing | User confirmed improvement | Display latency measurement |
+- Terminal core, selection, paste, scrolling, and Ctrl-click links.
+- GPU rendering and optimization stages 1–17, with recorded throughput,
+  memory, and latency comparisons.
+- Native macOS font rendering, font mappings, shared family sizing, and
+  generated box drawing/block glyphs for U+2500–U+259F.
+- Cursor geometry: adjusted cell height and a beam width of 15% of a cell.
+- Kitty and Xterm mode-2 keyboard negotiation, configurable text bindings,
+  and manual configuration reload with Ctrl+Shift+R.
+- Output/resize coalescing: 2 ms quiet period with a 5 ms maximum wait.
+  The user confirmed improved stability.
+- macOS GPU frame pacing at the reported monitor refresh interval.
+  Software rendering and Linux retain the existing coalescing deadlines.
+- macOS Option-as-Alt handling and native application packaging. The user
+  confirmed working Control shortcuts and Spotlight discovery.
+- Build/install targets for the macOS app and Linux desktop integration,
+  currently using a placeholder icon.
 
-The latest local checkpoint passed 161 regular tests, Linux compilation of
-all targets, formatting, and a release build. The isolated tmux keyboard
-test also passed, including the configured Shift+Enter binding with
-`extended-keys off`. These checks exercise configuration and PTY bytes;
-physical key delivery and the native desktop remain separate checks.
+The latest recorded packaging checkpoint passed 166 regular tests, with
+six ignored tests, Linux compilation, formatting, and the release build.
+These checks cover their recorded source snapshot. Desktop observations
+apply to the exercised cases and platforms.
 
-## Completed performance work
+## Desktop acceptance
 
-Completed optimization work appears in [performance.md](performance.md):
-stages 1–17, compact cell storage, contiguous erasure, GPU presentation,
-portable and PGO comparisons, throughput, memory, latency, and validation.
-The document also covers the resumable PGO build and Cargo installation.
-[Raw follow-up measurements](benchmarks/2026-10-16-follow-up.json) retain
-trial data, build hashes, and measurement metadata. Those measurements
-belong to their recorded source snapshots; font changes followed later.
-
-## Generated box drawing and block glyphs
-
-Status: implemented for U+2500–U+259F, with shared CPU/GPU glyph masks.
-
-Generated geometry takes priority over `font.codepoint_map` for these
-ranges. Other characters retain normal font selection. The renderer covers
-light, heavy, mixed, double, dashed, rounded, and diagonal lines; fractional
-blocks and quadrants; and full-cell shades at alpha 64, 128, and 192.
-Bold and italic retain the generated geometry. Cell dimensions determine
-line thickness and fractional coverage, including odd pixel dimensions.
-
-Checks cover all 160 characters over small, odd, and even cell sizes,
-block area and complementary fills, uniform shades, connected edges,
-double-line channels, and mapping/style precedence. The expanded Metal
-comparison passes against software rendering across font sizes, clipping,
-colors, decorations, cursors, and fractional sizing.
-
-Desktop comparison against the same status bars and borders in Alacritty
-and Ghostty remains useful. The earlier Liberation Mono measurements in
-performance work describe font-rendered blocks before this change.
-
-## Cursor height and cell metrics
-
-Status: removed the extra top pixel; native font measurements and rendering
-checks pass. Final desktop appearance remains to be checked.
-
-Block and beam cursors continue to cover the cell. The rasterizers added
-two pixels to cell height and one pixel to the baseline. The extra top
-pixel has been removed from cell height and baseline together. One bottom
-pixel remains to preserve rasterized descenders beyond rounded font metrics;
-Menlo at size 19 requires this space.
-
-Native macOS measurements for Fantasque at 19 pt:
-
-| Display scale | Font line height | Previous cell height | Current height |
-| --- | ---: | ---: | ---: |
-| 1 | 20 px | 22 px | 21 px |
-| 1.25 | 25 px | 27 px | 26 px |
-| 2 | 40 px | 42 px | 41 px |
-
-The 17 pt probe also recorded a one-pixel reduction at each scale.
-Descender and underscore tests cover 16, 19, 20, 23.75, 32, and 38 raster
-sizes with the default and fallback fonts. Wide block cursors, preedit, and GPU/software comparisons pass.
-This establishes the padding contribution; the user's final visual
-assessment remains a desktop check. Linux runtime validation remains open.
-
-## Negotiate keyboard reporting and distinguish Shift Enter
-
-Status: Kitty and Xterm mode-2 negotiation implemented. Codex PTY acceptance
-passed directly and through tmux with extended keys and CSI-u formatting.
-Configurable text bindings support exact modifiers and raw escape sequences.
-
-The implementation follows Ghostty's Kitty reporting behavior: active flags
-can be queried, pushed, popped, or updated, with separate bounded stacks
-for the main and alternate screens. Flags 1, 2, 4, 8, and 16 cover key
-disambiguation, events, alternate keys, all keys, and associated text.
-Legacy encoding remains active when flags are zero.
-
-The installed Codex 0.163.0 requested flags 5. A PTY probe using Cryptty's
-parser and encoder produced `CSI 13;2u` for Shift Enter; two unsent draft
-markers appeared on separate lines. Exit restored flags to zero. Encoder
-checks cover ordinary Enter, nested modes, screen switches, resets,
-repeat/release events, composed text, and keypad keys. Existing fish,
-Neovim, and tmux shell integration checks passed.
-
-The tmux 3.6a test enables Xterm mode 2 on the outer terminal. Exact-byte
-tests cover both tmux output formats, ordinary Enter, Ctrl+B detach, and
-mode restoration. For negotiated Shift Enter without a text binding, the tested Codex uses
-`extended-keys on` and
-`extended-keys-format csi-u`; attach from Cryptty with `tmux -T extkeys attach`.
-The verified CSI-u probe retained two adjacent lines in one unsent draft.
-Physical desktop input and suspend/resume remain acceptance work.
-
-Keyboard bindings send configured text before built-in shortcuts and
-protocol encoding. A Shift+Enter binding sending `ESC` plus Return works
-through legacy tmux input with `extended-keys off`; the isolated test
-checks exact bytes, ordinary Enter, and Ctrl+B detach. Bindings support
-exact modifier matching, later-entry precedence, and captured repeats
-until release. Active text composition suppresses bound output.
-Ctrl+Shift+R reloads configuration in the current window. See the README
-for syntax and
-[terminal compatibility](terminal-compatibility.md) for
-current keyboard boundaries and the [Kitty protocol][k] for the wire format.
-
-## Complete desktop keyboard acceptance
-
-Status: PTY and unit coverage complete for the recorded cases; native
-input lifecycle needs acceptance on macOS and Linux.
-
-Exercise Shift+Enter in Codex directly and through tmux, held-key repeats,
+Continue native keyboard checks on macOS and Linux: held-key repeats,
 IME composition, focus changes with modifiers held, and suspend/resume.
-Linux lock bits currently track local Caps Lock and Num Lock presses;
-initial state and changes while unfocused require implementation work.
-Xterm modes 1 and 3 remain unsupported. Text bindings currently send bytes;
-action bindings and automatic file watching fall outside their scope.
+Kitty and Xterm mode-2 PTY tests cover direct and tmux paths; physical input
+acceptance remains case-specific. See [terminal compatibility][compat].
 
-## Validate font mappings on macOS
+Linux lock bits track local Caps Lock and Num Lock presses. Initial state
+and changes while unfocused remain implementation work. Xterm modes 1 and
+3 remain unsupported.
 
-Status: automated macOS font checks pass; desktop visual acceptance pending.
+Compare font mappings, bold/italic faces, fallback glyphs, combining text,
+emoji, generated boxes, and cursor geometry at multiple display scales.
+Linux runtime appearance and GPU/software comparisons need desktop checks.
+Manual configuration reload also needs broader desktop acceptance.
 
-The current suite covers requested family and weight, native glyph
-placement, missing families, CJK and color emoji, hidden CoreText fallback
-faces, and shared family sizing across styles. Swash family-size checks
-also run on macOS; Linux all-target compilation passes.
+## Performance follow-up
 
-Compare primary and mapped families, bold/italic faces, missing glyphs,
-symbols, blocks, combining text, and emoji on both desktops. Inspect
-baselines, clipping, fallback order, and GPU/software appearance at
-multiple display scales. Glyphs retain native placement after family
-normalization; the earlier per-glyph bitmap fitting has been removed.
+Use the [current performance record][performance] and its linked raw data
+for completed measurements, including the October 17 Alacritty comparison
+and macOS GPU pacing trials. Older regressions belong to archived source
+snapshots; reproduce them on current code before attributing a cause.
 
-## Output and resize redraw coalescing
+Remaining measurements:
 
-Status: implemented; user confirmed improved stability on October 16.
+- Physical key-to-photon latency and resize behavior.
+- Direct versus tmux behavior under matched workloads, separating terminal
+  rendering from tmux processing and application output.
+- Font-mapping startup, new-glyph, cache-churn, and memory costs. Keep font
+  size, display scale, renderer, compiler, and PGO profile constant.
 
-Output and resize events use a 2 ms quiet period capped at 5 ms from the
-first pending update. Input delivery and PTY processing remain immediate;
-visual echo may share the presentation delay. Synchronized updates retain
-precedence. Timing tests cover split writes and continuous-output bounds.
+Retrain PGO when the relevant source or compiler snapshot changes.
 
-The user tested the rebuilt application and reported greater stability.
-The affected application and precise reproduction remain unspecified, so
-the report supports the improvement without establishing a unique cause.
-Native throughput and PTY reply measurements appear in the performance
-follow-up. Physical display latency and a separate resize comparison remain
-open.
+## Application icon
 
-## Investigate macOS performance regressions
+Three concepts have been generated for selection: a crypt portal with a
+cursor, a cryptid mascot, and a C monogram with a cursor. Final selection,
+small-size refinement, and packaging remain pending.
 
-Status: measured on archived source snapshots; cause remains open.
+## Color appearance across platforms
 
-The macOS GPU comparison recorded slower bulk plain text, truecolor, and
-cursor edits. The software control also recorded slower truecolor. Idle
-cursor-reply p99 remained near one display interval. Periodic queries
-changed observed throughput and require investigation. See the
-[macOS measurements](performance.md#macos-follow-up-2026-10-16) for exact
-versions, controls, and scope.
+Status: macOS visual difference reported on October 17; investigation
+deferred, with no rendering change made for this report.
 
-Reproduce on the current source before attributing these results to the
-subsequent font or keyboard changes. Separate parser, glyph/cache, and
-presentation costs. Physical key-to-photon latency needs independent
-measurement. Retrain PGO for any new source/compiler snapshot.
+The user supplied matching Codex status-line crops: Cryptty in the first
+image, Alacritty in the second. Cryptty's cyan, pink, and yellow appeared
+more saturated. The crops also showed different text sizes. The local
+primary, normal, and bright palette RGB values matched between both apps.
 
-## Measure font mapping overhead
+Color-space handling remains a candidate explanation. Alacritty's upstream
+macOS window code explicitly selects sRGB. The inspected wgpu-hal 30.0.1
+Metal path sets the layer color space to nil for its sRGB surface choice;
+Apple documents nil as disabling color matching. A controlled comparison
+with explicit sRGB tagging is needed to establish causality.
 
-Status: estimate from cache structure; measured comparison pending.
+The user reports similar appearance between both terminals on Linux.
+Whether Linux can reproduce the preferred macOS vividness remains open;
+no Linux display measurements or color-profile comparison were performed.
+Future checks should use identical content, font size, display, and known
+color profiles, including solid color patches to separate color handling
+from text rasterization. Confirm the desired appearance before changing
+color policy on either platform.
 
-Range selection and fitting happen when a character/style enters the glyph
-cache. Cached redraws reuse glyph bitmaps. Measure startup, new-glyph-heavy
-screens, cached redraws, cache churn, and memory with mappings enabled and
-disabled. Hold source, compiler, font size, scale, renderer, and PGO profile
-constant. Record the resulting glyph/font differences alongside timings.
-The existing throughput tables cover the earlier optimization snapshots.
+References: [Alacritty window code][color-window] and
+[Apple CAMetalLayer color-space documentation][metal-color].
 
-[u]: https://www.unicode.org/versions/Unicode17.0.0/core-spec/chapter-22/
-[a]: https://github.com/alacritty/alacritty/blob/master/alacritty/src/renderer/text/builtin_font.rs
-[g]: https://github.com/ghostty-org/ghostty/blob/main/src/font/sprite/draw/block.zig
-[k]: https://sw.kovidgoyal.net/kitty/keyboard-protocol/
+[compat]: terminal-compatibility.md
+[performance]: performance.md
+[color-window]: https://github.com/alacritty/alacritty/blob/master/alacritty/src/display/window.rs
+[metal-color]: https://developer.apple.com/documentation/quartzcore/cametallayer/colorspace
