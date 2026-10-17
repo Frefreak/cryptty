@@ -464,7 +464,10 @@ fn old_empty_mapping_comments_do_not_repeat_new_defaults() {
         std::fs::write(&path, text).unwrap();
         Config::read(&path).unwrap();
         let updated = std::fs::read_to_string(&path).unwrap();
-        assert_eq!(updated.matches("LXGW WenKai Mono Screen").count(), 1);
+        assert_eq!(
+            updated.matches("family: LXGW WenKai Mono Screen").count(),
+            1
+        );
         Config::read(&path).unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), updated);
     }

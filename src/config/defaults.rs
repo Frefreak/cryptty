@@ -377,6 +377,7 @@ mod tests {
         );
         assert_eq!(documented.font.hinting, runtime.font.hinting);
         assert_eq!(documented.font.family, runtime.font.family);
+        assert_eq!(documented.font.fallback, runtime.font.fallback);
         assert_eq!(documented.font.codepoint_map, runtime.font.codepoint_map);
         assert_eq!(
             documented.window.padding.physical(1.0),

@@ -4,6 +4,9 @@ font:
   size: 19
   # Swash hinting on Linux; macOS uses native font rendering.
   hinting: false
+  # Ordered fallback families for characters missing from the primary font.
+  fallback:
+    - LXGW WenKai Mono Screen
   # Per-font lists of Unicode ranges; later mappings take priority.
   codepoint_map:
     - family: LXGW WenKai Mono Screen

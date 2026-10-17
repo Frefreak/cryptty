@@ -150,8 +150,23 @@ impl Face {
         glyph(&font, ch).map(|_| font)
     }
 
+    pub fn rasterize_scaled(
+        &self,
+        ch: char,
+        scale: f32,
+    ) -> Option<swash::scale::image::Image> {
+        let font = self
+            .font
+            .clone_with_font_size(self.font.pt_size() * f64::from(scale));
+        super::native_fallback::rasterize(&font, glyph(&font, ch)?, true)
+    }
+
     pub fn rasterize(&self, ch: char) -> Option<swash::scale::image::Image> {
-        super::native_fallback::rasterize(&self.font, glyph(&self.font, ch)?)
+        super::native_fallback::rasterize(
+            &self.font,
+            glyph(&self.font, ch)?,
+            false,
+        )
     }
 }
 

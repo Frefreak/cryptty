@@ -23,6 +23,7 @@ impl View {
             config.font.hinting,
             &config.font.family,
             &config.font.codepoint_map,
+            &config.font.fallback,
         )?;
         let size = self.window.inner_size();
         let (cols, rows) = if size.width == 0 || size.height == 0 {

@@ -86,6 +86,7 @@ impl App {
             self.config.font.hinting,
             &self.config.font.family,
             &self.config.font.codepoint_map,
+            &self.config.font.fallback,
         )?;
         let size = window.inner_size();
         let (cols, rows) = renderer.grid_size(size.width, size.height);
@@ -235,6 +236,7 @@ impl View {
                     self.font.hinting,
                     &self.font.family,
                     &self.font.codepoint_map,
+                    &self.font.fallback,
                 )?;
                 self.display.clear_glyphs();
                 self.resize()?;

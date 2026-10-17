@@ -9,7 +9,11 @@ use core_text::font_descriptor::{
 use swash::scale::image::{Content, Image};
 use swash::zeno::Placement;
 
-pub(super) fn rasterize(font: &CTFont, glyph: u16) -> Option<Image> {
+pub(super) fn rasterize(
+    font: &CTFont,
+    glyph: u16,
+    smooth: bool,
+) -> Option<Image> {
     let bounds =
         font.get_bounding_rects_for_glyphs(kCTFontDefaultOrientation, &[glyph]);
     let left = bounds.origin.x.floor();
@@ -35,7 +39,7 @@ pub(super) fn rasterize(font: &CTFont, glyph: u16) -> Option<Image> {
         &CGPoint::new(0.0, 0.0),
         &CGSize::new(width, height),
     ));
-    context.set_should_smooth_fonts(false);
+    context.set_should_smooth_fonts(smooth && !colored);
     context.set_should_antialias(true);
     context.set_rgb_fill_color(1.0, 1.0, 1.0, 1.0);
     font.draw_glyphs(

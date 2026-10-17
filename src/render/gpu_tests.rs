@@ -28,7 +28,7 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
             "\x1b[4;44mUnder\x1b[7mInverse\x1b[0m\r\n",
             "\x1b[8mHidden\x1b[0m ABC_gjpq\r\n",
             "\x1b[5mSlow\x1b[6mRapid\x1b[0m\r\n",
-            "⏎▲▼ ██░▒▓ \u{0526}\u{08ab}\u{0afe}\u{324e}\r\n",
+            "①❶➀\u{e0b0}⏎▲▼ ██░▒▓ \u{0526}\u{08ab}\u{0afe}\u{324e}\r\n",
         )
         .as_bytes(),
     );
@@ -80,6 +80,7 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
             } else {
                 &defaults.codepoint_map
             },
+            &defaults.fallback,
         )
         .unwrap();
         painter.clear_glyphs();

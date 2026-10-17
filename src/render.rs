@@ -31,6 +31,7 @@ mod scene;
 #[cfg(all(test, target_os = "macos"))]
 #[path = "render/swash.rs"]
 mod swash_tests;
+mod symbol_fit;
 
 const CACHE_LIMIT: usize = 4096;
 
@@ -60,6 +61,7 @@ impl Renderer {
             false,
             &crate::config::Font::default().family,
             &[],
+            &[],
         )
     }
 
@@ -69,9 +71,10 @@ impl Renderer {
         hinting: bool,
         family: &str,
         mappings: &[crate::config::FontMapping],
+        fallbacks: &[String],
     ) -> Result<Self> {
         let rasterizer =
-            font::Rasterizer::new(size, hinting, family, mappings)?;
+            font::Rasterizer::new(size, hinting, family, mappings, fallbacks)?;
         Ok(Self {
             cell_width: rasterizer.cell_width,
             cell_height: rasterizer.cell_height,
@@ -401,6 +404,7 @@ mod tests {
             false,
             &config.font.family,
             &config.font.codepoint_map,
+            &config.font.fallback,
         )
         .unwrap();
         for ch in ['█', '░', '╬', '╭', '▚'] {
@@ -498,9 +502,15 @@ mod tests {
         };
         for family in [defaults.family.as_str(), fallback] {
             for size in [16.0, 19.0, 20.0, 23.75, 32.0, 38.0] {
-                let mut renderer =
-                    Renderer::with_options(size, (0, 0), false, family, &[])
-                        .unwrap();
+                let mut renderer = Renderer::with_options(
+                    size,
+                    (0, 0),
+                    false,
+                    family,
+                    &[],
+                    &[],
+                )
+                .unwrap();
                 let mut terminal = Terminal::new(6, 2);
                 terminal.cursor_visible = false;
                 terminal.feed(b"_gjpqy");
@@ -576,6 +586,7 @@ colors:
             (3, 5),
             false,
             &crate::config::Font::default().family,
+            &[],
             &[],
         )
         .unwrap();

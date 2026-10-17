@@ -11,6 +11,7 @@ pub struct Rasterizer {
     inner: crossfont::Rasterizer,
     families: Vec<Family>,
     mappings: Vec<(FontMapping, usize)>,
+    fallbacks: Vec<usize>,
     size: Size,
     pub cell_width: usize,
     pub cell_height: usize,
@@ -23,6 +24,7 @@ impl Rasterizer {
         _hinting: bool,
         family: &str,
         mappings: &[FontMapping],
+        fallbacks: &[String],
     ) -> Result<Self> {
         // CoreText takes the scaled macOS point size directly.
         let size = Size::new(size);
@@ -64,10 +66,31 @@ impl Rasterizer {
                 (mapping.clone(), index)
             })
             .collect();
+        let fallbacks = fallbacks
+            .iter()
+            .filter_map(|name| {
+                if let Some(index) =
+                    families.iter().position(|family| family.name == *name)
+                {
+                    return Some(index);
+                }
+                match Family::load(&mut inner, name, size, Some(cell_width)) {
+                    Ok(family) => {
+                        families.push(family);
+                        Some(families.len() - 1)
+                    }
+                    Err(error) => {
+                        eprintln!("Warning: {error}; skipping fallback font");
+                        None
+                    }
+                }
+            })
+            .collect();
         Ok(Self {
             inner,
             families,
             mappings,
+            fallbacks,
             size,
             cell_width,
             // Keep bottom coverage for descenders beyond rounded metrics.
@@ -80,6 +103,22 @@ impl Rasterizer {
     }
 
     pub fn rasterize(&mut self, ch: char, style: FontStyle) -> Option<Image> {
+        let image = self.rasterize_raw(ch, style)?;
+        let family = self.family_for(ch, style);
+        super::symbol_fit::fit(
+            ch,
+            image,
+            self.cell_width,
+            self.cell_height,
+            self.baseline,
+            |scale| {
+                self.families[family].faces[style.index()]
+                    .rasterize_scaled(ch, scale)
+            },
+        )
+    }
+
+    fn rasterize_raw(&mut self, ch: char, style: FontStyle) -> Option<Image> {
         let family = self.family_for(ch, style);
         let family = &self.families[family];
         let face = &family.faces[style.index()];
@@ -144,6 +183,11 @@ impl Rasterizer {
         if self.families[0].faces[style.index()].supports(ch) {
             return 0;
         }
+        if let Some(&index) = self.fallbacks.iter().find(|&&index| {
+            self.families[index].faces[style.index()].supports(ch)
+        }) {
+            return index;
+        }
         index = 0;
         let Some(font) =
             self.families[index].faces[style.index()].fallback_font(ch)
@@ -173,11 +217,58 @@ impl Rasterizer {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn fallback_order_primary_and_explicit_mapping() {
+        for names in [
+            ["PingFang SC", "Hiragino Sans GB"],
+            ["Hiragino Sans GB", "PingFang SC"],
+        ] {
+            let config = crate::config::Config::parse(&format!(
+                "font:\n  fallback: [{:?}, {:?}]\n  codepoint_map:\n    - family: {:?}\n      ranges: ['U+6587']\n",
+                names[0], names[1], names[1],
+            )).unwrap();
+            let mut r = Rasterizer::new(
+                38.0,
+                false,
+                "Menlo",
+                &config.font.codepoint_map,
+                &config.font.fallback,
+            )
+            .unwrap();
+            for style in [
+                FontStyle::default(),
+                FontStyle {
+                    bold: true,
+                    italic: true,
+                },
+            ] {
+                for (ch, expected) in
+                    [('中', names[0]), ('文', names[1]), ('M', "Menlo")]
+                {
+                    let index = r.family_for(ch, style);
+                    assert_eq!(r.families[index].name.clone(), expected);
+                }
+                let image = r.rasterize('①', style).unwrap();
+                let p = image.placement;
+                assert!(p.left >= 0);
+                assert!(p.left + p.width as i32 <= r.cell_width as i32);
+                assert!(p.top <= r.baseline);
+                assert!(
+                    r.baseline - p.top + p.height as i32
+                        <= r.cell_height as i32
+                );
+            }
+        }
+    }
+
     use crossfont::{FontDesc, Slant, Style, Weight};
 
     #[test]
     fn hidden_fallback_faces_remain_available() {
-        let mut native = Rasterizer::new(38.0, false, "Menlo", &[]).unwrap();
+        let mut native =
+            Rasterizer::new(38.0, false, "Menlo", &[], &[]).unwrap();
         for ch in ['\u{0526}', '\u{08ab}', '\u{0afe}', '\u{324e}'] {
             let index = native.family_for(ch, FontStyle::default());
             assert_ne!(index, 0, "Missing fallback for {ch}");
@@ -195,6 +286,7 @@ mod tests {
             false,
             "Cryptty deliberately nonexistent font family",
             &[],
+            &[],
         )
         .unwrap();
         let image = native.rasterize('M', FontStyle::default()).unwrap();
@@ -203,7 +295,8 @@ mod tests {
 
     #[test]
     fn requested_family_and_weight_match_coretext() {
-        let mut native = Rasterizer::new(38.0, false, "Menlo", &[]).unwrap();
+        let mut native =
+            Rasterizer::new(38.0, false, "Menlo", &[], &[]).unwrap();
         let mut reference = crossfont::Rasterizer::new().unwrap();
         let size = Size::new(38.0);
         let metrics = native
@@ -261,7 +354,8 @@ mod tests {
 
     #[test]
     fn native_fallback_renders_cjk_and_color_emoji() {
-        let mut native = Rasterizer::new(38.0, false, "Menlo", &[]).unwrap();
+        let mut native =
+            Rasterizer::new(38.0, false, "Menlo", &[], &[]).unwrap();
         for ch in ['中', '😀'] {
             let family = native.family_for(ch, FontStyle::default());
             assert_ne!(family, 0, "Expected an automatic fallback for {ch}");
@@ -274,7 +368,7 @@ mod tests {
                     size: family.size,
                 })
                 .expect("CoreText must find a fallback glyph");
-            let image = native.rasterize(ch, FontStyle::default()).unwrap();
+            let image = native.rasterize_raw(ch, FontStyle::default()).unwrap();
             assert_eq!(image.placement.left, original.left);
             assert_eq!(image.placement.top, original.top);
             assert_eq!(image.placement.width, original.width as u32);

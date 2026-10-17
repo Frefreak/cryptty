@@ -40,8 +40,7 @@ pub struct Rasterizer {
     fonts: HashMap<ID, Font>,
     faces: [ID; 4],
     mappings: Vec<(FontMapping, [ID; 4])>,
-    fallback_regular: Option<ID>,
-    fallback_bold: Option<ID>,
+    fallbacks: Vec<[ID; 4]>,
     scale: ScaleContext,
     size: f32,
     family_sizes: HashMap<String, f32>,
@@ -57,6 +56,7 @@ impl Rasterizer {
         hinting: bool,
         family: &str,
         mappings: &[FontMapping],
+        fallbacks: &[String],
     ) -> Result<Self> {
         let mut db = Database::new();
         db.load_system_fonts();
@@ -95,17 +95,21 @@ impl Rasterizer {
                 (mapping.clone(), styled_faces(&db, id.unwrap_or(regular)))
             })
             .collect();
-        let fallback_regular = db.query(&Query {
-            families: &[Family::Name("LXGW WenKai Mono Screen")],
-            ..Query::default()
-        });
-        let fallback_bold = db
-            .query(&Query {
-                families: &[Family::Name("LXGW WenKai Mono Screen")],
-                weight: Weight::BOLD,
-                ..Query::default()
+        let fallbacks = fallbacks
+            .iter()
+            .filter_map(|name| {
+                let id = db.query(&Query {
+                    families: &[Family::Name(name)],
+                    ..Query::default()
+                });
+                if id.is_none() {
+                    eprintln!(
+                        "Warning: fallback font {name:?} unavailable; skipping"
+                    );
+                }
+                id.map(|id| styled_faces(&db, id))
             })
-            .or(fallback_regular);
+            .collect();
         let font =
             Font::load(&db, regular).context("Cannot load monospace font")?;
         let face = font.as_ref();
@@ -138,8 +142,7 @@ impl Rasterizer {
             fonts,
             faces,
             mappings,
-            fallback_regular,
-            fallback_bold,
+            fallbacks,
             scale: ScaleContext::new(),
             size,
             family_sizes,
@@ -158,6 +161,18 @@ impl Rasterizer {
         {
             entry.insert(Font::load(&self.db, id)?);
         }
+        let image = self.render_at_size(id, ch, size)?;
+        super::symbol_fit::fit(
+            ch,
+            image,
+            self.cell_width,
+            self.cell_height,
+            self.baseline,
+            |scale| self.render_at_size(id, ch, size * scale),
+        )
+    }
+
+    fn render_at_size(&mut self, id: ID, ch: char, size: f32) -> Option<Image> {
         let font = self.fonts.get(&id)?.as_ref();
         let glyph = font.charmap().map(ch);
         let mut scaler = self
@@ -208,15 +223,10 @@ impl Rasterizer {
         let mapped = self.mappings.iter().rev().find_map(|(mapping, faces)| {
             mapping.contains(ch).then_some(faces[style.index()])
         });
-        let fallback = if style.bold {
-            self.fallback_bold
-        } else {
-            self.fallback_regular
-        };
         mapped
             .into_iter()
             .chain(std::iter::once(preferred))
-            .chain(fallback)
+            .chain(self.fallbacks.iter().map(|faces| faces[style.index()]))
             .chain(self.db.faces().map(|face| face.id))
             .find(|&id| self.supports(id, ch))
             .unwrap_or(preferred)
@@ -256,9 +266,59 @@ fn styled_faces(db: &Database, regular: ID) -> [ID; 4] {
 mod tests {
     use super::*;
 
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn fallback_order_primary_and_explicit_mapping() {
+        for names in [
+            ["PingFang SC", "Hiragino Sans GB"],
+            ["Hiragino Sans GB", "PingFang SC"],
+        ] {
+            let config = crate::config::Config::parse(&format!(
+                "font:\n  fallback: [{:?}, {:?}]\n  codepoint_map:\n    - family: {:?}\n      ranges: ['U+6587']\n",
+                names[0], names[1], names[1],
+            )).unwrap();
+            #[allow(unused_mut)]
+            let mut r = Rasterizer::new(
+                38.0,
+                false,
+                "Menlo",
+                &config.font.codepoint_map,
+                &config.font.fallback,
+            )
+            .unwrap();
+            for style in [
+                FontStyle::default(),
+                FontStyle {
+                    bold: true,
+                    italic: true,
+                },
+            ] {
+                for (ch, expected) in
+                    [('中', names[0]), ('文', names[1]), ('M', "Menlo")]
+                {
+                    let index = r.face_for(ch, style);
+                    assert_eq!(
+                        r.db.face(index).unwrap().families[0].0.clone(),
+                        expected
+                    );
+                }
+                let image = r.rasterize('①', style).unwrap();
+                let p = image.placement;
+                assert!(p.left >= 0);
+                assert!(p.left + p.width as i32 <= r.cell_width as i32);
+                assert!(p.top <= r.baseline);
+                assert!(
+                    r.baseline - p.top + p.height as i32
+                        <= r.cell_height as i32
+                );
+            }
+        }
+    }
+
     #[test]
     fn family_size_is_shared_across_styles_and_request_order() {
-        let mut first = Rasterizer::new(38.0, false, "monospace", &[]).unwrap();
+        let mut first =
+            Rasterizer::new(38.0, false, "monospace", &[], &[]).unwrap();
         let primary = first.faces[0];
         assert_eq!(first.font_size(primary), Some(38.0));
         let alternate = first
@@ -284,6 +344,7 @@ mod tests {
             false,
             "monospace",
             &config.font.codepoint_map,
+            &config.font.fallback,
         )
         .unwrap();
         let bold_size = first.font_size(faces[1]).unwrap();
@@ -324,6 +385,7 @@ mod tests {
             false,
             &crate::config::Font::default().family,
             &[],
+            &[],
         )
         .unwrap();
         let default_family =
@@ -340,7 +402,7 @@ mod tests {
             .families[0]
             .0
             .clone();
-        let selected = Rasterizer::new(19.0, false, &family, &[]).unwrap();
+        let selected = Rasterizer::new(19.0, false, &family, &[], &[]).unwrap();
         for id in selected.faces {
             assert!(
                 selected
@@ -359,7 +421,7 @@ mod tests {
 
     #[test]
     fn disjoint_mappings_and_later_overrides_preserve_font_styles() {
-        let base = Rasterizer::new(28.0, false, "monospace", &[]).unwrap();
+        let base = Rasterizer::new(28.0, false, "monospace", &[], &[]).unwrap();
         let primary =
             base.db.face(base.faces[0]).unwrap().families[0].0.clone();
         let alternate = base
@@ -378,9 +440,14 @@ mod tests {
         let config = crate::config::Config::parse(&format!(
             "font:\n  codepoint_map:\n    - ranges: ['U+0041-U+0043', 'U+0058-U+005A']\n      family: {alternate:?}\n    - ranges: ['U+0042']\n      family: {primary:?}\n"
         )).unwrap();
-        let r =
-            Rasterizer::new(28.0, false, &primary, &config.font.codepoint_map)
-                .unwrap();
+        let r = Rasterizer::new(
+            28.0,
+            false,
+            &primary,
+            &config.font.codepoint_map,
+            &config.font.fallback,
+        )
+        .unwrap();
         for style in [
             FontStyle::default(),
             FontStyle {

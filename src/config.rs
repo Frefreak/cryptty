@@ -179,6 +179,7 @@ pub struct Font {
     pub family: String,
     pub size: FontSize,
     pub hinting: bool,
+    pub fallback: Vec<String>,
     pub codepoint_map: Vec<FontMapping>,
 }
 
@@ -188,6 +189,7 @@ impl Default for Font {
             family: "FantasqueSansM Nerd Font Mono".to_string(),
             size: FontSize::default(),
             hinting: false,
+            fallback: vec!["LXGW WenKai Mono Screen".to_string()],
             codepoint_map: FontMapping::defaults(),
         }
     }
