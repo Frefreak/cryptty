@@ -31,6 +31,8 @@ mod notifications;
 mod redraw;
 mod reload;
 mod vim_mode;
+#[cfg(target_os = "linux")]
+mod wayland_blur;
 
 struct View {
     display: display::Display,
@@ -70,6 +72,7 @@ impl App {
         let attributes = Window::default_attributes()
             .with_title("Cryptty")
             .with_visible(false)
+            .with_transparent(self.config.window.opacity.transparent())
             .with_inner_size(LogicalSize::new(900.0, 560.0))
             .with_min_inner_size(LogicalSize::new(160.0, 100.0));
         #[cfg(target_os = "linux")]
@@ -84,8 +87,11 @@ impl App {
         macos_input::install(&window)?;
         #[cfg(target_os = "macos")]
         macos_input::configure(&window, self.config.window.option_as_alt);
-        let display =
-            display::Display::new(window.clone(), self.renderer_choice)?;
+        let display = display::Display::new(
+            window.clone(),
+            self.renderer_choice,
+            self.config.window,
+        )?;
         let renderer = Renderer::with_options(
             self.config.font.size.pixels(window.scale_factor()),
             self.config.window.padding.physical(window.scale_factor()),

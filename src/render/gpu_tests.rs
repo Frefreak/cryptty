@@ -206,3 +206,226 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
         }
     }
 }
+
+#[test]
+#[ignore = "requires a working Metal or Vulkan adapter"]
+fn transparent_pixels_and_opaque_restoration() {
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::METAL | wgpu::Backends::VULKAN,
+        ..wgpu::InstanceDescriptor::new_without_display_handle()
+    });
+    let adapter = pollster::block_on(
+        instance.request_adapter(&wgpu::RequestAdapterOptions::default()),
+    )
+    .unwrap();
+    let (device, queue) = pollster::block_on(
+        adapter.request_device(&wgpu::DeviceDescriptor::default()),
+    )
+    .unwrap();
+    let format = wgpu::TextureFormat::Rgba8Unorm;
+    let mut painter = Painter::new(&device, format);
+    let mut renderer = Renderer::new(19.0).unwrap();
+    let mut terminal = Terminal::new(6, 3);
+    terminal.feed(b"A\x1b[41m \x1b[0m\x1b[?25l");
+    terminal.feed(
+        b"\x1b[1;4H\x1b[38;2;122;122;122mA\x1b[38;2;99;168;248mA\x1b[97mA\x1b[0m",
+    );
+    terminal.feed(b"\x1b[2;1H");
+    let mut image = Vec::new();
+    crate::graphics::sender::emit(
+        &mut image,
+        &crate::graphics::Raster {
+            width: 1,
+            height: 1,
+            rgba: vec![255, 0, 0, 128],
+        },
+        123,
+        1,
+        1,
+        false,
+    )
+    .unwrap();
+    terminal.feed(&image);
+
+    let (cw, ch) = (renderer.cell_width, renderer.cell_height);
+    let origin = renderer.cell_origin(0, 0);
+    let mut opaque = Vec::new();
+    for (alpha, size) in [
+        (1.0, (256, 128)),
+        (0.8, (256, 128)),
+        (0.82, (512, 192)),
+        (0.0, (128, 64)),
+        (1.0, (256, 128)),
+    ] {
+        painter.set_opacity(&device, format, alpha.try_into().unwrap());
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("transparency test"),
+            size: wgpu::Extent3d {
+                width: size.0,
+                height: size.1,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT
+                | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        painter
+            .draw(
+                &device,
+                &queue,
+                &texture.create_view(&Default::default()),
+                &mut renderer,
+                &terminal,
+                size,
+                "",
+            )
+            .unwrap();
+        let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("alpha readback"),
+            size: u64::from(size.0 * size.1 * 4),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        let mut encoder = device.create_command_encoder(&Default::default());
+        encoder.copy_texture_to_buffer(
+            texture.as_image_copy(),
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(size.0 * 4),
+                    rows_per_image: Some(size.1),
+                },
+            },
+            texture.size(),
+        );
+        queue.submit([encoder.finish()]);
+        let (send, receive) = std::sync::mpsc::channel();
+        buffer.slice(..).map_async(wgpu::MapMode::Read, move |r| {
+            send.send(r).unwrap();
+        });
+        device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
+        receive.recv().unwrap().unwrap();
+        let bytes = buffer.slice(..).get_mapped_range().unwrap();
+        let pixel = |x: usize, y: usize| {
+            let offset = (y * size.0 as usize + x) * 4;
+            &bytes[offset..offset + 4]
+        };
+        let background = super::scene::color(terminal.theme().background);
+        for (channel, value) in background.into_iter().enumerate() {
+            let expected = (value * alpha * 255.0).round() as u8;
+            assert!(
+                pixel(size.0 as usize - 1, size.1 as usize - 1)[channel]
+                    .abs_diff(expected)
+                    <= 1
+            );
+        }
+        let image_pixel =
+            pixel(origin.0 + cw / 2, origin.1 + ch + cw.min(ch) / 2);
+        for channel in 0..4 {
+            let source = if channel == 0 || channel == 3 {
+                128.0
+            } else {
+                0.0
+            };
+            let expected = if alpha < 1.0 && channel < 3 {
+                let a = 128.0 / 255.0 + alpha * 127.0 / 255.0;
+                let linear = source / 255.0
+                    + to_linear(background[channel]) * alpha * 127.0 / 255.0;
+                (to_srgb(linear / a) * a * 255.0).round() as u8
+            } else {
+                (source + background[channel] * alpha * 127.0).round() as u8
+            };
+            assert!(
+                image_pixel[channel].abs_diff(expected) <= 2,
+                "image alpha={alpha} channel={channel}: {image_pixel:?}"
+            );
+        }
+        if alpha < 1.0 {
+            let mut edges = 0;
+            let white = super::scene::color(terminal.theme().palette[15]);
+            for (col, foreground) in [
+                (3, [122.0 / 255.0; 3]),
+                (4, [99.0 / 255.0, 168.0 / 255.0, 248.0 / 255.0]),
+                (5, [white[0], white[1], white[2]]),
+            ] {
+                for y in origin.1..origin.1 + ch {
+                    for x in origin.0 + col * cw..origin.0 + (col + 1) * cw {
+                        let rgba = pixel(x, y);
+                        let a = f32::from(rgba[3]) / 255.0;
+                        let coverage =
+                            ((a - alpha) / (1.0 - alpha)).clamp(0.0, 1.0);
+                        if !(0.1..0.9).contains(&coverage) {
+                            continue;
+                        }
+                        edges += 1;
+                        for backdrop in [0.0, 0.5, 1.0] {
+                            for channel in 0..3 {
+                                let actual = to_srgb(
+                                    to_linear(
+                                        f32::from(rgba[channel]) / 255.0 / a,
+                                    ) * a
+                                        + to_linear(backdrop) * (1.0 - a),
+                                );
+                                let background = to_linear(background[channel])
+                                    * alpha
+                                    + to_linear(backdrop) * (1.0 - alpha);
+                                let expected = to_srgb(
+                                    to_linear(foreground[channel]) * coverage
+                                        + background * (1.0 - coverage),
+                                );
+                                assert!(
+                                    (actual - expected).abs() < 0.016,
+                                    "glyph alpha={alpha} backdrop={backdrop} coverage={coverage} channel={channel}: actual={actual} expected={expected}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+            assert!(
+                edges > 0,
+                "Must test partially covered colored glyph edges"
+            );
+        }
+        // Explicit ANSI backgrounds stay opaque.
+        assert_eq!(pixel(origin.0 + cw, origin.1)[3], 255);
+        let mut ink = 0;
+        for y in origin.1..origin.1 + ch {
+            for x in origin.0..origin.0 + cw {
+                let rgba = pixel(x, y);
+                assert!(rgba[..3].iter().all(|&c| c <= rgba[3]));
+                if alpha < 1.0 && rgba[3] == 255 {
+                    ink += 1;
+                }
+            }
+        }
+        if alpha < 1.0 {
+            assert!(ink > 0, "Text must retain opaque ink");
+        } else if opaque.is_empty() {
+            opaque = bytes.to_vec();
+        } else {
+            assert_eq!(&*bytes, opaque.as_slice());
+        }
+    }
+}
+
+fn to_linear(value: f32) -> f32 {
+    if value <= 0.04045 {
+        value / 12.92
+    } else {
+        ((value + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+fn to_srgb(value: f32) -> f32 {
+    if value <= 0.0031308 {
+        value * 12.92
+    } else {
+        1.055 * value.powf(1.0 / 2.4) - 0.055
+    }
+}

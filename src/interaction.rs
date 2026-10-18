@@ -219,7 +219,9 @@ impl View {
             .map(|link| link.ranges.clone())
             .unwrap_or_default();
         let tooltip_changed = self.renderer.set_link_tooltip(
-            link.as_ref().map(|link| link.uri.as_str()),
+            link.as_ref()
+                .filter(|_| self.modifiers.control_key())
+                .map(|link| link.uri.as_str()),
             (x, y),
         );
         if self.terminal.hovered_link != hovered || tooltip_changed {

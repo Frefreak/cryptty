@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use anyhow::Result;
 use cryptty::{
+    config,
     options::RendererChoice,
     render::{Renderer, gpu::Gpu},
     terminal::Terminal,
@@ -19,12 +20,18 @@ enum Backend {
 pub struct Display {
     backend: Option<Backend>,
     automatic: bool,
+    #[cfg(target_os = "linux")]
+    blur: std::cell::OnceCell<Option<crate::wayland_blur::Blur>>,
 }
 
 impl Display {
-    pub fn new(window: Arc<Window>, choice: RendererChoice) -> Result<Self> {
+    pub fn new(
+        window: Arc<Window>,
+        choice: RendererChoice,
+        settings: config::Window,
+    ) -> Result<Self> {
         let backend = match choice {
-            RendererChoice::Software => software(window)?,
+            RendererChoice::Software => software(window.clone())?,
             RendererChoice::Auto | RendererChoice::Gpu { .. } => {
                 let selected = match choice {
                     RendererChoice::Gpu { adapter } => adapter,
@@ -34,16 +41,64 @@ impl Display {
                     Ok(gpu) => Backend::Gpu(Box::new(gpu)),
                     Err(error) if choice == RendererChoice::Auto => {
                         eprintln!("Cryptty: GPU unavailable: {error:#}");
-                        software(window)?
+                        software(window.clone())?
                     }
                     Err(error) => return Err(error),
                 }
             }
         };
-        Ok(Self {
+        let mut display = Self {
             backend: Some(backend),
             automatic: choice == RendererChoice::Auto,
-        })
+            #[cfg(target_os = "linux")]
+            blur: std::cell::OnceCell::new(),
+        };
+        display.configure_window(&window, settings);
+        Ok(display)
+    }
+
+    pub fn configure_window(
+        &mut self,
+        window: &Arc<Window>,
+        settings: config::Window,
+    ) {
+        let transparent = if let Some(Backend::Gpu(gpu)) = &mut self.backend {
+            gpu.set_opacity(settings.opacity)
+        } else {
+            if settings.opacity.transparent() {
+                eprintln!(
+                    "Cryptty: software rendering uses an opaque background"
+                );
+            }
+            false
+        };
+        window.set_transparent(transparent);
+        self.set_blur(window, transparent && settings.blur);
+    }
+
+    fn set_blur(&mut self, window: &Arc<Window>, enabled: bool) {
+        #[cfg(target_os = "linux")]
+        {
+            if enabled {
+                self.blur.get_or_init(|| {
+                    match crate::wayland_blur::Blur::new(window.clone()) {
+                        Ok(blur) => blur,
+                        Err(error) => {
+                            eprintln!(
+                                "Cryptty: background blur unavailable: {error:#}"
+                            );
+                            None
+                        }
+                    }
+                });
+            }
+            if let Some(blur) = self.blur.get().and_then(Option::as_ref) {
+                blur.set_enabled(enabled);
+                window.set_blur(false);
+                return;
+            }
+        }
+        window.set_blur(enabled);
     }
 
     pub fn frame_interval(&self, window: &Window) -> Duration {
@@ -92,6 +147,7 @@ impl Display {
                     eprintln!(
                         "Cryptty: GPU failed: {error:#}; switching to software"
                     );
+                    self.set_blur(window, false);
                     self.backend.take();
                     self.backend = Some(software(window.clone())?);
                     renderer.invalidate();
@@ -125,6 +181,8 @@ impl Display {
 }
 
 fn software(window: Arc<Window>) -> Result<Backend> {
+    window.set_blur(false);
+    window.set_transparent(false);
     let context = Context::new(window.clone())
         .map_err(|e| anyhow::anyhow!("software display: {e}"))?;
     let surface = Surface::new(&context, window)

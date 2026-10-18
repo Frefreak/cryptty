@@ -217,10 +217,16 @@ fn quick_ctrl_click_opens_complete_tmux_url_and_reaps_helper() {
                 );
                 std::thread::sleep(Duration::from_millis(5));
             }
+            assert!(!view.renderer.set_link_tooltip(None, (0, 0)));
+            view.modifiers = ModifiersState::CONTROL;
+            view.refresh_pointer();
             assert!(!view.renderer.set_link_tooltip(
                 Some(&self.uri),
                 (position.col, position.row),
             ));
+            view.modifiers = ModifiersState::empty();
+            view.refresh_pointer();
+            assert!(!view.renderer.set_link_tooltip(None, (0, 0)));
             view.draw().unwrap();
             view.pointer_left();
             view.pointer_moved(x as f64 + 1.0, y as f64 + 1.0).unwrap();
@@ -273,10 +279,7 @@ fn quick_ctrl_click_opens_complete_tmux_url_and_reaps_helper() {
             );
             view.modifiers = ModifiersState::empty();
             view.refresh_pointer();
-            assert!(!view.renderer.set_link_tooltip(
-                Some(&self.uri),
-                (position.col, position.row),
-            ));
+            assert!(!view.renderer.set_link_tooltip(None, (0, 0)));
             view.pointer_left();
             assert!(view.terminal.hovered_link.is_empty());
             assert!(!view.renderer.set_link_tooltip(None, (0, 0)));

@@ -18,6 +18,10 @@ font:
         - U+FF00-U+FFEF
         - U+20000-U+3FFFF
 window:
+  # GPU background opacity, from 0.0 to 1.0; software remains opaque.
+  opacity: 1.0
+  # Native KDE Wayland blur; strength follows desktop settings.
+  blur: false
   # macOS only: none, only_left, only_right, or both.
   option_as_alt: only_left
   padding:

@@ -1,10 +1,12 @@
 use anyhow::{Context, Result};
 
-use super::{Renderer, atlas::Atlas, scene};
+use super::{Renderer, atlas::Atlas, linear, scene};
 use crate::terminal::Terminal;
 
 pub(super) struct Painter {
     atlas: Atlas,
+    linear: Option<linear::LinearFrame>,
+    opacity: crate::config::Opacity,
     viewport: wgpu::Buffer,
     bindings: wgpu::BindGroup,
     pipelines: Vec<wgpu::RenderPipeline>,
@@ -66,10 +68,12 @@ impl Painter {
                 },
             ],
         });
-        let pipelines = pipelines(device, &layout, format);
+        let pipelines = pipelines(device, &layout, format, false);
         let vertices = vertex_buffer(device, 64);
         Self {
             atlas,
+            linear: None,
+            opacity: Default::default(),
             viewport,
             bindings,
             pipelines,
@@ -77,6 +81,30 @@ impl Painter {
             layout,
             images: Default::default(),
         }
+    }
+
+    pub fn set_opacity(
+        &mut self,
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        opacity: crate::config::Opacity,
+    ) {
+        if self.opacity.transparent() != opacity.transparent() {
+            let target_format = if opacity.transparent() {
+                self.linear = Some(linear::LinearFrame::new(device, format));
+                linear::FORMAT
+            } else {
+                self.linear = None;
+                format
+            };
+            self.pipelines = pipelines(
+                device,
+                &self.layout,
+                target_format,
+                opacity.transparent(),
+            );
+        }
+        self.opacity = opacity;
     }
 
     pub fn clear_glyphs(&mut self) {
@@ -159,21 +187,33 @@ impl Painter {
         );
         let mut encoder = device.create_command_encoder(&Default::default());
         let bg = scene::color(terminal.theme().background);
+        let bg = bg.map(|channel| {
+            if self.linear.is_some() {
+                linear::decode(f64::from(channel))
+            } else {
+                f64::from(channel)
+            }
+        });
+        let target = match &mut self.linear {
+            Some(frame) => frame.prepare(device, size),
+            None => view,
+        };
+        let opacity = f64::from(self.opacity.get());
         {
             let mut pass =
                 encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("terminal frame"),
                     color_attachments: &[Some(
                         wgpu::RenderPassColorAttachment {
-                            view,
+                            view: target,
                             depth_slice: None,
                             resolve_target: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(wgpu::Color {
-                                    r: bg[0] as f64,
-                                    g: bg[1] as f64,
-                                    b: bg[2] as f64,
-                                    a: 1.0,
+                                    r: bg[0] * opacity,
+                                    g: bg[1] * opacity,
+                                    b: bg[2] * opacity,
+                                    a: opacity,
                                 }),
                                 store: wgpu::StoreOp::Store,
                             },
@@ -217,6 +257,9 @@ impl Painter {
                 }
             }
         }
+        if let Some(frame) = &self.linear {
+            frame.encode(&mut encoder, view);
+        }
         queue.submit([encoder.finish()]);
         Ok(())
     }
@@ -235,6 +278,7 @@ fn pipelines(
     device: &wgpu::Device,
     bindings: &wgpu::BindGroupLayout,
     format: wgpu::TextureFormat,
+    transparent: bool,
 ) -> Vec<wgpu::RenderPipeline> {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("terminal shader"),
@@ -246,45 +290,50 @@ fn pipelines(
             bind_group_layouts: &[Some(bindings)],
             immediate_size: 0,
         });
-    [
-        ("red", wgpu::ColorWrites::RED),
-        ("green", wgpu::ColorWrites::GREEN),
-        ("blue", wgpu::ColorWrites::BLUE),
-    ]
-    .into_iter()
-    .map(|(entry, mask)| {
-        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some(entry),
-            layout: Some(&layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vertex"),
-                compilation_options: Default::default(),
-                buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: size_of::<scene::Quad>() as u64,
-                    step_mode: wgpu::VertexStepMode::Instance,
-                    attributes: &wgpu::vertex_attr_array![
-                        0 => Float32x4, 1 => Float32x4,
-                        2 => Float32x4, 3 => Uint32,
-                    ],
-                })],
-            },
-            primitive: Default::default(),
-            depth_stencil: None,
-            multisample: Default::default(),
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some(entry),
-                compilation_options: Default::default(),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: mask,
-                })],
-            }),
-            multiview_mask: None,
-            cache: None,
+    let entries: &[(&str, wgpu::ColorWrites)] = if transparent {
+        &[("transparent", wgpu::ColorWrites::ALL)]
+    } else {
+        &[
+            ("red", wgpu::ColorWrites::RED),
+            ("green", wgpu::ColorWrites::GREEN),
+            ("blue", wgpu::ColorWrites::BLUE),
+        ]
+    };
+    entries
+        .iter()
+        .map(|&(entry, mask)| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(entry),
+                layout: Some(&layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vertex"),
+                    compilation_options: Default::default(),
+                    buffers: &[Some(wgpu::VertexBufferLayout {
+                        array_stride: size_of::<scene::Quad>() as u64,
+                        step_mode: wgpu::VertexStepMode::Instance,
+                        attributes: &wgpu::vertex_attr_array![
+                            0 => Float32x4, 1 => Float32x4,
+                            2 => Float32x4, 3 => Uint32,
+                        ],
+                    })],
+                },
+                primitive: Default::default(),
+                depth_stencil: None,
+                multisample: Default::default(),
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some(entry),
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format,
+                        blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+                        write_mask: mask,
+                    })],
+                }),
+                multiview_mask: None,
+                cache: None,
+            })
         })
-    })
-    .collect()
+        .collect()
 }

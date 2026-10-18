@@ -484,6 +484,9 @@ dependencies = [
  "tempfile",
  "unicode-width",
  "vte",
+ "wayland-backend",
+ "wayland-client",
+ "wayland-protocols",
  "wgpu",
  "winit",
 ]

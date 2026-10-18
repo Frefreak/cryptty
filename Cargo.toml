@@ -48,6 +48,11 @@ objc2-foundation = { version = "0.2.2", features = [
     "NSAttributedString", "NSValue", "NSRange", "NSString",
 ] }
 
+[target.'cfg(target_os = "linux")'.dependencies]
+wayland-client = "0.31"
+wayland-backend = { version = "0.3", features = ["client_system", "dlopen"] }
+wayland-protocols = { version = "0.32", features = ["client", "staging"] }
+
 [target.'cfg(not(target_os = "macos"))'.dependencies]
 fontdb = "0.23"
 

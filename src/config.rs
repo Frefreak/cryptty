@@ -232,6 +232,39 @@ impl FontSize {
 pub struct Window {
     pub padding: Padding,
     pub option_as_alt: OptionAsAlt,
+    pub opacity: Opacity,
+    pub blur: bool,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[serde(try_from = "f32")]
+pub struct Opacity(f32);
+
+impl Default for Opacity {
+    fn default() -> Self {
+        Self(1.0)
+    }
+}
+
+impl TryFrom<f32> for Opacity {
+    type Error = &'static str;
+
+    fn try_from(value: f32) -> Result<Self, Self::Error> {
+        if !value.is_finite() || !(0.0..=1.0).contains(&value) {
+            return Err("Window opacity must be a finite number from 0 to 1");
+        }
+        Ok(Self(value))
+    }
+}
+
+impl Opacity {
+    pub fn get(self) -> f32 {
+        self.0
+    }
+
+    pub fn transparent(self) -> bool {
+        self.0 < 1.0
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]

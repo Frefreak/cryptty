@@ -57,3 +57,18 @@ fn shade(in: VertexOutput, channel: u32) -> vec4<f32> {
 @fragment fn blue(in: VertexOutput) -> @location(0) vec4<f32> {
     return shade(in, 2u);
 }
+
+// Blend transparent frames in linear light before encoding for the compositor.
+@fragment fn transparent(in: VertexOutput) -> @location(0) vec4<f32> {
+    var color = shade(in, 0u);
+    if in.kind == 1u {
+        let texel = textureLoad(atlas, vec2<i32>(in.uv), 0);
+        color.a = max(max(texel.r, texel.g), texel.b);
+    }
+    let linear = select(
+        pow((color.rgb + 0.055) / 1.055, vec3(2.4)),
+        color.rgb / 12.92,
+        color.rgb <= vec3(0.04045),
+    );
+    return vec4(linear, color.a);
+}

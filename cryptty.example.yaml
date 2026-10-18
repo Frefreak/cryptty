@@ -6,6 +6,10 @@ font:
   #   - ranges: ["U+23CE", "U+25B2", "U+25BC", "U+2580-U+259F"]
   #     family: DejaVu Sans Mono
 window:
+  # GPU background opacity, from 0.0 to 1.0; software remains opaque.
+  opacity: 1.0
+  # Native KDE Wayland blur; strength follows desktop settings.
+  blur: false
   padding:
     x: 2
     y: 2

@@ -553,3 +553,23 @@ fn bindings_require_one_supported_output() {
         );
     }
 }
+
+#[test]
+fn opacity_and_blur_defaults_ranges_and_types() {
+    let config = Config::parse("").unwrap();
+    assert_eq!(config.window.opacity.get(), 1.0);
+    assert!(!config.window.blur);
+    for value in ["0", "0.8", "1"] {
+        let config =
+            Config::parse(&format!("window: {{opacity: {value}, blur: true}}"))
+                .unwrap();
+        assert_eq!(config.window.opacity.get(), value.parse::<f32>().unwrap());
+        assert!(config.window.blur);
+    }
+    for value in ["-0.1", "1.1", ".nan", ".inf", "-.inf", "'0.8'", "true"] {
+        assert!(
+            Config::parse(&format!("window: {{opacity: {value}}}")).is_err()
+        );
+    }
+    assert!(Config::parse("window: {blur: 7}").is_err());
+}

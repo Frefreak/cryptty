@@ -22,6 +22,7 @@ pub mod gpu;
 #[cfg(test)]
 mod gpu_tests;
 mod images;
+mod linear;
 #[cfg(target_os = "macos")]
 mod native_fallback;
 #[cfg(target_os = "macos")]

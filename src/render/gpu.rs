@@ -52,6 +52,8 @@ pub struct Gpu {
     painter: Painter,
     failure: Arc<Mutex<Option<String>>>,
     needs_configure: bool,
+    opaque_alpha: wgpu::CompositeAlphaMode,
+    transparent_alpha: Option<wgpu::CompositeAlphaMode>,
 }
 
 impl Gpu {
@@ -133,16 +135,10 @@ impl Gpu {
                     .push(format!("adapter {index}: no surface configuration"));
                 continue;
             };
-            // Match the software renderer's byte-space color blending.
             let capabilities = surface.get_capabilities(&adapter);
-            let Some(format) = capabilities
-                .formats
-                .iter()
-                .copied()
-                .find(|format| !format.is_srgb())
-            else {
+            let Some(format) = surface_format(&capabilities.formats) else {
                 errors.push(format!(
-                    "adapter {index}: requires sRGB-only surface"
+                    "adapter {index}: no non-sRGB surface with 8-bit alpha"
                 ));
                 continue;
             };
@@ -178,6 +174,7 @@ impl Gpu {
                 "Cryptty: GPU {index}: {} ({:?}, {:?})",
                 info.name, info.backend, config.present_mode
             );
+            let opaque_alpha = config.alpha_mode;
             return Ok(Self {
                 surface,
                 device,
@@ -186,9 +183,41 @@ impl Gpu {
                 painter,
                 failure,
                 needs_configure: false,
+                opaque_alpha,
+                transparent_alpha: capabilities
+                    .alpha_modes
+                    .iter()
+                    .copied()
+                    .find(|mode| {
+                        *mode == wgpu::CompositeAlphaMode::PreMultiplied
+                    }),
             });
         }
         bail!("No usable GPU found. {}", errors.join("; "))
+    }
+
+    pub fn set_opacity(&mut self, opacity: crate::config::Opacity) -> bool {
+        let (opacity, alpha) = match (
+            opacity.transparent(),
+            self.transparent_alpha,
+        ) {
+            (true, Some(alpha)) => (opacity, alpha),
+            (true, None) => {
+                eprintln!(
+                    "Cryptty: GPU surface lacks premultiplied transparency; \
+                     using an opaque background"
+                );
+                (crate::config::Opacity::default(), self.opaque_alpha)
+            }
+            (false, _) => (opacity, self.opaque_alpha),
+        };
+        self.painter
+            .set_opacity(&self.device, self.config.format, opacity);
+        if self.config.alpha_mode != alpha {
+            self.config.alpha_mode = alpha;
+            self.needs_configure = true;
+        }
+        opacity.transparent()
     }
 
     pub fn clear_glyphs(&mut self) {
@@ -259,5 +288,33 @@ impl Gpu {
         }
         self.queue.present(frame);
         Ok(())
+    }
+}
+
+fn surface_format(
+    formats: &[wgpu::TextureFormat],
+) -> Option<wgpu::TextureFormat> {
+    // RGB10A2's four alpha levels cause fringes around transparent glyphs.
+    formats.iter().copied().find(|format| {
+        matches!(
+            format,
+            wgpu::TextureFormat::Bgra8Unorm | wgpu::TextureFormat::Rgba8Unorm
+        )
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::surface_format;
+    use wgpu::TextureFormat::*;
+
+    #[test]
+    fn surface_preserves_glyph_alpha_precision_without_srgb_encoding() {
+        assert_eq!(
+            surface_format(&[Rgb10a2Unorm, Bgra8UnormSrgb, Bgra8Unorm]),
+            Some(Bgra8Unorm),
+        );
+        assert_eq!(surface_format(&[Rgba8Unorm]), Some(Rgba8Unorm));
+        assert_eq!(surface_format(&[Rgb10a2Unorm, Bgra8UnormSrgb]), None);
     }
 }

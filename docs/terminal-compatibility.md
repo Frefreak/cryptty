@@ -147,8 +147,9 @@ OSC accepts BEL and ST termination. Colors accept `rgb:r/g/b` and
 hexadecimal forms, plus `black` and `white`. Ctrl-click opens HTTP, HTTPS,
 and `file://` links through the platform opener. Plain URLs follow soft wraps; explicit line
 breaks end detection. OSC 8 supplies the full target independently of its
-label. Hovering underlines links and shows a target tooltip beside the
-pointer; Ctrl-Shift-click bypasses mouse capture.
+label. Hovering underlines links; holding Ctrl shows a target tooltip
+beside the pointer. Releasing Ctrl hides it. Ctrl-Shift-click bypasses
+mouse capture.
 
 Hover and Ctrl-click use local tmux integration to recover pane-local wrap
 boundaries through the default server. Application snapshots must match

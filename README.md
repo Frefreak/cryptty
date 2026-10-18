@@ -149,8 +149,9 @@ Ctrl-Shift-N opens a fresh shell in
 a new window, using the original launch directory and renderer options.
 Ctrl-click opens HTTP, HTTPS, and `file://` links, including OSC 8 targets
 and plain URLs across terminal soft wraps. Hovering underlines the detected
-link and shows its target beside the pointer. Long targets wrap within a
-bounded tooltip and end with an ellipsis when truncated.
+link. Holding Ctrl shows its target beside the pointer; releasing Ctrl
+hides the tooltip. Long targets wrap within a bounded tooltip and end with
+an ellipsis when truncated.
 Hold Shift to select or Ctrl-Shift-click links during mouse capture.
 Trailing echoed `^C` is excluded from plain URLs and their word selection.
 
@@ -193,12 +194,38 @@ repeat notice. Existing values and comments stay intact. No block markers
 or version metadata are required.
 
 Press **Ctrl+Shift+R** to reload the configuration in the current window.
-Font settings, padding, colors, and keyboard bindings apply immediately;
+Font settings, padding, opacity, blur, colors, and bindings apply immediately;
 the shell and terminal contents stay in place. Reload reapplies the color
 palette and OSC color reset defaults. A failed reload retains the active
 settings, adds `config reload failed` to the window title, and reports the
 error to stderr. A successful retry clears that title message. Explicit
 text bindings retain precedence over built-in shortcuts.
+
+For a translucent background, add these settings under `window`:
+
+```yaml
+window:
+  opacity: 0.8
+  blur: true
+```
+
+Opacity accepts values from `0.0` to `1.0` and affects the default background.
+Explicit cell backgrounds, selections, cursors, and images retain their own
+opacity. Transparent mode uses grayscale text coverage and blends in linear
+light to avoid dark glyph edges. It adds an intermediate GPU texture and a
+full-window encoding pass. `opacity: 1.0` restores the opaque RGB path and
+disables blur. Defaults remain `opacity: 1.0` and `blur: false`.
+
+Transparency requires GPU rendering and a premultiplied surface. The GPU
+renderer selects an 8-bit-alpha format to preserve smooth glyph edges.
+Software rendering and GPU surfaces without premultiplied alpha support
+retain an opaque background and log a notice. This includes the current
+Metal backend on macOS. Blur uses the native KDE Wayland effect; its
+strength follows desktop settings, without a per-window pixel radius.
+The standard `ext-background-effect-v1` protocol supports current KWin;
+the legacy KDE protocol remains a fallback. Other Wayland compositors may
+ignore the blur hint.
+Ctrl+Shift+R applies both settings to the current window.
 
 On macOS, fonts use CoreText through crossfont and follow the system's
 font-smoothing setting. On Linux, fonts use Swash; `font.hinting` applies

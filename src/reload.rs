@@ -33,6 +33,7 @@ impl View {
             renderer.grid_size(size.width, size.height)
         };
         self.pty.resize(pty_size(cols, rows, &renderer))?;
+        self.display.configure_window(&self.window, config.window);
 
         #[cfg(target_os = "macos")]
         crate::macos_input::configure(
@@ -200,6 +201,19 @@ mod tests {
                             .displayed_title
                             .ends_with(" — config reload failed")
                     );
+                    for opacity in [0.8, 0.0, 1.0] {
+                        let transparent = format!(
+                            "window: {{opacity: {opacity}, blur: true}}"
+                        );
+                        std::fs::write(&path, transparent).unwrap();
+                        view.reload_config();
+                        assert!(!view.config_reload_failed);
+                        view.redraw.presented(
+                            std::time::Instant::now(),
+                            std::time::Duration::ZERO,
+                        );
+                        view.draw().unwrap();
+                    }
                 }
                 events.exit();
             }
