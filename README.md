@@ -147,19 +147,22 @@ personal key mappings and visible-pane scope.
 
 Ctrl-Shift-N opens a fresh shell in
 a new window, using the original launch directory and renderer options.
-Ctrl-click opens HTTP/HTTPS links, including OSC 8 targets and plain URLs
-across terminal soft wraps. Hovering underlines the detected link.
+Ctrl-click opens HTTP, HTTPS, and `file://` links, including OSC 8 targets
+and plain URLs across terminal soft wraps. Hovering underlines the detected
+link and shows its target beside the pointer. Long targets wrap within a
+bounded tooltip and end with an ellipsis when truncated.
 Hold Shift to select or Ctrl-Shift-click links during mouse capture.
 Trailing echoed `^C` is excluded from plain URLs and their word selection.
 
-While Ctrl is held for link interaction, Cryptty queries a matching local
+While hovering or opening links, Cryptty queries a matching local
 client on tmux's default server. Pane snapshots preserve tmux's soft wraps,
 so URLs spanning pane rows open in full. During application mouse capture,
 hold Ctrl-Shift as usual. Queries run asynchronously and stop when the
 interaction ends; an accepted click may finish after Ctrl is released.
 The idle connection closes after five seconds. No plugin or setting is
-required. Custom tmux sockets, remote servers, copy mode, pane titles, and
-cropped viewports retain the original screen-based detection.
+required. Copy-mode snapshots use the currently visible scrolled content.
+Custom tmux sockets, remote servers, pane titles, and cropped viewports
+retain the original screen-based detection.
 Applications can copy text through OSC 52 to the system clipboard.
 
 Resizing reflows primary-screen text and retains up to 10,000 history rows

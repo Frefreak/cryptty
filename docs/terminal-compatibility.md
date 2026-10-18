@@ -144,13 +144,16 @@ affect cells that were written before the change.
 | 52 | Base64 text writes to the system clipboard (`c` or empty target) |
 
 OSC accepts BEL and ST termination. Colors accept `rgb:r/g/b` and
-hexadecimal forms, plus `black` and `white`. Ctrl-click opens HTTP/HTTPS
-through the platform opener. Plain URLs follow soft wraps; explicit line
+hexadecimal forms, plus `black` and `white`. Ctrl-click opens HTTP, HTTPS,
+and `file://` links through the platform opener. Plain URLs follow soft wraps; explicit line
 breaks end detection. OSC 8 supplies the full target independently of its
-label. Hovering underlines links; Ctrl-Shift-click bypasses mouse capture.
+label. Hovering underlines links and shows a target tooltip beside the
+pointer; Ctrl-Shift-click bypasses mouse capture.
 
-Ctrl-triggered local tmux integration recovers pane-local wrap boundaries
-through the default server. Snapshot text must match the displayed pane.
+Hover and Ctrl-click use local tmux integration to recover pane-local wrap
+boundaries through the default server. Application snapshots must match
+the displayed pane. Copy-mode snapshots use the visible scrolled content
+and preserve wraps across matching rows.
 Multi-row highlights remain inside that pane. Queries run off the UI thread;
 idle connections expire after five seconds. Unsupported tmux layouts and
 servers use the existing screen detector. See the README for scope.

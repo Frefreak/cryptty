@@ -162,6 +162,9 @@ impl View {
 
     pub(super) fn refresh_pointer(&mut self) {
         if self.vim.is_some() {
+            if self.renderer.set_link_tooltip(None, (0, 0)) {
+                self.window.request_redraw();
+            }
             self.refresh_vim();
             self.window.set_cursor(CursorIcon::Default);
             return;
@@ -171,9 +174,7 @@ impl View {
             || self.interaction.selection_anchor.is_some();
         self.tmux.update(
             self.interaction.pending_link.is_some()
-                || (available
-                    && self.interaction.pointer_inside
-                    && self.modifiers.control_key()),
+                || self.interaction.pointer_inside,
             (self.terminal.cols(), self.terminal.rows.len()),
             Instant::now(),
         );
@@ -195,7 +196,7 @@ impl View {
                 }
             }
             if self.interaction.pending_link.is_none()
-                && !self.modifiers.control_key()
+                && !self.interaction.pointer_inside
             {
                 self.tmux.update(
                     false,
@@ -204,7 +205,7 @@ impl View {
                 );
             }
         }
-        let link = if available && self.interaction.pointer_inside {
+        let link = if self.interaction.pointer_inside {
             self.lookup_link(position)
         } else {
             Lookup::Ready(None)
@@ -217,13 +218,17 @@ impl View {
             .as_ref()
             .map(|link| link.ranges.clone())
             .unwrap_or_default();
-        if self.terminal.hovered_link != hovered {
+        let tooltip_changed = self.renderer.set_link_tooltip(
+            link.as_ref().map(|link| link.uri.as_str()),
+            (x, y),
+        );
+        if self.terminal.hovered_link != hovered || tooltip_changed {
             self.terminal.hovered_link = hovered;
             self.renderer.invalidate();
             self.window.request_redraw();
         }
         self.window.set_cursor(
-            if link.is_some() && self.modifiers.control_key() {
+            if available && link.is_some() && self.modifiers.control_key() {
                 CursorIcon::Pointer
             } else if available {
                 CursorIcon::Text
@@ -237,10 +242,7 @@ impl View {
         let explicit = self.terminal.rows[position.row][position.col]
             .hyperlink
             .is_some();
-        if (self.modifiers.control_key()
-            || self.interaction.pending_link.is_some())
-            && !explicit
-        {
+        if !explicit {
             match self.tmux.lookup(&self.terminal, position) {
                 Lookup::Unavailable => (),
                 result => return result,

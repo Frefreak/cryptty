@@ -323,7 +323,7 @@ impl Terminal {
 }
 
 pub fn supported_uri(uri: &str) -> bool {
-    ["https://", "http://"].iter().any(|scheme| {
+    ["https://", "http://", "file://"].iter().any(|scheme| {
         uri.get(..scheme.len())
             .is_some_and(|prefix| prefix.eq_ignore_ascii_case(scheme))
     })

@@ -124,6 +124,10 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
                 Position { row: 2, col: 0 },
                 Position { row: 2, col: 10 },
             )];
+            renderer.set_link_tooltip(
+                (shape == 6).then_some("file:///tmp/中文/test%20file.txt"),
+                (20, 3),
+            );
             renderer.draw(&terminal, width, height, preedit);
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("pixel comparison"),

@@ -84,7 +84,9 @@ mode so the selection can be retried.
 
 Pane text is captured on demand through the existing local default-server
 tmux integration. The captured text must match the frozen display, with
-complete coverage of supported visible panes. A changing or unsupported
+complete coverage of supported visible panes. In tmux copy mode, capture
+uses the visible scrolled content; leaving Vim mode preserves tmux copy
+mode and its scroll position. A changing or unsupported
 viewport cancels entry; retry once the display settles. Custom sockets and
 remote tmux sessions use the terminal grid, without pane-local metadata.
 

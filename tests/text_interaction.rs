@@ -313,3 +313,21 @@ fn copying_styled_selected_text_keeps_only_characters() {
         assert_eq!(destination.cell_style(col, 0), Default::default());
     }
 }
+
+#[test]
+fn file_links_support_plain_wrapped_uris_and_osc8_targets() {
+    for uri in ["file:///tmp/a%20b.txt", "FILE://localhost/tmp/test"] {
+        let mut terminal = Terminal::new(12, 5);
+        terminal.feed(uri.as_bytes());
+        for index in 0..uri.len() {
+            assert_eq!(
+                terminal.link_at(p(index / 12, index % 12)).unwrap().uri,
+                uri
+            );
+        }
+        let mut terminal = Terminal::new(40, 2);
+        terminal
+            .feed(format!("\x1b]8;;{uri}\x07open file\x1b]8;;\x07").as_bytes());
+        assert_eq!(terminal.link_at(p(0, 3)).unwrap().uri, uri);
+    }
+}

@@ -234,6 +234,31 @@ pub(super) fn build(
             scene.solid(x, y, w, h, terminal.theme().palette[5]);
         }
     }
+    if let Some(layout) = scene
+        .renderer
+        .tooltip_layout((size.0 as usize, size.1 as usize))
+    {
+        let (left, top) = scene.renderer.cell_origin(layout.col, layout.row);
+        let width = layout.cols * w;
+        let height = layout.rows * h;
+        scene.solid(left, top, width, height, terminal.theme().foreground);
+        scene.solid(
+            left + 1,
+            top + 1,
+            width.saturating_sub(2),
+            height.saturating_sub(2),
+            terminal.theme().background,
+        );
+        for (ch, col, row, columns) in layout.glyphs {
+            scene.glyph(
+                ch,
+                FontStyle::default(),
+                (col, row),
+                columns,
+                terminal.theme().foreground,
+            )?;
+        }
+    }
     Some(Frame {
         quads: scene.quads,
         overlay,

@@ -50,10 +50,10 @@ fn pane_links_and_highlights_stay_inside_their_rectangle() {
     let snapshot = Snapshot {
         complete: true,
         size: (22, 6),
-        panes: vec![PaneText {
+        panes: vec![CapturedPane::Application(PaneText {
             origin: p(1, 11),
             terminal,
-        }],
+        })],
     };
     let Lookup::Ready(Some(link)) = snapshot.lookup(&display, p(3, 12)) else {
         panic!("wrapped suffix must resolve");
@@ -218,12 +218,28 @@ fn real_tmux_split_recovers_url_and_tracks_layout_changes() {
     let zoomed =
         Snapshot::capture(&mut connection, &tty, (81, 12), &|| true).unwrap();
     assert_eq!(zoomed.panes.len(), 1);
-    assert_eq!(zoomed.panes[0].origin, p(1, 0));
-    assert_eq!(zoomed.panes[0].terminal.cols(), 81);
+    assert_eq!(zoomed.panes[0].pane().origin, p(1, 0));
+    assert_eq!(zoomed.panes[0].pane().terminal.cols(), 81);
     run(&["copy-mode", "-t", "test:0.1"]);
     let copy_mode =
         Snapshot::capture(&mut connection, &tty, (81, 12), &|| true).unwrap();
-    assert!(copy_mode.panes.is_empty());
+    assert!(copy_mode.complete);
+    assert_eq!(copy_mode.panes.len(), 1);
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while !terminal.rows.iter().any(|row| row.iter().any(|cell| {
+        matches!(&cell.content, Content::Text { text } if text.chars().next() == Some('['))
+    })) {
+        let event = pty
+            .output
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+            .unwrap();
+        let Event::Output(bytes) = event else {
+            panic!("tmux exited")
+        };
+        let replies = terminal.feed(&bytes);
+        pty.write(replies).unwrap();
+    }
+    assert!(matches!(copy_mode.text(&terminal), TextSnapshot::Ready(_)));
 }
 
 #[test]
@@ -232,10 +248,54 @@ fn vim_snapshot_rejects_partial_pane_coverage() {
     let snapshot = Snapshot {
         complete: false,
         size: (10, 3),
-        panes: vec![PaneText {
+        panes: vec![CapturedPane::Application(PaneText {
             origin: p(0, 0),
             terminal: display.visible_snapshot(),
-        }],
+        })],
     };
     assert!(matches!(snapshot.text(&display), TextSnapshot::Changed));
+}
+
+#[test]
+fn copy_mode_uses_visible_headers_and_preserves_matching_wraps() {
+    let physical =
+        "headerxxxx\nhttps://a/\n1234567890\nend       \npromptxxxx\n";
+    let backing = pane_terminal(
+        10,
+        5,
+        physical,
+        "headerxxxx\nhttps://a/1234567890end\npromptxxxx\n",
+    )
+    .unwrap();
+    let mut display = Terminal::new(22, 7);
+    for (row, line) in physical.lines().enumerate() {
+        display.feed(format!("\x1b[{};12H{line}", row + 2).as_bytes());
+    }
+    display.feed(b"\x1b[2;12H[copy top]\x1b[6;12H/search   ");
+    let captured = CapturedPane::CopyMode(PaneText {
+        origin: p(1, 11),
+        terminal: backing,
+    });
+    let visible = captured.visible(&display).unwrap();
+    assert_eq!(
+        visible.terminal.link_at(p(2, 2)).unwrap().uri,
+        "https://a/1234567890end"
+    );
+    assert_eq!(
+        visible
+            .terminal
+            .selected_text(TextRange::between(p(0, 0), p(0, 10))),
+        "[copy top]"
+    );
+    assert_eq!(
+        visible
+            .terminal
+            .selected_text(TextRange::between(p(4, 0), p(4, 10))),
+        "/search"
+    );
+    display.feed(b"\x1b[4;12H/changed  ");
+    let visible = captured.visible(&display).unwrap();
+    assert_eq!(visible.terminal.rows[1].wrapped, None);
+    assert_eq!(visible.terminal.rows[2].wrapped, None);
+    assert_eq!(visible.terminal.link_at(p(1, 2)).unwrap().uri, "https://a/");
 }

@@ -23,7 +23,8 @@ const CLIENT_FORMAT: &str = concat!(
 );
 const PANE_FORMAT: &str = concat!(
     "#{pane_id}\t#{pane_left}\t#{pane_top}\t",
-    "#{pane_width}\t#{pane_height}\t#{pane_in_mode}\t#{pane_active}",
+    "#{pane_width}\t#{pane_height}\t#{pane_mode}\t#{pane_active}\t",
+    "#{scroll_position}",
 );
 
 #[derive(Debug, PartialEq, Eq)]
@@ -168,10 +169,55 @@ impl PaneText {
     }
 }
 
+enum CapturedPane {
+    Application(PaneText),
+    CopyMode(PaneText),
+}
+
+impl CapturedPane {
+    fn pane(&self) -> &PaneText {
+        match self {
+            Self::Application(pane) | Self::CopyMode(pane) => pane,
+        }
+    }
+
+    fn visible(&self, display: &Terminal) -> Option<PaneText> {
+        let pane = self.pane();
+        if matches!(self, Self::Application(_)) {
+            return pane.matches(display).then(|| PaneText {
+                origin: pane.origin,
+                terminal: pane.terminal.visible_snapshot(),
+            });
+        }
+        let mut terminal = pane.terminal.visible_snapshot();
+        let mut matching = Vec::new();
+        for (y, row) in terminal.rows.iter_mut().enumerate() {
+            let source = display.rows.get(pane.origin.row + y)?;
+            let mut same = true;
+            for x in 0..row.len() {
+                let visible = source.get(pane.origin.col + x)?;
+                same &= row[x].content == visible.content;
+                row[x].clone_from(visible);
+            }
+            matching.push(same);
+        }
+        // Copy-mode headers and prompts replace backing text on screen.
+        for (y, row) in terminal.rows.iter_mut().enumerate() {
+            if !matching[y] || !matching.get(y + 1).copied().unwrap_or(false) {
+                row.wrapped = None;
+            }
+        }
+        Some(PaneText {
+            origin: pane.origin,
+            terminal,
+        })
+    }
+}
+
 pub struct Snapshot {
     complete: bool,
     size: (usize, usize),
-    pub panes: Vec<PaneText>,
+    panes: Vec<CapturedPane>,
 }
 
 impl Snapshot {
@@ -179,19 +225,18 @@ impl Snapshot {
         if !self.complete
             || self.size != (display.cols(), display.rows.len())
             || self.panes.is_empty()
-            || !self.panes.iter().all(|pane| pane.matches(display))
         {
             return TextSnapshot::Changed;
         }
-        TextSnapshot::Ready(
-            self.panes
-                .iter()
-                .map(|pane| PaneText {
-                    origin: pane.origin,
-                    terminal: pane.terminal.visible_snapshot(),
-                })
-                .collect(),
-        )
+        match self
+            .panes
+            .iter()
+            .map(|pane| pane.visible(display))
+            .collect()
+        {
+            Some(panes) => TextSnapshot::Ready(panes),
+            None => TextSnapshot::Changed,
+        }
     }
 
     fn capture(
@@ -220,14 +265,18 @@ impl Snapshot {
         let mut commands = Vec::new();
         for line in metadata.lines() {
             let fields: Vec<_> = line.split('\t').collect();
-            anyhow::ensure!(fields.len() == 7, "invalid tmux pane metadata");
+            anyhow::ensure!(fields.len() == 8, "invalid tmux pane metadata");
             if client.zoomed && fields[6] != "1" {
                 continue;
             }
-            if fields[5] != "0" {
-                complete = false;
-                continue;
-            }
+            let in_mode = match fields[5] {
+                "" => false,
+                "copy-mode" => true,
+                _ => {
+                    complete = false;
+                    continue;
+                }
+            };
             let id = identifier(fields[0], '%').context("invalid pane id")?;
             let left: usize = fields[1].parse()?;
             let top: usize = fields[2].parse()?;
@@ -254,9 +303,22 @@ impl Snapshot {
                 },
                 width,
                 height,
+                in_mode,
             ));
-            commands.push(format!("capture-pane -p -N -t {id}"));
-            commands.push(format!("capture-pane -p -J -t {id}"));
+            let mode = if in_mode {
+                let scroll = if fields[7].is_empty() {
+                    0
+                } else {
+                    fields[7].parse::<u32>()?
+                };
+                let first = -i64::from(scroll);
+                let last = first + height as i64 - 1;
+                format!(" -M -S {first} -E {last}")
+            } else {
+                String::new()
+            };
+            commands.push(format!("capture-pane -p -N{mode} -t {id}"));
+            commands.push(format!("capture-pane -p -J{mode} -t {id}"));
         }
         commands.push(pane_command);
         commands.push(clients);
@@ -269,13 +331,18 @@ impl Snapshot {
             "tmux layout changed during capture",
         );
         let mut panes = Vec::new();
-        for ((origin, width, height), captures) in
+        for ((origin, width, height, in_mode), captures) in
             bounds.into_iter().zip(replies.chunks_exact(2))
         {
             if let Some(terminal) =
                 pane_terminal(width, height, &captures[0], &captures[1])
             {
-                panes.push(PaneText { origin, terminal });
+                let pane = PaneText { origin, terminal };
+                panes.push(if in_mode {
+                    CapturedPane::CopyMode(pane)
+                } else {
+                    CapturedPane::Application(pane)
+                });
             } else {
                 complete = false;
             }
@@ -291,11 +358,25 @@ impl Snapshot {
         if self.size != (display.cols(), display.rows.len()) {
             return Lookup::Unavailable;
         }
-        for pane in &self.panes {
+        for captured in &self.panes {
+            let pane = captured.pane();
             if let Some(local) = pane.local_position(position) {
-                if !pane.matches(display) {
-                    return Lookup::Unavailable;
-                }
+                let visible;
+                let pane = match captured {
+                    CapturedPane::Application(pane) => {
+                        if !pane.matches(display) {
+                            return Lookup::Unavailable;
+                        }
+                        pane
+                    }
+                    CapturedPane::CopyMode(_) => {
+                        let Some(text) = captured.visible(display) else {
+                            return Lookup::Unavailable;
+                        };
+                        visible = text;
+                        &visible
+                    }
+                };
                 return Lookup::Ready(
                     pane.terminal
                         .link_at(local)

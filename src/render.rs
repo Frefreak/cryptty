@@ -31,6 +31,7 @@ mod scene;
 #[cfg(all(test, target_os = "macos"))]
 #[path = "render/swash.rs"]
 mod swash_tests;
+mod tooltip;
 
 const CACHE_LIMIT: usize = 4096;
 
@@ -51,6 +52,7 @@ pub struct Renderer {
     old_cursor: Option<(usize, usize)>,
     old_preedit_row: Option<usize>,
     old_vim_mode: bool,
+    tooltip: Option<tooltip::Tooltip>,
 }
 
 impl Renderer {
@@ -92,6 +94,7 @@ impl Renderer {
             old_cursor: None,
             old_preedit_row: None,
             old_vim_mode: false,
+            tooltip: None,
         })
     }
 
@@ -150,6 +153,9 @@ impl Renderer {
             self.invalidate();
         }
         if self.old_vim_mode != terminal.vim_mode {
+            self.invalidate();
+        }
+        if self.tooltip.is_some() {
             self.invalidate();
         }
         if self.previous.is_empty() {
@@ -224,6 +230,29 @@ impl Renderer {
                 vim_frame((width, height), self.padding, self.cell_height)
             {
                 self.solid(x, y, w, h, terminal.theme().palette[5]);
+            }
+        }
+        if let Some(layout) = self.tooltip_layout((width, height)) {
+            let (left, top) = self.cell_origin(layout.col, layout.row);
+            let w = layout.cols * self.cell_width;
+            let h = layout.rows * self.cell_height;
+            self.solid(left, top, w, h, terminal.theme().foreground);
+            self.solid(
+                left + 1,
+                top + 1,
+                w.saturating_sub(2),
+                h.saturating_sub(2),
+                terminal.theme().background,
+            );
+            for (ch, col, row, columns) in layout.glyphs {
+                self.paint_char(
+                    ch,
+                    FontStyle::default(),
+                    col,
+                    row,
+                    columns,
+                    terminal.theme().foreground,
+                );
             }
         }
         self.old_vim_mode = terminal.vim_mode;

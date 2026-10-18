@@ -47,7 +47,12 @@ fn quick_ctrl_click_opens_complete_tmux_url_and_reaps_helper() {
             std::fs::Permissions::from_mode(0o755),
         )
         .unwrap();
-        for capture_mouse in ["off", "on"] {
+        for (capture_mouse, scheme) in [
+            ("off", "https"),
+            ("on", "https"),
+            ("off", "file"),
+            ("on", "file"),
+        ] {
             let output = Command::new(std::env::current_exe().unwrap())
             .args([
                 "--exact",
@@ -60,8 +65,9 @@ fn quick_ctrl_click_opens_complete_tmux_url_and_reaps_helper() {
             ])
             .env(CHILD, "1")
             .env("CRYPTTY_TEST_MOUSE", capture_mouse)
+            .env("CRYPTTY_TEST_SCHEME", scheme)
             .env("TMUX_TMPDIR", directory.path())
-            .env("CRYPTTY_LINK_OUTPUT", directory.path().join(format!("opened-url-{capture_mouse}")))
+            .env("CRYPTTY_LINK_OUTPUT", directory.path().join(format!("opened-url-{capture_mouse}-{scheme}")))
             .env(
                 "PATH",
                 format!(
@@ -126,7 +132,12 @@ fn quick_ctrl_click_opens_complete_tmux_url_and_reaps_helper() {
         "mouse",
         &std::env::var("CRYPTTY_TEST_MOUSE").unwrap(),
     ]);
-    let uri = format!("https://example.com/{}", "abcdefghij/".repeat(8));
+    let prefix = if std::env::var("CRYPTTY_TEST_SCHEME").unwrap() == "file" {
+        "file:///tmp/"
+    } else {
+        "https://example.com/"
+    };
+    let uri = format!("{prefix}{}", "abcdefghij/".repeat(8));
     let command = format!("printf '%s' '{uri}'; sleep 30");
     tmux(&["split-window", "-h", "-t", "test", &command]);
 
@@ -178,7 +189,7 @@ fn quick_ctrl_click_opens_complete_tmux_url_and_reaps_helper() {
                             })
                             .flatten()
                             .collect();
-                        line.find("https://example.com").map(|col| Position {
+                        line.find(&self.uri[..16]).map(|col| Position {
                             row,
                             col: line[..col].chars().count() + 2,
                         })
@@ -194,6 +205,24 @@ fn quick_ctrl_click_opens_complete_tmux_url_and_reaps_helper() {
             drain(view);
             assert_ne!(view.terminal.link_at(position).unwrap().uri, self.uri);
             let (x, y) = view.renderer.cell_origin(position.col, position.row);
+            view.pointer_moved(x as f64 + 1.0, y as f64 + 1.0).unwrap();
+            loop {
+                drain(view);
+                if view.terminal.hovered_link.len() > 1 {
+                    break;
+                }
+                assert!(
+                    Instant::now() < deadline,
+                    "unmodified hover timed out"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            assert!(!view.renderer.set_link_tooltip(
+                Some(&self.uri),
+                (position.col, position.row),
+            ));
+            view.draw().unwrap();
+            view.pointer_left();
             view.pointer_moved(x as f64 + 1.0, y as f64 + 1.0).unwrap();
             view.modifiers = ModifiersState::CONTROL;
             if std::env::var("CRYPTTY_TEST_MOUSE").unwrap() == "on" {
@@ -244,6 +273,13 @@ fn quick_ctrl_click_opens_complete_tmux_url_and_reaps_helper() {
             );
             view.modifiers = ModifiersState::empty();
             view.refresh_pointer();
+            assert!(!view.renderer.set_link_tooltip(
+                Some(&self.uri),
+                (position.col, position.row),
+            ));
+            view.pointer_left();
+            assert!(view.terminal.hovered_link.is_empty());
+            assert!(!view.renderer.set_link_tooltip(None, (0, 0)));
             let size = (view.terminal.cols(), view.terminal.rows.len());
             view.tmux.update(
                 false,

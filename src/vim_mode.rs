@@ -115,6 +115,7 @@ impl View {
     }
 
     fn enter_vim(&mut self) {
+        self.renderer.set_link_tooltip(None, (0, 0));
         self.interaction.reset_buttons();
         self.clear_selection();
         self.preedit.clear();

@@ -299,6 +299,97 @@ fn frozen_tmux_vim_mode_copies_and_returns_to_live_output() {
             assert!(view.vim.is_none());
             assert_eq!(clipboard.get_text().unwrap(), "beta");
             assert!(has_text(&view.terminal, "CHANGED"));
+            // Enter from a scrolled tmux copy viewport using the default key.
+            tmux(&[
+                "respawn-pane",
+                "-k",
+                "-t",
+                "test:0.1",
+                "printf 'history target\\n'; seq 0 79 | sed 's/^/filler /'; sleep 60",
+            ]);
+            let deadline = Instant::now() + Duration::from_secs(8);
+            loop {
+                drain(view);
+                if has_text(&view.terminal, "filler 79") {
+                    break;
+                }
+                assert!(Instant::now() < deadline);
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            tmux(&["copy-mode", "-t", "test:0.1"]);
+            tmux(&["send-keys", "-t", "test:0.1", "-X", "history-top"]);
+            loop {
+                drain(view);
+                if has_text(&view.terminal, "history target") {
+                    break;
+                }
+                assert!(Instant::now() < deadline);
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            std::thread::sleep(Duration::from_millis(30));
+            drain(view);
+            let scroll = tmux(&[
+                "display-message",
+                "-p",
+                "-t",
+                "test:0.1",
+                "#{scroll_position}",
+            ]);
+            view.keyboard = Config::default().keyboard;
+            press(
+                view,
+                WindowKey::Character("j".into()),
+                ModifiersState::CONTROL | ModifiersState::SHIFT,
+            );
+            press(
+                view,
+                WindowKey::Character("t".into()),
+                ModifiersState::empty(),
+            );
+            press(
+                view,
+                WindowKey::Character("a".into()),
+                ModifiersState::empty(),
+            );
+            while matches!(view.vim, Some(Mode::Loading { .. })) {
+                drain(view);
+                assert!(Instant::now() < deadline);
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            assert!(matches!(view.vim, Some(Mode::Active(_))));
+            press(
+                view,
+                WindowKey::Character("y".into()),
+                ModifiersState::empty(),
+            );
+            press(
+                view,
+                WindowKey::Character("w".into()),
+                ModifiersState::empty(),
+            );
+            assert!(view.vim.is_none());
+            assert_eq!(clipboard.get_text().unwrap().trim_end(), "target");
+            assert_eq!(
+                tmux(&[
+                    "display-message",
+                    "-p",
+                    "-t",
+                    "test:0.1",
+                    "#{pane_mode}",
+                ])
+                .trim(),
+                "copy-mode"
+            );
+            assert_eq!(
+                tmux(&[
+                    "display-message",
+                    "-p",
+                    "-t",
+                    "test:0.1",
+                    "#{scroll_position}",
+                ]),
+                scroll
+            );
             // IME text is routed to Leap, not the PTY.
             view.vim = Some(Mode::Active(Box::new(Session::new(
                 {
