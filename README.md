@@ -23,6 +23,8 @@ When `LC_ALL`, `LC_CTYPE`, and `LANG` are empty or unset, the launcher sets
 For a custom destination, use `./scripts/build-macos-app --destination PATH`;
 add `--install` to register that location with macOS.
 The app runs independently of this checkout and of uv.
+Installation also creates `~/.local/bin/cimg`, a POSIX shell shortcut to
+`cryptty image` in the installed app. Add `~/.local/bin` to `PATH` if needed.
 
 On Linux, install the binary, desktop entry, and Cryptty coffin icon:
 
@@ -34,6 +36,8 @@ This command requires Rust and `desktop-file-utils`.
 The default prefix is `~/.local`. The installed launcher records absolute
 executable and icon paths. Override with
 `make install-linux PREFIX=/your/prefix`.
+The installer also adds `cimg` beside `cryptty`: use `cimg --pane FILE` to
+preview an image, or pass any other `cryptty image` arguments.
 The desktop entry lives in `assets/cryptty.desktop` for distribution packaging.
 The Wayland application ID matches `org.cryptty.desktop`, so desktops can
 associate running windows with the installed icon. Linux uses the transparent
@@ -59,7 +63,11 @@ The script saves the executable and merged profile under `target/pgo/`,
 with build artifacts under `target/pgo-build/`. All remain local, ignored
 artifacts. Interrupted builds retain a training checkpoint; retrying with
 unchanged source and compiler resumes the optimized build. Successful
-builds remove the checkpoint. To train and install through Cargo, run:
+builds remove the checkpoint. Installation also adds the `cimg` shell
+shortcut beside the binary on Linux, or in `~/.local/bin` on macOS.
+This shortcut runs `cryptty image` through `PATH`; keep the Cargo install
+location and the shortcut directory on `PATH`.
+To train and install through Cargo, run:
 
 ```fish
 ./scripts/build-pgo --install
@@ -137,6 +145,15 @@ Ctrl-click opens HTTP/HTTPS links, including OSC 8 targets and plain URLs
 across terminal soft wraps. Hovering underlines the detected link.
 Hold Shift to select or Ctrl-Shift-click links during mouse capture.
 Trailing echoed `^C` is excluded from plain URLs and their word selection.
+
+While Ctrl is held for link interaction, Cryptty queries a matching local
+client on tmux's default server. Pane snapshots preserve tmux's soft wraps,
+so URLs spanning pane rows open in full. During application mouse capture,
+hold Ctrl-Shift as usual. Queries run asynchronously and stop when the
+interaction ends; an accepted click may finish after Ctrl is released.
+The idle connection closes after five seconds. No plugin or setting is
+required. Custom tmux sockets, remote servers, copy mode, pane titles, and
+cropped viewports retain the original screen-based detection.
 Applications can copy text through OSC 52 to the system clipboard.
 
 Resizing reflows primary-screen text and retains up to 10,000 history rows

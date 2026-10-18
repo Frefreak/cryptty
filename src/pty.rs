@@ -139,6 +139,10 @@ impl Pty {
         Ok(true)
     }
 
+    pub fn tty_name(&self) -> Option<std::path::PathBuf> {
+        self.master.tty_name()
+    }
+
     pub fn resize(&self, size: PtySize) -> Result<()> {
         self.master.resize(size)
     }

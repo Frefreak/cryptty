@@ -4,7 +4,8 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use cryptty::{
     input,
-    terminal::{Effect, MouseMode, Position, TextRange, supported_uri},
+    terminal::{Effect, MouseMode, Position, Row, TextRange, supported_uri},
+    tmux::{Lookup, ScreenLink},
 };
 use winit::event::{ElementState, MouseButton, MouseScrollDelta};
 use winit::window::CursorIcon;
@@ -21,6 +22,25 @@ pub(super) struct Interaction {
     selection_anchor: Option<SelectionAnchor>,
     clicks: Clicks,
     pointer_inside: bool,
+    pending_link: Option<PendingLink>,
+}
+
+struct PendingLink {
+    position: Position,
+    rows: std::collections::VecDeque<Row>,
+}
+
+impl PendingLink {
+    fn matches(&self, terminal: &cryptty::terminal::Terminal) -> bool {
+        self.rows.len() == terminal.rows.len()
+            && self.rows.iter().zip(&terminal.rows).all(|(before, after)| {
+                before.len() == after.len()
+                    && before.wrapped == after.wrapped
+                    && before.iter().zip(after).all(|(a, b)| {
+                        a.content == b.content && a.hyperlink == b.hyperlink
+                    })
+            })
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -57,6 +77,7 @@ impl Interaction {
         self.last_motion = None;
         self.selection_anchor = None;
         self.clicks = Clicks::default();
+        self.pending_link = None;
     }
 
     fn selection_after_output(
@@ -143,11 +164,54 @@ impl View {
         let available = self.terminal.mouse_mode == MouseMode::Off
             || self.modifiers.shift_key()
             || self.interaction.selection_anchor.is_some();
+        self.tmux.update(
+            self.interaction.pending_link.is_some()
+                || (available
+                    && self.interaction.pointer_inside
+                    && self.modifiers.control_key()),
+            (self.terminal.cols(), self.terminal.rows.len()),
+            Instant::now(),
+        );
         let (x, y) = self.pointer_cell();
-        let link = (available && self.interaction.pointer_inside)
-            .then(|| self.terminal.link_at(Position { row: y, col: x }))
-            .flatten();
-        let hovered = link.as_ref().map(|link| link.range);
+        let position = Position { row: y, col: x };
+        if let Some(pending) = &self.interaction.pending_link {
+            let clicked = pending.position;
+            if !pending.matches(&self.terminal) {
+                self.interaction.pending_link = None;
+            } else {
+                match self.lookup_link(clicked) {
+                    Lookup::Pending => (),
+                    result => {
+                        self.interaction.pending_link = None;
+                        if let Lookup::Ready(Some(link)) = result {
+                            open_link(&link.uri);
+                        }
+                    }
+                }
+            }
+            if self.interaction.pending_link.is_none()
+                && !self.modifiers.control_key()
+            {
+                self.tmux.update(
+                    false,
+                    (self.terminal.cols(), self.terminal.rows.len()),
+                    Instant::now(),
+                );
+            }
+        }
+        let link = if available && self.interaction.pointer_inside {
+            self.lookup_link(position)
+        } else {
+            Lookup::Ready(None)
+        };
+        let link = match link {
+            Lookup::Ready(link) => link,
+            _ => None,
+        };
+        let hovered = link
+            .as_ref()
+            .map(|link| link.ranges.clone())
+            .unwrap_or_default();
         if self.terminal.hovered_link != hovered {
             self.terminal.hovered_link = hovered;
             self.renderer.invalidate();
@@ -162,6 +226,22 @@ impl View {
                 CursorIcon::Default
             },
         );
+    }
+
+    fn lookup_link(&self, position: Position) -> Lookup {
+        let explicit = self.terminal.rows[position.row][position.col]
+            .hyperlink
+            .is_some();
+        if (self.modifiers.control_key()
+            || self.interaction.pending_link.is_some())
+            && !explicit
+        {
+            match self.tmux.lookup(&self.terminal, position) {
+                Lookup::Unavailable => (),
+                result => return result,
+            }
+        }
+        Lookup::Ready(self.terminal.link_at(position).map(ScreenLink::from))
     }
 
     fn selection_position(&self) -> Position {
@@ -331,15 +411,25 @@ impl View {
         }
         if !released && index == 0 && available && self.modifiers.control_key()
         {
-            let (x, y) = self.pointer_cell();
-            if let Some(link) =
-                self.terminal.link_at(Position { row: y, col: x })
-            {
-                self.interaction.clicks = Clicks::default();
-                open_link(&link.uri);
-                return Ok(());
+            let (col, row) = self.pointer_cell();
+            let position = Position { row, col };
+            self.interaction.clicks = Clicks::default();
+            match self.lookup_link(position) {
+                Lookup::Ready(Some(link)) => {
+                    open_link(&link.uri);
+                    return Ok(());
+                }
+                Lookup::Pending => {
+                    self.interaction.pending_link = Some(PendingLink {
+                        position,
+                        rows: self.terminal.rows.clone(),
+                    });
+                    return Ok(());
+                }
+                _ => (),
             }
         }
+
         if !released && index == 0 && available {
             let (col, row) = self.pointer_cell();
             let position = Position { row, col };
@@ -504,3 +594,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(all(test, target_os = "linux"))]
+#[path = "interaction/tmux_tests.rs"]
+mod tmux_tests;

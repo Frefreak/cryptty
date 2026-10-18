@@ -6,3 +6,4 @@ pub mod options;
 pub mod pty;
 pub mod render;
 pub mod terminal;
+pub mod tmux;

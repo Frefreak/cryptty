@@ -176,7 +176,7 @@ impl Terminal {
         if self.selection.is_some_and(|r| r.contains(position)) {
             style.inverse = !style.inverse;
         }
-        if self.hovered_link.is_some_and(|r| r.contains(position)) {
+        if self.hovered_link.iter().any(|r| r.contains(position)) {
             style.underline = Underline::Single;
         }
         style

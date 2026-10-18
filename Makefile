@@ -33,6 +33,7 @@ install-linux:
 	@command -v desktop-file-edit >/dev/null || \
 	  { echo 'install-linux requires desktop-file-utils' >&2; exit 1; }
 	$(CARGO) install --path . --locked --root "$(PREFIX)"
+	install -Dm755 scripts/cimg "$(PREFIX)/bin/cimg"
 	install -Dm644 assets/cryptty-linux-512.png \
 	  "$(PREFIX)/share/icons/hicolor/512x512/apps/cryptty.png"
 	install -Dm644 assets/cryptty.desktop \

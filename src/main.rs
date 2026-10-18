@@ -9,6 +9,7 @@ use cryptty::{
     pty,
     render::Renderer,
     terminal::Terminal,
+    tmux,
 };
 use portable_pty::PtySize;
 use winit::application::ApplicationHandler;
@@ -36,6 +37,7 @@ struct View {
     renderer: Renderer,
     terminal: Terminal,
     pty: pty::Pty,
+    tmux: tmux::Integration,
     modifiers: ModifiersState,
     keyboard_input: keyboard_input::State,
     keyboard: Keyboard,
@@ -106,12 +108,17 @@ impl App {
                 let _ = proxy.send_event(());
             },
         )?;
+        let proxy = self.proxy.clone();
+        let tmux = tmux::Integration::new(pty.tty_name(), move || {
+            let _ = proxy.send_event(());
+        });
         self.view = Some(View {
             display,
             window,
             renderer,
             terminal,
             pty,
+            tmux,
             modifiers: ModifiersState::empty(),
             keyboard_input: keyboard_input::State::default(),
             keyboard: self.config.keyboard.clone(),
@@ -179,6 +186,7 @@ impl View {
             self.renderer.cell_height as u32,
         );
         self.terminal.resize(cols, rows);
+        self.tmux.invalidate();
         self.pty.resize(pty_size(cols, rows, &self.renderer))?;
         self.renderer.invalidate();
         self.clear_selection();
@@ -366,9 +374,10 @@ impl ApplicationHandler<()> for App {
                 Ok(pty::Event::Output(bytes)) => {
                     processed += 1;
                     let selection = view.terminal.selection;
-                    if view.terminal.hovered_link.is_some() {
+                    if !view.terminal.hovered_link.is_empty() {
                         view.renderer.invalidate();
                     }
+                    view.tmux.invalidate();
                     let replies = view.terminal.feed(&bytes);
                     view.selection_after_output(selection);
                     view.apply_effects();
@@ -400,8 +409,8 @@ impl ApplicationHandler<()> for App {
             let _ = self.proxy.send_event(());
         }
         view.update_title();
+        view.refresh_pointer();
         if changed {
-            view.refresh_pointer();
             view.defer_redraw();
         }
     }
@@ -411,6 +420,9 @@ impl ApplicationHandler<()> for App {
             return;
         };
         let now = Instant::now();
+        if view.tmux.deadline().is_some_and(|deadline| deadline <= now) {
+            view.refresh_pointer();
+        }
         let mut wake = view.terminal.synchronized_until();
         if wake.is_some_and(|t| t <= now) {
             view.terminal.finish_synchronized_update();
@@ -455,6 +467,9 @@ impl ApplicationHandler<()> for App {
         } else {
             view.terminal.text_blink_phase = 0;
             view.next_text_blink = now + Duration::from_millis(250);
+        }
+        if let Some(deadline) = view.tmux.deadline() {
+            wake = Some(wake.map_or(deadline, |t| t.min(deadline)));
         }
         events.set_control_flow(
             wake.map_or(ControlFlow::Wait, ControlFlow::WaitUntil),

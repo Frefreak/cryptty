@@ -95,11 +95,16 @@ RUSTFLAGS+=' -Cllvm-args=-pgo-warn-missing-function'
 cargo build --release --locked --target "$host"
 if [[ $install_requested == true ]]; then
     install_args=()
+    shortcut_bin="$HOME/.local/bin"
     if [[ $(uname -s) == Linux ]]; then
-        install_args=(--root "${PREFIX:-$HOME/.local}")
+        install_root=${PREFIX:-$HOME/.local}
+        install_args=(--root "$install_root")
+        shortcut_bin="$install_root/bin"
     fi
     cargo install --path "$repo" --locked --target "$host" --force \
         "${install_args[@]}"
+    mkdir -p "$shortcut_bin"
+    install -m755 "$repo/scripts/cimg" "$shortcut_bin/cimg"
 fi
 cp "$binary" "$training/cryptty"
 cp "$profile" "$training/cryptty.profdata"

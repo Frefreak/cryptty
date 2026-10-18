@@ -148,6 +148,12 @@ hexadecimal forms, plus `black` and `white`. Ctrl-click opens HTTP/HTTPS
 through the platform opener. Plain URLs follow soft wraps; explicit line
 breaks end detection. OSC 8 supplies the full target independently of its
 label. Hovering underlines links; Ctrl-Shift-click bypasses mouse capture.
+
+Ctrl-triggered local tmux integration recovers pane-local wrap boundaries
+through the default server. Snapshot text must match the displayed pane.
+Multi-row highlights remain inside that pane. Queries run off the UI thread;
+idle connections expire after five seconds. Unsupported tmux layouts and
+servers use the existing screen detector. See the README for scope.
 Trailing echoed `^C` is excluded from plain-URL detection and double-click
 selection of URL-containing text. OSC 8 targets remain unchanged.
 Clipboard reads through OSC

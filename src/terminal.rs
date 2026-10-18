@@ -438,7 +438,7 @@ pub struct Terminal {
     pub rows: VecDeque<Row>,
     history: VecDeque<Row>,
     pub selection: Option<TextRange>,
-    pub hovered_link: Option<TextRange>,
+    pub hovered_link: Vec<TextRange>,
     pub text_blink_phase: u8,
     pub cursor: (usize, usize),
     pub cursor_visible: bool,
@@ -517,7 +517,7 @@ impl Terminal {
             rows,
             history: VecDeque::new(),
             selection: None,
-            hovered_link: None,
+            hovered_link: Vec::new(),
             text_blink_phase: 0,
             cursor: (0, 0),
             cursor_visible: true,
@@ -627,7 +627,7 @@ impl Terminal {
 
     pub fn resize(&mut self, cols: usize, rows: usize) {
         self.selection = None;
-        self.hovered_link = None;
+        self.hovered_link.clear();
         let (cols, rows) = (cols.max(2), rows.max(1));
         if cols == self.cols() && rows == self.rows.len() {
             return;
@@ -713,7 +713,7 @@ impl Terminal {
     pub fn feed(&mut self, bytes: &[u8]) -> Vec<u8> {
         let selected = self.selection.map(|range| self.selected_text(range));
         if !bytes.is_empty() {
-            self.hovered_link = None;
+            self.hovered_link.clear();
         }
         // Detach the parser while it calls back into the terminal model.
         let mut parser = self.parser.take().expect("parser outside feed");

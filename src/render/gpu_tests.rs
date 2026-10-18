@@ -116,10 +116,10 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
                 Position { row: 0, col: 0 },
                 Position { row: 1, col: 5 },
             ));
-            terminal.hovered_link = Some(TextRange::between(
+            terminal.hovered_link = vec![TextRange::between(
                 Position { row: 2, col: 0 },
                 Position { row: 2, col: 10 },
-            ));
+            )];
             renderer.draw(&terminal, width, height, preedit);
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("pixel comparison"),

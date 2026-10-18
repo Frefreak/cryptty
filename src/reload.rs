@@ -41,6 +41,7 @@ impl View {
         self.renderer = renderer;
         self.display.clear_glyphs();
         self.terminal.resize(cols, rows);
+        self.tmux.invalidate();
         self.terminal.set_theme(config.colors.theme());
         self.terminal.word_characters = config.selection.word_characters;
         self.terminal.cell_pixels = (

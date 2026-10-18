@@ -9,6 +9,7 @@ import argparse
 import json
 from pathlib import Path
 import plistlib
+import shlex
 import shutil
 import subprocess
 import sys
@@ -141,6 +142,15 @@ def main():
                 previous.rename(destination)
             raise
     if args.install:
+        shortcut = Path.home() / ".local/bin/cimg"
+        shortcut.parent.mkdir(parents=True, exist_ok=True)
+        binary = destination / "Contents/MacOS/cryptty"
+        shortcut.write_text(
+            "#!/bin/sh\n"
+            f'exec {shlex.quote(str(binary))} image "$@"\n'
+        )
+        shortcut.chmod(0o755)
+        print(f"Installed {shortcut}; add its directory to PATH if needed")
         subprocess.run([str(REGISTER), "-f", str(destination)], check=True)
         subprocess.run(["mdimport", str(destination)], check=True)
         print(f"Installed {destination}; launch with Spotlight: Cryptty")

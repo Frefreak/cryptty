@@ -1,0 +1,226 @@
+use super::*;
+
+fn p(row: usize, col: usize) -> Position {
+    Position { row, col }
+}
+
+#[test]
+fn captures_distinguish_wrapping_from_explicit_newlines() {
+    let physical = "https://a/\n1234567890\nend       \n          \n";
+    let joined = "https://a/1234567890end\n\n";
+    let terminal = pane_terminal(10, 4, physical, joined).unwrap();
+    assert_eq!(
+        terminal.link_at(p(2, 1)).unwrap().uri,
+        "https://a/1234567890end"
+    );
+    let terminal = pane_terminal(10, 4, physical, physical).unwrap();
+    assert_eq!(terminal.link_at(p(0, 2)).unwrap().uri, "https://a/");
+    assert!(terminal.link_at(p(1, 1)).is_none());
+}
+
+#[test]
+fn inconsistent_captures_are_rejected() {
+    assert!(
+        pane_terminal(10, 2, "https://a/\nchanged   \n", "https://a/old\n")
+            .is_none()
+    );
+}
+
+#[test]
+fn unicode_wide_padding_and_combining_marks_keep_coordinates() {
+    let terminal =
+        pane_terminal(4, 3, "abc \n中e\u{301} \n尾  \n", "abc中e\u{301}\n尾\n")
+            .unwrap();
+    assert_eq!(terminal.rows[0].wrapped, Some(3));
+    assert_eq!(
+        terminal.selected_text(TextRange::between(p(0, 0), p(1, 3))),
+        "abc中e\u{301}"
+    );
+}
+
+#[test]
+fn pane_links_and_highlights_stay_inside_their_rectangle() {
+    let physical = "https://a/\n1234567890\nend       \n          \n";
+    let terminal =
+        pane_terminal(10, 4, physical, "https://a/1234567890end\n\n").unwrap();
+    let mut display = Terminal::new(22, 6);
+    for (row, line) in physical.lines().enumerate() {
+        display.feed(format!("\x1b[{};12H{line}", row + 2).as_bytes());
+    }
+    let snapshot = Snapshot {
+        size: (22, 6),
+        panes: vec![PaneText {
+            origin: p(1, 11),
+            terminal,
+        }],
+    };
+    let Lookup::Ready(Some(link)) = snapshot.lookup(&display, p(3, 12)) else {
+        panic!("wrapped suffix must resolve");
+    };
+    assert_eq!(link.uri, "https://a/1234567890end");
+    assert_eq!(
+        link.ranges,
+        vec![
+            TextRange::between(p(1, 11), p(1, 21)),
+            TextRange::between(p(2, 11), p(2, 21)),
+            TextRange::between(p(3, 11), p(3, 14)),
+        ]
+    );
+    assert!(matches!(
+        snapshot.lookup(&display, p(3, 5)),
+        Lookup::Unavailable
+    ));
+    display.feed(b"\x1b[2;12HX");
+    assert!(matches!(
+        snapshot.lookup(&display, p(3, 12)),
+        Lookup::Unavailable
+    ));
+}
+
+#[test]
+fn client_selection_uses_exact_tty_and_checks_viewport() {
+    let text = concat!(
+        "/dev/pts/9\t$1\t@2\t80\t24\t80\t23\ton\tbottom\toff\t0\n",
+        "/dev/pts/1\t$3\t@4\t80\t24\t80\t22\t2\ttop\toff\t1\n",
+    );
+    let client = Client::find(text, Path::new("/dev/pts/1")).unwrap();
+    assert_eq!(client.window, "@4");
+    assert!(client.status_top);
+    assert!(client.zoomed);
+    assert!(client.fits((80, 24)));
+    assert!(!client.fits((80, 25)));
+    assert!(Client::find(text, Path::new("/dev/pts/10")).is_none());
+}
+
+#[test]
+#[ignore = "requires tmux and a local PTY"]
+fn real_tmux_split_recovers_url_and_tracks_layout_changes() {
+    use crate::pty::{Event, Pty};
+    use portable_pty::PtySize;
+    use std::ffi::OsString;
+    use std::process::Command;
+    use std::time::{Duration, Instant};
+
+    struct ServerGuard(std::path::PathBuf);
+    impl Drop for ServerGuard {
+        fn drop(&mut self) {
+            let _ = Command::new("tmux")
+                .arg("-S")
+                .arg(&self.0)
+                .arg("kill-server")
+                .env_remove("TMUX")
+                .output();
+        }
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let socket = directory.path().join("tmux.sock");
+    let _guard = ServerGuard(socket.clone());
+    let run = |args: &[&str]| {
+        let output = Command::new("tmux")
+            .arg("-S")
+            .arg(&socket)
+            .args(args)
+            .env_remove("TMUX")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    };
+    run(&[
+        "-f",
+        "/dev/null",
+        "new-session",
+        "-d",
+        "-s",
+        "test",
+        "-x",
+        "81",
+        "-y",
+        "12",
+        "sleep 30",
+    ]);
+    run(&["set-option", "-g", "status-position", "top"]);
+    let uri = concat!(
+        "https://carso.nz/1111111111111111/",
+        "222222222222222222/3333333333333333333333/",
+        "444444444444444444444444444/5555555555555"
+    );
+    let command = format!("printf '%s' {}; sleep 30", quote(uri));
+    run(&["split-window", "-h", "-l", "40", "-t", "test", &command]);
+    let command: Vec<OsString> = vec![
+        "tmux".into(),
+        "-S".into(),
+        socket.clone().into(),
+        "attach-session".into(),
+        "-t".into(),
+        "test".into(),
+    ];
+    let mut pty = Pty::spawn(
+        &command,
+        PtySize {
+            cols: 81,
+            rows: 12,
+            ..PtySize::default()
+        },
+        || {},
+    )
+    .unwrap();
+    let tty = pty.tty_name().unwrap();
+    let mut terminal = Terminal::new(81, 12);
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let event = pty
+            .output
+            .recv_timeout(deadline.saturating_duration_since(Instant::now()))
+            .unwrap();
+        let Event::Output(bytes) = event else {
+            panic!("tmux exited")
+        };
+        let replies = terminal.feed(&bytes);
+        pty.write(replies).unwrap();
+        if matches!(&terminal.rows[3][41].content,
+                    Content::Text { text } if text.chars().next() == Some('4'))
+        {
+            break;
+        }
+    }
+    assert_eq!(terminal.rows[1].wrapped, None);
+    assert_ne!(terminal.link_at(p(1, 45)).unwrap().uri, uri);
+    let mut connection = client::Server {
+        socket: Some(socket.clone()),
+    }
+    .connect(&tty, &|| true)
+    .unwrap();
+    let snapshot =
+        Snapshot::capture(&mut connection, &tty, (81, 12), &|| true).unwrap();
+    for point in [p(1, 45), p(2, 42), p(3, 42)] {
+        let Lookup::Ready(Some(link)) = snapshot.lookup(&terminal, point)
+        else {
+            panic!("tmux link at {point:?} missing");
+        };
+        assert_eq!(link.uri, uri);
+        assert!(
+            link.ranges
+                .iter()
+                .all(|range| range.start.col >= 41 && range.end.col <= 81)
+        );
+    }
+    let before = Instant::now();
+    for _ in 0..50 {
+        Snapshot::capture(&mut connection, &tty, (81, 12), &|| true).unwrap();
+    }
+    eprintln!("tmux snapshot average: {:?}", before.elapsed() / 50);
+    run(&["resize-pane", "-Z", "-t", "test:0.1"]);
+    let zoomed =
+        Snapshot::capture(&mut connection, &tty, (81, 12), &|| true).unwrap();
+    assert_eq!(zoomed.panes.len(), 1);
+    assert_eq!(zoomed.panes[0].origin, p(1, 0));
+    assert_eq!(zoomed.panes[0].terminal.cols(), 81);
+    run(&["copy-mode", "-t", "test:0.1"]);
+    let copy_mode =
+        Snapshot::capture(&mut connection, &tty, (81, 12), &|| true).unwrap();
+    assert!(copy_mode.panes.is_empty());
+}
