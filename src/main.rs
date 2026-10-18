@@ -30,6 +30,7 @@ mod macos_input;
 mod notifications;
 mod redraw;
 mod reload;
+mod vim_mode;
 
 struct View {
     display: display::Display,
@@ -38,6 +39,7 @@ struct View {
     terminal: Terminal,
     pty: pty::Pty,
     tmux: tmux::Integration,
+    vim: Option<vim_mode::Mode>,
     modifiers: ModifiersState,
     keyboard_input: keyboard_input::State,
     keyboard: Keyboard,
@@ -119,6 +121,7 @@ impl App {
             terminal,
             pty,
             tmux,
+            vim: None,
             modifiers: ModifiersState::empty(),
             keyboard_input: keyboard_input::State::default(),
             keyboard: self.config.keyboard.clone(),
@@ -157,6 +160,10 @@ impl View {
 
     fn update_title(&mut self) {
         let mut title = self.terminal.title.clone();
+        if let Some(mode) = &self.vim {
+            title.push_str(" — ");
+            title.push_str(&mode.status());
+        }
         if self.backlog_full {
             title.push_str(" — input backlog full");
         }
@@ -185,6 +192,7 @@ impl View {
             self.renderer.cell_width as u32,
             self.renderer.cell_height as u32,
         );
+        self.leave_vim();
         self.terminal.resize(cols, rows);
         self.tmux.invalidate();
         self.pty.resize(pty_size(cols, rows, &self.renderer))?;
@@ -211,7 +219,8 @@ impl View {
 
     fn draw(&mut self) -> Result<()> {
         let now = Instant::now();
-        if self.terminal.synchronized_until().is_some_and(|t| t > now)
+        if (self.vim.is_none()
+            && self.terminal.synchronized_until().is_some_and(|t| t > now))
             || self.redraw.deadline().is_some_and(|t| t > now)
         {
             return Ok(());
@@ -220,7 +229,9 @@ impl View {
         self.display.draw(
             &self.window,
             &mut self.renderer,
-            &self.terminal,
+            self.vim
+                .as_ref()
+                .map_or(&self.terminal, |mode| mode.screen()),
             &self.preedit,
             request_frame_callback,
         )?;
@@ -228,7 +239,10 @@ impl View {
             Instant::now(),
             self.display.frame_interval(&self.window),
         );
-        let (x, y) = self.terminal.cursor;
+        let (x, y) = self
+            .vim
+            .as_ref()
+            .map_or(self.terminal.cursor, |mode| mode.screen().cursor);
         let (left, top) = self.renderer.cell_origin(x, y);
         self.window.set_ime_cursor_area(
             PhysicalPosition::new(left as i32, top as i32),
@@ -306,6 +320,16 @@ impl View {
                 self.window.request_redraw();
             }
             WindowEvent::Ime(Ime::Commit(text)) => {
+                if self.vim.is_some() {
+                    self.preedit.clear();
+                    for ch in text.chars() {
+                        if self.vim.is_none() {
+                            break;
+                        }
+                        self.vim_key(cryptty::vim::Key::Char(ch));
+                    }
+                    return Ok(());
+                }
                 if !text.is_empty() {
                     self.redraw.input(Instant::now());
                 }
@@ -374,10 +398,14 @@ impl ApplicationHandler<()> for App {
                 Ok(pty::Event::Output(bytes)) => {
                     processed += 1;
                     let selection = view.terminal.selection;
-                    if !view.terminal.hovered_link.is_empty() {
+                    if view.vim.is_none()
+                        && !view.terminal.hovered_link.is_empty()
+                    {
                         view.renderer.invalidate();
                     }
-                    view.tmux.invalidate();
+                    if view.vim.is_none() {
+                        view.tmux.invalidate();
+                    }
                     let replies = view.terminal.feed(&bytes);
                     view.selection_after_output(selection);
                     view.apply_effects();
@@ -410,7 +438,7 @@ impl ApplicationHandler<()> for App {
         }
         view.update_title();
         view.refresh_pointer();
-        if changed {
+        if changed && view.vim.is_none() {
             view.defer_redraw();
         }
     }
@@ -423,7 +451,12 @@ impl ApplicationHandler<()> for App {
         if view.tmux.deadline().is_some_and(|deadline| deadline <= now) {
             view.refresh_pointer();
         }
-        let mut wake = view.terminal.synchronized_until();
+        view.refresh_vim();
+        let mut wake = if view.vim.is_some() {
+            None
+        } else {
+            view.terminal.synchronized_until()
+        };
         if wake.is_some_and(|t| t <= now) {
             view.terminal.finish_synchronized_update();
             view.window.request_redraw();
@@ -444,7 +477,10 @@ impl ApplicationHandler<()> for App {
                 wake = Some(wake.map_or(deadline, |t| t.min(deadline)));
             }
         }
-        if view.terminal.cursor_style.blinking && view.terminal.cursor_visible {
+        if view.vim.is_none()
+            && view.terminal.cursor_style.blinking
+            && view.terminal.cursor_visible
+        {
             if now >= view.next_blink {
                 view.terminal.cursor_blink_on = !view.terminal.cursor_blink_on;
                 view.next_blink = now + Duration::from_millis(500);
@@ -453,7 +489,7 @@ impl ApplicationHandler<()> for App {
             wake =
                 Some(wake.map_or(view.next_blink, |t| t.min(view.next_blink)));
         }
-        if view.terminal.has_blinking_text() {
+        if view.vim.is_none() && view.terminal.has_blinking_text() {
             if now >= view.next_text_blink {
                 view.terminal.text_blink_phase =
                     (view.terminal.text_blink_phase + 1) % 4;
@@ -467,6 +503,11 @@ impl ApplicationHandler<()> for App {
         } else {
             view.terminal.text_blink_phase = 0;
             view.next_text_blink = now + Duration::from_millis(250);
+        }
+        if let Some(deadline) =
+            view.vim.as_ref().and_then(|mode| mode.deadline())
+        {
+            wake = Some(wake.map_or(deadline, |t| t.min(deadline)));
         }
         if let Some(deadline) = view.tmux.deadline() {
             wake = Some(wake.map_or(deadline, |t| t.min(deadline)));

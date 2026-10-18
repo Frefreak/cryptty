@@ -95,6 +95,16 @@ impl Control {
 }
 
 impl Graphics {
+    pub(crate) fn snapshot(&self) -> Self {
+        Self {
+            images: self.images.clone(),
+            placements: self.placements.clone(),
+            positioned: self.positioned.clone(),
+            revision: self.revision,
+            ..Self::default()
+        }
+    }
+
     pub fn command(
         &mut self,
         bytes: &[u8],

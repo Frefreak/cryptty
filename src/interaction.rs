@@ -110,7 +110,7 @@ impl Interaction {
         true
     }
 
-    fn clipboard(&mut self) -> Result<&mut arboard::Clipboard> {
+    pub(super) fn clipboard(&mut self) -> Result<&mut arboard::Clipboard> {
         if self.clipboard.is_none() {
             self.clipboard = Some(arboard::Clipboard::new()?);
         }
@@ -161,6 +161,11 @@ impl View {
     }
 
     pub(super) fn refresh_pointer(&mut self) {
+        if self.vim.is_some() {
+            self.refresh_vim();
+            self.window.set_cursor(CursorIcon::Default);
+            return;
+        }
         let available = self.terminal.mouse_mode == MouseMode::Off
             || self.modifiers.shift_key()
             || self.interaction.selection_anchor.is_some();
@@ -357,6 +362,9 @@ impl View {
         self.interaction.pointer = (x, y);
         self.interaction.pointer_inside = true;
         self.refresh_pointer();
+        if self.vim.is_some() {
+            return Ok(());
+        }
         if let Some(anchor) = self.interaction.selection_anchor {
             let (col, row) = self.pointer_cell();
             if self
@@ -392,6 +400,9 @@ impl View {
         button: MouseButton,
         state: ElementState,
     ) -> Result<()> {
+        if self.vim.is_some() {
+            return Ok(());
+        }
         let index = match button {
             MouseButton::Left => 0,
             MouseButton::Middle => 1,
@@ -470,6 +481,9 @@ impl View {
         &mut self,
         delta: MouseScrollDelta,
     ) -> Result<()> {
+        if self.vim.is_some() {
+            return Ok(());
+        }
         if self.terminal.mouse_mode == MouseMode::Off
             || self.modifiers.shift_key()
         {

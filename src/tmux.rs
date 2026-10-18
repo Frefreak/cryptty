@@ -94,6 +94,14 @@ impl From<Link> for ScreenLink {
     }
 }
 
+pub enum TextSnapshot {
+    Pending,
+    Unavailable,
+    Changed,
+    Failed,
+    Ready(Vec<PaneText>),
+}
+
 pub enum Lookup {
     Pending,
     Unavailable,
@@ -161,11 +169,31 @@ impl PaneText {
 }
 
 pub struct Snapshot {
+    complete: bool,
     size: (usize, usize),
     pub panes: Vec<PaneText>,
 }
 
 impl Snapshot {
+    fn text(&self, display: &Terminal) -> TextSnapshot {
+        if !self.complete
+            || self.size != (display.cols(), display.rows.len())
+            || self.panes.is_empty()
+            || !self.panes.iter().all(|pane| pane.matches(display))
+        {
+            return TextSnapshot::Changed;
+        }
+        TextSnapshot::Ready(
+            self.panes
+                .iter()
+                .map(|pane| PaneText {
+                    origin: pane.origin,
+                    terminal: pane.terminal.visible_snapshot(),
+                })
+                .collect(),
+        )
+    }
+
     fn capture(
         connection: &mut Control,
         tty: &Path,
@@ -187,12 +215,17 @@ impl Snapshot {
         let metadata = connection
             .query(std::slice::from_ref(&pane_command))?
             .remove(0);
+        let mut complete = true;
         let mut bounds = Vec::new();
         let mut commands = Vec::new();
         for line in metadata.lines() {
             let fields: Vec<_> = line.split('\t').collect();
             anyhow::ensure!(fields.len() == 7, "invalid tmux pane metadata");
-            if fields[5] != "0" || (client.zoomed && fields[6] != "1") {
+            if client.zoomed && fields[6] != "1" {
+                continue;
+            }
+            if fields[5] != "0" {
+                complete = false;
                 continue;
             }
             let id = identifier(fields[0], '%').context("invalid pane id")?;
@@ -243,9 +276,15 @@ impl Snapshot {
                 pane_terminal(width, height, &captures[0], &captures[1])
             {
                 panes.push(PaneText { origin, terminal });
+            } else {
+                complete = false;
             }
         }
-        Ok(Self { size, panes })
+        Ok(Self {
+            size,
+            panes,
+            complete,
+        })
     }
 
     pub fn lookup(&self, display: &Terminal, position: Position) -> Lookup {

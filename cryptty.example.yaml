@@ -33,3 +33,9 @@ colors:
     magenta: "#ff92df"
     cyan: "#a4ffff"
     white: "#ffffff"
+
+# keyboard:
+#   bindings:
+#     - key: j
+#       modifiers: [Control, Shift]
+#       action: VimMode

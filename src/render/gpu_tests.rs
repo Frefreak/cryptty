@@ -99,6 +99,9 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
         for (width, height, preedit, shape) in [
             (1024, 1024, "", 2),
             (640, 640, "", 4),
+            (640, 640, "", 8),
+            (256, 90, "", 8),
+            (1, 1, "", 8),
             (384, 160, "测试", 2),
             (256, 90, "", 6),
             (1, 1, "中", 6),
@@ -111,6 +114,7 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
                 terminal.set_theme(theme);
             }
             terminal.feed(format!("\x1b[{shape} q").as_bytes());
+            terminal.vim_mode = shape == 8;
             terminal.text_blink_phase = shape % 4;
             terminal.selection = Some(TextRange::between(
                 Position { row: 0, col: 0 },

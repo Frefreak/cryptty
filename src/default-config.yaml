@@ -24,7 +24,10 @@ window:
     x: 2
     y: 2
 keyboard:
-  bindings: []
+  bindings:
+    - key: j
+      modifiers: [Control, Shift]
+      action: VimMode
 selection:
   # Additional word characters beside Unicode letters and digits.
   word_characters: '/\._-~:@%+=,#?'

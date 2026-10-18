@@ -19,6 +19,7 @@ struct Request {
 struct Response {
     generation: u64,
     snapshot: Option<Snapshot>,
+    failed: bool,
 }
 
 struct Worker {
@@ -51,6 +52,7 @@ impl Worker {
                         &current,
                     )
                 })();
+                let failed = result.is_err() && connection.is_some();
                 if result.is_err() {
                     connection = None;
                 }
@@ -58,6 +60,7 @@ impl Worker {
                     .send(Response {
                         generation: request.generation,
                         snapshot: result.ok(),
+                        failed,
                     })
                     .is_err()
                 {
@@ -84,6 +87,7 @@ pub struct Integration {
     pending: bool,
     dirty: bool,
     snapshot: Option<Snapshot>,
+    failed: bool,
     next_request: Instant,
     idle_until: Option<Instant>,
 }
@@ -103,6 +107,7 @@ impl Integration {
             pending: false,
             dirty: false,
             snapshot: None,
+            failed: false,
             next_request: Instant::now(),
             idle_until: None,
         }
@@ -126,6 +131,7 @@ impl Integration {
             self.worker_generation
                 .store(self.generation, Ordering::Relaxed);
             self.snapshot = None;
+            self.failed = false;
             self.dirty = active;
             self.next_request = now;
             self.idle_until = (!active).then_some(now + IDLE_TIMEOUT);
@@ -140,6 +146,7 @@ impl Integration {
                 self.pending = false;
                 if self.active && response.generation == self.generation {
                     self.snapshot = response.snapshot;
+                    self.failed = response.failed;
                     if self.snapshot.is_none() {
                         self.next_request = now + Duration::from_secs(1);
                     }
@@ -173,6 +180,18 @@ impl Integration {
             Some(self.next_request)
         } else {
             self.idle_until
+        }
+    }
+
+    pub fn text(&self, display: &Terminal) -> super::TextSnapshot {
+        if self.active && (self.pending || self.dirty) {
+            super::TextSnapshot::Pending
+        } else if let Some(snapshot) = &self.snapshot {
+            snapshot.text(display)
+        } else if self.failed {
+            super::TextSnapshot::Failed
+        } else {
+            super::TextSnapshot::Unavailable
         }
     }
 
@@ -232,8 +251,10 @@ mod tests {
         let request = receive.try_recv().unwrap();
         integration.update(false, (80, 24), now);
         send.send(Response {
+            failed: false,
             generation: request.generation,
             snapshot: Some(Snapshot {
+                complete: true,
                 size: (80, 24),
                 panes: Vec::new(),
             }),

@@ -139,6 +139,12 @@ Reload with Ctrl+Shift+R after changing this setting.
 Selection survives unrelated output and follows scrolling while its text
 remains visible. Overwriting the selected text, switching screens, resizing,
 starting a new selection, or pasting clears it. Copying retains plain text.
+Ctrl+Shift+J enters **Vim mode** on a frozen view and starts Leap.
+Jump with two characters and, when needed, a target label; continue with
+Vim motions, counts, and character, line, or block selection. `y` copies
+and returns to the live display. See [Vim mode](docs/vim-mode.md) for the
+personal key mappings and visible-pane scope.
+
 Ctrl-Shift-N opens a fresh shell in
 a new window, using the original launch directory and renderer options.
 Ctrl-click opens HTTP/HTTPS links, including OSC 8 targets and plain URLs
@@ -256,12 +262,26 @@ accept `Shift`, `Control`, `Alt`, and `Super` (Command on macOS). Matching
 requires exactly the listed modifiers; an omitted list means none. Later
 bindings take priority. Empty text consumes the key without sending bytes.
 YAML double-quoted strings support escapes such as `\u001b`, `\r`, and `\n`.
-Bindings repeat while held and retain their initial match until release.
+Text bindings repeat while held and retain their initial match until release.
 Text composition takes priority. Press Ctrl+Shift+R after changing bindings.
 The example sends `ESC` plus Return and works through tmux with
 `extended-keys off`; the isolated PTY test verifies the emitted bytes.
-Bindings currently send text. Action bindings and automatic file watching
-remain outside this implementation.
+To change the Vim mode entry shortcut, add a `VimMode` action:
+
+```yaml
+keyboard:
+  bindings:
+    - {key: j, modifiers: [Control, Shift], action: VimMode}
+```
+
+Each binding requires exactly one of `text` or `action`. `VimMode` enters
+Vim mode and starts Leap; pressing it again starts another Leap. The action
+runs once per press. Text composition takes precedence. Any configured
+`VimMode` binding replaces the default Ctrl+Shift+J shortcut. Multiple entry
+bindings are allowed. Later bindings win, including text bindings on the
+same key. Empty text on Ctrl+Shift+J disables the default shortcut.
+Ctrl+Shift+R reloads these bindings. Automatic file watching remains outside
+this implementation.
 
 See [performance experiments and measurements](docs/performance.md).
 See [milestone status and remaining work](docs/roadmap.md).

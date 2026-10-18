@@ -4,7 +4,7 @@ use unicode_width::UnicodeWidthChar;
 use super::{
     Renderer,
     atlas::Atlas,
-    decoration::{cursor_layout, cursor_rect, decorations},
+    decoration::{cursor_layout, cursor_rects, decorations, vim_frame},
 };
 use crate::terminal::{Content, CursorShape, FontStyle, Terminal};
 
@@ -195,10 +195,18 @@ pub(super) fn build(
     if terminal.cursor_drawn() {
         let (x, y, columns, shape) = cursor_layout(terminal, preedit);
         let (left, top) = scene.renderer.cell_origin(x, y);
-        let [dx, dy, cw, ch] = cursor_rect(shape, w, h, columns);
-        scene.solid(left + dx, top + dy, cw, ch, terminal.theme().cursor);
+        for [dx, dy, cw, ch] in cursor_rects(
+            shape,
+            w,
+            h,
+            columns,
+            terminal.vim_mode && preedit.is_empty(),
+        ) {
+            scene.solid(left + dx, top + dy, cw, ch, terminal.theme().cursor);
+        }
         let cell = &terminal.rows[y][x];
-        if shape == CursorShape::Block
+        if !terminal.vim_mode
+            && shape == CursorShape::Block
             && terminal.text_visible(cell.style())
             && let Content::Text { text } = &cell.content
         {
@@ -215,6 +223,15 @@ pub(super) fn build(
                     bg,
                 )?;
             }
+        }
+    }
+    if terminal.vim_mode {
+        for [x, y, w, h] in vim_frame(
+            (size.0 as usize, size.1 as usize),
+            scene.renderer.padding,
+            h,
+        ) {
+            scene.solid(x, y, w, h, terminal.theme().palette[5]);
         }
     }
     Some(Frame {

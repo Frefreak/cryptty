@@ -5,6 +5,7 @@ use crate::{View, pty_size};
 
 impl View {
     pub(super) fn reload_config(&mut self) {
+        self.leave_vim();
         let result =
             Config::load().and_then(|config| self.apply_config(config));
         self.config_reload_failed = result.is_err();

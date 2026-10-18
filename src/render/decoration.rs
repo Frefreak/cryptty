@@ -27,7 +27,7 @@ pub(super) fn cursor_layout(
     (x, y, columns, terminal.cursor_style.shape)
 }
 
-pub(super) fn cursor_rect(
+fn cursor_rect(
     shape: CursorShape,
     w: usize,
     h: usize,
@@ -84,4 +84,44 @@ pub(super) fn decorations(
     if style.overline {
         paint(0, 0, w, thickness, false);
     }
+}
+
+pub(super) fn cursor_rects(
+    shape: CursorShape,
+    w: usize,
+    h: usize,
+    columns: usize,
+    hollow: bool,
+) -> [[usize; 4]; 4] {
+    if hollow {
+        let width = w * columns;
+        let thickness = (h / 16).max(1).min(w).min(h);
+        [
+            [0, 0, width, thickness],
+            [0, h - thickness, width, thickness],
+            [0, 0, thickness, h],
+            [width - thickness, 0, thickness, h],
+        ]
+    } else {
+        [cursor_rect(shape, w, h, columns), [0; 4], [0; 4], [0; 4]]
+    }
+}
+
+pub(super) fn vim_frame(
+    size: (usize, usize),
+    padding: (usize, usize),
+    cell_height: usize,
+) -> [[usize; 4]; 4] {
+    let (left, top) = padding;
+    let right = size.0.saturating_sub(padding.0);
+    let bottom = size.1.saturating_sub(padding.1);
+    let width = right.saturating_sub(left);
+    let height = bottom.saturating_sub(top);
+    let stroke = (cell_height / 8).clamp(2, 5).min(width).min(height);
+    [
+        [left, top, width, stroke],
+        [left, bottom - stroke, width, stroke],
+        [left, top, stroke, height],
+        [right - stroke, top, stroke, height],
+    ]
 }

@@ -5,7 +5,7 @@ use swash::scale::image::{Content as ImageContent, Image};
 use unicode_width::UnicodeWidthChar;
 
 use crate::terminal::{Content, CursorShape, FontStyle, Terminal};
-use decoration::{cursor_layout, cursor_rect, decorations};
+use decoration::{cursor_layout, cursor_rects, decorations, vim_frame};
 
 #[cfg(target_os = "macos")]
 #[path = "render/native.rs"]
@@ -50,6 +50,7 @@ pub struct Renderer {
     text_blink_phase: u8,
     old_cursor: Option<(usize, usize)>,
     old_preedit_row: Option<usize>,
+    old_vim_mode: bool,
 }
 
 impl Renderer {
@@ -90,6 +91,7 @@ impl Renderer {
             text_blink_phase: 0,
             old_cursor: None,
             old_preedit_row: None,
+            old_vim_mode: false,
         })
     }
 
@@ -147,6 +149,9 @@ impl Renderer {
             self.text_blink_phase = terminal.text_blink_phase;
             self.invalidate();
         }
+        if self.old_vim_mode != terminal.vim_mode {
+            self.invalidate();
+        }
         if self.previous.is_empty() {
             self.pixels.fill(terminal.theme().background);
         }
@@ -183,11 +188,18 @@ impl Renderer {
         if cursor.is_some() {
             let (x, y, columns, shape) = cursor_layout(terminal, preedit);
             let (left, top) = self.cell_origin(x, y);
-            let [dx, dy, w, h] =
-                cursor_rect(shape, self.cell_width, self.cell_height, columns);
-            self.solid(left + dx, top + dy, w, h, terminal.theme().cursor);
+            for [dx, dy, w, h] in cursor_rects(
+                shape,
+                self.cell_width,
+                self.cell_height,
+                columns,
+                terminal.vim_mode && preedit.is_empty(),
+            ) {
+                self.solid(left + dx, top + dy, w, h, terminal.theme().cursor);
+            }
             let cell = &terminal.rows[y][x];
-            if shape == CursorShape::Block
+            if !terminal.vim_mode
+                && shape == CursorShape::Block
                 && terminal.text_visible(cell.style())
                 && let Content::Text { text } = &cell.content
             {
@@ -207,6 +219,14 @@ impl Renderer {
                 }
             }
         }
+        if terminal.vim_mode {
+            for [x, y, w, h] in
+                vim_frame((width, height), self.padding, self.cell_height)
+            {
+                self.solid(x, y, w, h, terminal.theme().palette[5]);
+            }
+        }
+        self.old_vim_mode = terminal.vim_mode;
         self.previous.clone_from(&terminal.rows);
         self.old_cursor = cursor;
         self.old_preedit_row = preedit_row;
@@ -454,6 +474,54 @@ mod tests {
         assert_eq!(blend_rgb(0x123456, 0xabcdef, &[0; 3]), 0x123456);
         assert_eq!(blend_rgb(0x123456, 0xabcdef, &[255; 3]), 0xabcdef);
         assert_eq!(blend(0, 0xffffff, 128), 0x808080);
+    }
+
+    #[test]
+    fn vim_outline_preserves_glyphs_and_frame_cleans_up() {
+        let mut terminal = Terminal::new(18, 8);
+        terminal.feed(
+            "\r\n a中e\u{301} text\r\nsecond line\r\nthird line".as_bytes(),
+        );
+        let rows = terminal.rows.clone();
+        let mut renderer = Renderer::new(24.0).unwrap();
+        let (w, h) = (renderer.cell_width, renderer.cell_height);
+        let size = ((w * 18) as u32, (h * 8) as u32);
+        for x in [1, 2, 3, 4] {
+            terminal.cursor = (x, 1);
+            terminal.cursor_visible = false;
+            terminal.vim_mode = false;
+            renderer.draw(&terminal, size.0, size.1, "");
+            let plain = renderer.pixels.clone();
+            terminal.cursor_visible = true;
+            terminal.vim_mode = true;
+            renderer.draw(&terminal, size.0, size.1, "");
+            let start = if x == 3 { 2 } else { x };
+            let columns = if x == 2 || x == 3 { 2 } else { 1 };
+            let thickness = (h / 16).max(1).min(w).min(h);
+            for y in h + thickness..2 * h - thickness {
+                let a = y * w * 18 + start * w + thickness;
+                let b = y * w * 18 + (start + columns) * w - thickness;
+                assert_eq!(&renderer.pixels[a..b], &plain[a..b]);
+            }
+            assert_ne!(renderer.pixels, plain);
+            for y in 3 * h..h * 8 - 5 {
+                let a = y * w * 18 + 5;
+                let b = (y + 1) * w * 18 - 5;
+                assert_eq!(&renderer.pixels[a..b], &plain[a..b]);
+            }
+            assert_eq!(terminal.rows, rows);
+            terminal.cursor = (5, 2);
+            renderer.draw(&terminal, size.0, size.1, "");
+            let moved = renderer.pixels.clone();
+            renderer.invalidate();
+            renderer.draw(&terminal, size.0, size.1, "");
+            assert_eq!(renderer.pixels, moved);
+            terminal.cursor = (x, 1);
+            terminal.cursor_visible = false;
+            terminal.vim_mode = false;
+            renderer.draw(&terminal, size.0, size.1, "");
+            assert_eq!(renderer.pixels, plain);
+        }
     }
 
     #[test]

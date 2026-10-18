@@ -472,3 +472,84 @@ fn old_empty_mapping_comments_do_not_repeat_new_defaults() {
         assert_eq!(std::fs::read_to_string(&path).unwrap(), updated);
     }
 }
+
+#[test]
+fn vim_entry_defaults_and_custom_bindings_follow_keymap_precedence() {
+    use winit::keyboard::{Key, ModifiersState as M, NamedKey};
+    let default_key = Key::Character("j".into());
+    let default_mods = M::CONTROL | M::SHIFT;
+    let default = Config::default().keyboard;
+    assert!(default.enters_vim(&default_key, default_mods));
+    assert!(!default.enters_vim(&default_key, M::CONTROL));
+    assert_eq!(default.text_for(&default_key, default_mods), None);
+
+    let keyboard = Config::parse(
+        r#"
+keyboard:
+  bindings:
+    - {key: Enter, modifiers: [Shift], text: "\r"}
+"#,
+    )
+    .unwrap()
+    .keyboard;
+    assert!(keyboard.enters_vim(&default_key, default_mods));
+
+    let keyboard = Config::parse(
+        r#"
+keyboard:
+  bindings:
+    - {key: F6, modifiers: [Alt], action: VimMode}
+    - {key: k, modifiers: [Control], action: VimMode}
+    - {key: k, modifiers: [Control], text: ""}
+"#,
+    )
+    .unwrap()
+    .keyboard;
+    assert!(keyboard.enters_vim(&Key::Named(NamedKey::F6), M::ALT));
+    assert!(!keyboard.enters_vim(&Key::Named(NamedKey::F6), M::empty()));
+    assert!(!keyboard.enters_vim(&default_key, default_mods));
+    let k = Key::Character("k".into());
+    assert!(!keyboard.enters_vim(&k, M::CONTROL));
+    assert_eq!(keyboard.text_for(&k, M::CONTROL), Some(""));
+
+    let keyboard = Config::parse(
+        r#"
+keyboard:
+  bindings:
+    - {key: j, modifiers: [Control, Shift], text: ""}
+"#,
+    )
+    .unwrap()
+    .keyboard;
+    assert!(!keyboard.enters_vim(&default_key, default_mods));
+    assert_eq!(keyboard.text_for(&default_key, default_mods), Some(""));
+
+    let keyboard = Config::parse(
+        r#"
+keyboard:
+  bindings:
+    - {key: j, modifiers: [Control, Shift], text: "x"}
+    - {key: j, modifiers: [Control, Shift], action: VimMode}
+"#,
+    )
+    .unwrap()
+    .keyboard;
+    assert!(keyboard.enters_vim(&default_key, default_mods));
+    assert_eq!(keyboard.text_for(&default_key, default_mods), None);
+}
+
+#[test]
+fn bindings_require_one_supported_output() {
+    for binding in [
+        "{key: j}",
+        "{key: j, text: x, action: VimMode}",
+        "{key: j, action: Unknown}",
+        "{key: j, action: 1}",
+    ] {
+        assert!(
+            Config::parse(&format!("keyboard: {{bindings: [{binding}]}}"))
+                .is_err(),
+            "accepted invalid binding: {binding}"
+        );
+    }
+}

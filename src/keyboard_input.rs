@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::time::Instant;
 
 use anyhow::Result;
@@ -22,6 +22,8 @@ pub(super) struct State {
     bound_keys: HashMap<PhysicalKey, Vec<u8>>,
     held_modifiers: HashMap<PhysicalKey, ModifiersState>,
     locks: u8,
+    forwarded: HashSet<PhysicalKey>,
+    modal_keys: HashSet<PhysicalKey>,
 }
 
 impl State {
@@ -29,6 +31,8 @@ impl State {
         self.consumed.clear();
         self.bound_keys.clear();
         self.held_modifiers.clear();
+        self.forwarded.clear();
+        self.modal_keys.clear();
     }
 
     fn consume_shortcut_event(
@@ -46,6 +50,32 @@ impl State {
                         Some(Consumed::OneShot)
                     )
             }
+        }
+    }
+
+    fn claim_modal(&mut self, key: PhysicalKey) {
+        if !self.forwarded.contains(&key)
+            && !self.consumed.contains_key(&key)
+            && !self.bound_keys.contains_key(&key)
+        {
+            self.modal_keys.insert(key);
+        }
+    }
+
+    fn consume_modal_event(
+        &mut self,
+        key: PhysicalKey,
+        state: ElementState,
+        active: bool,
+    ) -> bool {
+        if state == ElementState::Released {
+            return self.modal_keys.remove(&key);
+        }
+        if active {
+            self.claim_modal(key);
+            false
+        } else {
+            self.modal_keys.contains(&key)
         }
     }
 
@@ -135,11 +165,30 @@ impl View {
             state: event.state,
             repeat: event.repeat,
         };
+        if self.keyboard_input.consume_modal_event(
+            event.physical_key,
+            event.state,
+            self.vim.is_some(),
+        ) {
+            return Ok(());
+        }
         if self.keyboard_input.consume_shortcut_event(
             event.physical_key,
             event.state,
             event.repeat,
         ) {
+            return Ok(());
+        }
+        let forwarded_release = !pressed
+            && (self.keyboard_input.forwarded.remove(&event.physical_key)
+                || self
+                    .keyboard_input
+                    .bound_keys
+                    .contains_key(&event.physical_key));
+        if !forwarded_release && self.vim_input(&input_event) {
+            if pressed {
+                self.keyboard_input.claim_modal(event.physical_key);
+            }
             return Ok(());
         }
         let cursor_changed = pressed && self.reset_blink();
@@ -150,6 +199,9 @@ impl View {
         ) {
             if pressed && !bytes.is_empty() {
                 self.redraw.input(Instant::now());
+            }
+            if pressed && !bytes.is_empty() {
+                self.keyboard_input.forwarded.insert(event.physical_key);
             }
             self.send_input(bytes)?;
             if cursor_changed {
@@ -217,6 +269,9 @@ impl View {
         if pressed && !bytes.is_empty() {
             self.redraw.input(Instant::now());
         }
+        if pressed && !bytes.is_empty() {
+            self.keyboard_input.forwarded.insert(event.physical_key);
+        }
         self.send_input(bytes)?;
         if cursor_changed {
             self.window.request_redraw();
@@ -230,6 +285,39 @@ mod tests {
     use super::*;
     use cryptty::config::Config;
     use winit::keyboard::{KeyCode, KeyLocation};
+
+    #[test]
+    fn modal_repeats_stop_at_exit_but_preexisting_keys_keep_their_release() {
+        let mut state = State::default();
+        let key = PhysicalKey::Code(KeyCode::KeyY);
+        assert!(!state.consume_modal_event(key, ElementState::Pressed, true));
+        assert!(state.consume_modal_event(key, ElementState::Pressed, false));
+        assert!(state.consume_modal_event(key, ElementState::Released, false));
+        assert!(!state.consume_modal_event(key, ElementState::Pressed, false));
+        state.forwarded.insert(key);
+        assert!(!state.consume_modal_event(key, ElementState::Pressed, true));
+        assert!(!state.consume_modal_event(key, ElementState::Released, true));
+        assert!(state.forwarded.remove(&key));
+    }
+
+    #[test]
+    fn shortcuts_and_empty_bindings_keep_release_ownership_in_vim_mode() {
+        let mut state = State::default();
+        let key = PhysicalKey::Code(KeyCode::KeyR);
+        state.consumed.insert(key, Consumed::OneShot);
+        assert!(!state.consume_modal_event(key, ElementState::Pressed, true));
+        assert!(!state.consume_modal_event(key, ElementState::Released, true));
+        assert!(state.consume_shortcut_event(
+            key,
+            ElementState::Released,
+            false
+        ));
+        assert!(!state.consumed.contains_key(&key));
+        state.bound_keys.insert(key, Vec::new());
+        state.claim_modal(key);
+        assert!(!state.consume_modal_event(key, ElementState::Released, true));
+        assert!(state.bound_keys.contains_key(&key));
+    }
 
     #[test]
     fn shortcut_repeats_stay_consumed_until_release() {

@@ -442,6 +442,7 @@ pub struct Terminal {
     pub text_blink_phase: u8,
     pub cursor: (usize, usize),
     pub cursor_visible: bool,
+    pub vim_mode: bool,
     pub cursor_style: CursorStyle,
     pub cursor_blink_on: bool,
     pub application_cursor: bool,
@@ -521,6 +522,7 @@ impl Terminal {
             text_blink_phase: 0,
             cursor: (0, 0),
             cursor_visible: true,
+            vim_mode: false,
             cursor_style: CursorStyle::default(),
             cursor_blink_on: true,
             application_cursor: false,
@@ -556,6 +558,49 @@ impl Terminal {
             preceding: None,
             unknown_osc: BTreeMap::new(),
             sync_deadline: None,
+        }
+    }
+
+    /// A renderable copy of the visible screen, without parser or history state.
+    pub fn visible_snapshot(&self) -> Self {
+        let mut snapshot =
+            Self::with_theme(self.cols(), self.rows.len(), self.theme);
+        snapshot.rows = self.rows.clone();
+        snapshot.palette = self.palette;
+        snapshot.color_revision = self.color_revision;
+        snapshot.graphics = self.graphics.snapshot();
+        snapshot.cell_pixels = self.cell_pixels;
+        snapshot.word_characters = self.word_characters.clone();
+        snapshot.cursor = self.cursor;
+        snapshot.cursor_style = self.cursor_style;
+        snapshot.cursor_visible = self.cursor_visible;
+        snapshot.reverse_video = self.reverse_video;
+        snapshot.title = self.title.clone();
+        snapshot
+    }
+
+    pub(crate) fn overlay(
+        &mut self,
+        position: Position,
+        label: Option<char>,
+        style: Style,
+    ) {
+        let row = &mut self.rows[position.row];
+        let mut col = position.col;
+        if matches!(row[col].content, Content::Continuation) {
+            col = col.saturating_sub(1);
+        }
+        let width = match &row[col].content {
+            Content::Text { text } => text.columns(),
+            _ => 1,
+        };
+        for x in col..(col + width).min(row.len()) {
+            row[x].style = style.into();
+            if let Some(ch) = label {
+                row[x].content = Content::Text {
+                    text: CellText::new(if x == col { ch } else { ' ' }, false),
+                };
+            }
         }
     }
 

@@ -48,6 +48,7 @@ fn pane_links_and_highlights_stay_inside_their_rectangle() {
         display.feed(format!("\x1b[{};12H{line}", row + 2).as_bytes());
     }
     let snapshot = Snapshot {
+        complete: true,
         size: (22, 6),
         panes: vec![PaneText {
             origin: p(1, 11),
@@ -223,4 +224,18 @@ fn real_tmux_split_recovers_url_and_tracks_layout_changes() {
     let copy_mode =
         Snapshot::capture(&mut connection, &tty, (81, 12), &|| true).unwrap();
     assert!(copy_mode.panes.is_empty());
+}
+
+#[test]
+fn vim_snapshot_rejects_partial_pane_coverage() {
+    let display = Terminal::new(10, 3);
+    let snapshot = Snapshot {
+        complete: false,
+        size: (10, 3),
+        panes: vec![PaneText {
+            origin: p(0, 0),
+            terminal: display.visible_snapshot(),
+        }],
+    };
+    assert!(matches!(snapshot.text(&display), TextSnapshot::Changed));
 }

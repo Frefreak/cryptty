@@ -14,10 +14,39 @@ impl Keyboard {
         key: &Key,
         modifiers: ModifiersState,
     ) -> Option<&str> {
-        self.bindings.iter().rev().find_map(|binding| {
-            (binding.key == *key && binding.modifiers == modifiers)
-                .then_some(binding.text.as_str())
-        })
+        match self.output_for(key, modifiers)? {
+            Output::Text(text) => Some(text),
+            Output::Action(_) => None,
+        }
+    }
+
+    pub fn enters_vim(&self, key: &Key, modifiers: ModifiersState) -> bool {
+        matches!(
+            self.output_for(key, modifiers),
+            Some(Output::Action(Action::VimMode))
+        )
+    }
+
+    fn output_for(
+        &self,
+        key: &Key,
+        modifiers: ModifiersState,
+    ) -> Option<&Output> {
+        if let Some(binding) = self.bindings.iter().rev().find(|binding| {
+            binding.key == *key && binding.modifiers == modifiers
+        }) {
+            return Some(&binding.output);
+        }
+        let custom_vim = self.bindings.iter().any(|binding| {
+            matches!(binding.output, Output::Action(Action::VimMode))
+        });
+        if !custom_vim
+            && *key == Key::Character("j".into())
+            && modifiers == (ModifiersState::CONTROL | ModifiersState::SHIFT)
+        {
+            return Some(&Output::Action(Action::VimMode));
+        }
+        None
     }
 }
 
@@ -26,7 +55,7 @@ impl Keyboard {
 struct Binding {
     key: Key,
     modifiers: ModifiersState,
-    text: String,
+    output: Output,
 }
 
 #[derive(Deserialize)]
@@ -35,7 +64,19 @@ struct Definition {
     key: String,
     #[serde(default)]
     modifiers: Vec<Modifier>,
-    text: String,
+    text: Option<String>,
+    action: Option<Action>,
+}
+
+#[derive(Clone, Debug)]
+enum Output {
+    Text(String),
+    Action(Action),
+}
+
+#[derive(Clone, Debug, Deserialize)]
+enum Action {
+    VimMode,
 }
 
 #[derive(Deserialize)]
@@ -72,10 +113,19 @@ impl TryFrom<Definition> for Binding {
                     }
             },
         );
+        let output = match (value.text, value.action) {
+            (Some(text), None) => Output::Text(text),
+            (None, Some(action)) => Output::Action(action),
+            _ => {
+                return Err(
+                    "Binding requires exactly one of text or action".into()
+                );
+            }
+        };
         Ok(Self {
             key,
             modifiers,
-            text: value.text,
+            output,
         })
     }
 }
