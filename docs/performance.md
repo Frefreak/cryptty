@@ -606,7 +606,8 @@ rasterized descenders. Native Fantasque at 19 pt and 2× scale now uses a
 Geometry tests and the expanded Metal/software pixel comparison cover
 all 160 generated characters. The full suite passes 159 regular tests.
 These changes follow the archived throughput runs; their performance
-impact remains unmeasured. See [milestones](roadmap.md) for visual acceptance.
+impact remains unmeasured. See [follow-up notes](roadmap.md) for further
+visual checks.
 
 
 ## Bounded redraw coalescing

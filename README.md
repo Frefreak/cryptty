@@ -284,4 +284,4 @@ Ctrl+Shift+R reloads these bindings. Automatic file watching remains outside
 this implementation.
 
 See [performance experiments and measurements](docs/performance.md).
-See [milestone status and remaining work](docs/roadmap.md).
+See [deferred work and follow-up notes](docs/roadmap.md).
