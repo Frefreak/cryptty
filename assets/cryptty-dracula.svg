@@ -1,0 +1,151 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+  width="1024" height="1024" viewBox="0 0 1024 1024"
+  role="img" aria-labelledby="title desc">
+  <title id="title">Cryptty — Dracula coffin</title>
+  <desc id="desc">A charcoal violet coffin with an offset lid,
+    a single recessed green light, and a glowing terminal prompt.</desc>
+  <defs>
+    <linearGradient id="shell" x2="1" y2="1">
+      <stop stop-color="#343242"/>
+      <stop offset="1" stop-color="#17161f"/>
+    </linearGradient>
+    <linearGradient id="face" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#30303e"/>
+      <stop offset=".55" stop-color="#242430"/>
+      <stop offset="1" stop-color="#191923"/>
+    </linearGradient>
+    <linearGradient id="cavity" x2="1" y2=".7">
+      <stop stop-color="#111a19"/>
+      <stop offset="1" stop-color="#101017"/>
+    </linearGradient>
+    <filter id="rim-glow" x="-.2" y="-.2" width="1.4" height="1.4"
+      color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="12"/>
+    </filter>
+    <filter id="glyph-glow" x="-.4" y="-.5" width="1.8" height="2"
+      color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+    <clipPath id="inside">
+  <path
+    d="M315.25,131.15 L554.29,116.98 L678.31,334.45 L559.25,865.47
+      L305.90,882.59 L142.91,379.56 Z"/>
+    </clipPath>
+  </defs>
+  <g transform="translate(45 0)">
+  <path
+    d="M300.00,104.00 L570.00,88.00 L708.00,330.00 L582.00,892.00
+      L286.00,912.00 L112.00,375.00 Z"
+    transform="translate(0 22)"
+    fill="#101016"
+    stroke="#101016"
+    stroke-width="12"
+    stroke-linejoin="round"/>
+  <path
+    d="M300.00,104.00 L570.00,88.00 L708.00,330.00 L582.00,892.00
+      L286.00,912.00 L112.00,375.00 Z"
+    fill="url(#shell)"
+    stroke="#111118"
+    stroke-width="8"
+    stroke-linejoin="round"/>
+  <path
+    d="M315.25,131.15 L554.29,116.98 L678.31,334.45 L559.25,865.47
+      L305.90,882.59 L142.91,379.56 Z"
+    fill="url(#cavity)"/>
+  <path
+    d="M300.00,104.00 L570.00,88.00 L554.29,116.98 L315.25,131.15 Z"
+    fill="#5e5a74"/>
+  <path
+    d="M570.00,88.00 L708.00,330.00 L678.31,334.45 L554.29,116.98 Z"
+    fill="#464354"/>
+  <path
+    d="M708.00,330.00 L582.00,892.00 L559.25,865.47 L678.31,334.45 Z"
+    fill="#292735"/>
+  <path
+    d="M582.00,892.00 L286.00,912.00 L305.90,882.59 L559.25,865.47 Z"
+    fill="#24222f"/>
+  <path
+    d="M286.00,912.00 L112.00,375.00 L142.91,379.56 L305.90,882.59 Z"
+    fill="#373343"/>
+  <path
+    d="M112.00,375.00 L300.00,104.00 L315.25,131.15 L142.91,379.56 Z"
+    fill="#625c77"/>
+  <g clip-path="url(#inside)">
+  <path
+    d="M323.96,146.66 L545.32,133.54 L661.34,337.00 L546.25,850.31
+      L317.28,865.79 L160.58,382.17 Z"
+    fill="none"
+    stroke="#50fa7b"
+    stroke-width="20"
+    opacity=".52"
+    filter="url(#rim-glow)"/>
+  <path
+    d="M323.96,146.66 L545.32,133.54 L661.34,337.00 L546.25,850.31
+      L317.28,865.79 L160.58,382.17 Z"
+    fill="none"
+    stroke="#70ff98"
+    stroke-width="9"
+    stroke-linejoin="round"/>
+  </g>
+  <g transform="translate(-90 0)">
+  <path
+    d="M534.00,100.00 L780.00,155.00 L906.00,417.00 L738.00,916.00
+      L460.00,862.00 L336.00,360.00 Z"
+    transform="translate(-7 20)"
+    fill="#101017"
+    stroke="#101017"
+    stroke-width="10"
+    stroke-linejoin="round"/>
+  <path
+    d="M534.00,100.00 L780.00,155.00 L906.00,417.00 L738.00,916.00
+      L460.00,862.00 L336.00,360.00 Z"
+    fill="url(#face)"
+    stroke="#111118"
+    stroke-width="8"
+    stroke-linejoin="round"/>
+  <path
+    d="M534.00,100.00 L780.00,155.00 L764.10,175.01 L543.37,125.66 Z"
+    fill="#706982"/>
+  <path
+    d="M780.00,155.00 L906.00,417.00 L881.22,418.53 L764.10,175.01 Z"
+    fill="#4d495f"/>
+  <path
+    d="M906.00,417.00 L738.00,916.00 L722.63,889.58 L881.22,418.53 Z"
+    fill="#353243"/>
+  <path
+    d="M738.00,916.00 L460.00,862.00 L478.81,842.22 L722.63,889.58 Z"
+    fill="#302c3e"/>
+  <path
+    d="M460.00,862.00 L336.00,360.00 L360.97,365.17 L478.81,842.22 Z"
+    fill="#4d465f"/>
+  <path
+    d="M336.00,360.00 L534.00,100.00 L543.37,125.66 L360.97,365.17 Z"
+    fill="#777089"/>
+  <path
+    d="M543.37,125.66 L764.10,175.01 L881.22,418.53 L722.63,889.58
+      L478.81,842.22 L360.97,365.17 Z"
+    fill="url(#face)"
+    stroke="#82798f"
+    stroke-opacity=".28"
+    stroke-width="1.5"/>
+  <g transform="translate(500 376) rotate(12)">
+  <path
+    d="M0,0 L82,61 L0,122 M122,124 L198,124"
+    fill="none"
+    stroke="#50fa7b"
+    stroke-width="30"
+    opacity=".6"
+    filter="url(#glyph-glow)"
+    stroke-linecap="round"
+    stroke-linejoin="round"/>
+  <path
+    d="M0,0 L82,61 L0,122 M122,124 L198,124"
+    fill="none"
+    stroke="#92ffb0"
+    stroke-width="23"
+    stroke-linecap="round"
+    stroke-linejoin="round"/>
+  </g>
+  </g>
+  </g>
+</svg>
