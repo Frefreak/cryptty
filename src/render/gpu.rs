@@ -147,8 +147,14 @@ impl Gpu {
                 continue;
             };
             config.format = format;
-            // Replace stale frames while preserving synchronized presentation.
-            config.present_mode = if capabilities
+            // Prefer low latency when the Linux surface supports it.
+            config.present_mode = if cfg!(target_os = "linux")
+                && capabilities
+                    .present_modes
+                    .contains(&wgpu::PresentMode::Immediate)
+            {
+                wgpu::PresentMode::Immediate
+            } else if capabilities
                 .present_modes
                 .contains(&wgpu::PresentMode::Mailbox)
             {
@@ -195,6 +201,7 @@ impl Gpu {
         renderer: &mut Renderer,
         terminal: &Terminal,
         preedit: &str,
+        request_frame_callback: bool,
     ) -> Result<()> {
         if let Some(error) = self.failure.lock().unwrap().take() {
             bail!(error);
@@ -247,7 +254,9 @@ impl Gpu {
             size,
             preedit,
         )?;
-        window.pre_present_notify();
+        if request_frame_callback {
+            window.pre_present_notify();
+        }
         self.queue.present(frame);
         Ok(())
     }

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Instant;
 
 use anyhow::Result;
 use winit::event::{ElementState, KeyEvent};
@@ -141,16 +142,17 @@ impl View {
         ) {
             return Ok(());
         }
-        if pressed {
-            self.reset_blink();
-        }
+        let cursor_changed = pressed && self.reset_blink();
         if let Some(bytes) = self.keyboard_input.binding_input(
             &self.keyboard,
             &input_event,
             !self.preedit.is_empty(),
         ) {
+            if pressed && !bytes.is_empty() {
+                self.redraw.input(Instant::now());
+            }
             self.send_input(bytes)?;
-            if pressed {
+            if cursor_changed {
                 self.window.request_redraw();
             }
             return Ok(());
@@ -212,8 +214,11 @@ impl View {
             self.terminal.application_cursor,
             self.terminal.application_keypad,
         );
+        if pressed && !bytes.is_empty() {
+            self.redraw.input(Instant::now());
+        }
         self.send_input(bytes)?;
-        if pressed {
+        if cursor_changed {
             self.window.request_redraw();
         }
         Ok(())

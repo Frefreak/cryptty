@@ -614,6 +614,12 @@ impl Terminal {
         self.sync_deadline = None;
     }
 
+    pub fn reset_cursor_blink(&mut self) -> bool {
+        let was_drawn = self.cursor_drawn();
+        self.cursor_blink_on = true;
+        was_drawn != self.cursor_drawn()
+    }
+
     pub fn cursor_drawn(&self) -> bool {
         self.cursor_visible
             && (!self.cursor_style.blinking || self.cursor_blink_on)

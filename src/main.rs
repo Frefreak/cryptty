@@ -162,9 +162,10 @@ impl View {
         }
     }
 
-    fn reset_blink(&mut self) {
-        self.terminal.cursor_blink_on = true;
+    fn reset_blink(&mut self) -> bool {
+        let changed = self.terminal.reset_cursor_blink();
         self.next_blink = Instant::now() + Duration::from_millis(500);
+        changed
     }
 
     fn resize(&mut self) -> Result<()> {
@@ -186,6 +187,12 @@ impl View {
         Ok(())
     }
 
+    fn input_priority(&self, now: Instant) -> bool {
+        cfg!(target_os = "linux")
+            && self.display.is_gpu()
+            && self.redraw.input_active(now)
+    }
+
     fn defer_redraw(&mut self) {
         let now = Instant::now();
         self.redraw.defer(now);
@@ -201,11 +208,13 @@ impl View {
         {
             return Ok(());
         }
+        let request_frame_callback = !self.input_priority(now);
         self.display.draw(
             &self.window,
             &mut self.renderer,
             &self.terminal,
             &self.preedit,
+            request_frame_callback,
         )?;
         self.redraw.presented(
             Instant::now(),
@@ -244,7 +253,13 @@ impl View {
                 self.resize()?;
             }
             WindowEvent::RedrawRequested => self.draw()?,
-            WindowEvent::Occluded(false) => self.window.request_redraw(),
+            WindowEvent::Occluded(occluded) => {
+                if occluded {
+                    self.redraw.cancel_input();
+                } else {
+                    self.window.request_redraw();
+                }
+            }
             WindowEvent::ModifiersChanged(modifiers) => {
                 self.modifiers = modifiers.state();
                 self.refresh_pointer();
@@ -255,6 +270,7 @@ impl View {
                     self.terminal.focus_reporting,
                 ))?;
                 if !focused {
+                    self.redraw.cancel_input();
                     self.modifiers = ModifiersState::empty();
                     self.preedit.clear();
                     self.interaction.reset_buttons();
@@ -282,6 +298,9 @@ impl View {
                 self.window.request_redraw();
             }
             WindowEvent::Ime(Ime::Commit(text)) => {
+                if !text.is_empty() {
+                    self.redraw.input(Instant::now());
+                }
                 self.reset_blink();
                 self.preedit.clear();
                 self.renderer.invalidate();
@@ -401,7 +420,14 @@ impl ApplicationHandler<()> for App {
         if let Some(deadline) = view.redraw.deadline() {
             let deadline = wake.map_or(deadline, |sync| sync.max(deadline));
             if deadline <= now {
-                view.window.request_redraw();
+                if view.input_priority(now) {
+                    if let Err(error) = view.draw() {
+                        self.fail(events, error);
+                        return;
+                    }
+                } else {
+                    view.window.request_redraw();
+                }
             } else {
                 wake = Some(wake.map_or(deadline, |t| t.min(deadline)));
             }

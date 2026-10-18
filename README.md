@@ -66,7 +66,9 @@ builds remove the checkpoint. To train and install through Cargo, run:
 ```
 
 This invokes `cargo install --path .` with the trained profile and the same
-build cache. Cargo uses its normal installation directory.
+build cache. On Linux, installation defaults to `~/.local/bin/cryptty`;
+set `PREFIX` to override the prefix. Other platforms use Cargo's normal
+installation directory.
 See [the PGO workflow](docs/performance.md#one-command-pgo-build).
 
 Rendering uses wgpu with Metal on macOS and Vulkan on Linux. Automatic

@@ -1,6 +1,25 @@
 use super::*;
 
 #[test]
+fn cursor_blink_reset_reports_visible_changes() {
+    for (visible, blinking, phase, changed) in [
+        (true, true, false, true),
+        (true, true, true, false),
+        (true, false, false, false),
+        (false, true, false, false),
+        (false, false, false, false),
+    ] {
+        let mut terminal = Terminal::new(10, 2);
+        terminal.cursor_visible = visible;
+        terminal.cursor_style.blinking = blinking;
+        terminal.cursor_blink_on = phase;
+        assert_eq!(terminal.reset_cursor_blink(), changed);
+        assert!(terminal.cursor_blink_on);
+        assert!(!terminal.reset_cursor_blink());
+    }
+}
+
+#[test]
 #[cfg(target_pointer_width = "64")]
 fn cell_storage_stays_within_the_compact_layout() {
     assert_eq!(std::mem::size_of::<Content>(), 16);

@@ -94,7 +94,12 @@ export RUSTFLAGS="-Cprofile-use=$profile"
 RUSTFLAGS+=' -Cllvm-args=-pgo-warn-missing-function'
 cargo build --release --locked --target "$host"
 if [[ $install_requested == true ]]; then
-    cargo install --path "$repo" --locked --target "$host" --force
+    install_args=()
+    if [[ $(uname -s) == Linux ]]; then
+        install_args=(--root "${PREFIX:-$HOME/.local}")
+    fi
+    cargo install --path "$repo" --locked --target "$host" --force \
+        "${install_args[@]}"
 fi
 cp "$binary" "$training/cryptty"
 cp "$profile" "$training/cryptty.profdata"

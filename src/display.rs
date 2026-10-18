@@ -61,6 +61,10 @@ impl Display {
         Duration::ZERO
     }
 
+    pub fn is_gpu(&self) -> bool {
+        matches!(self.backend, Some(Backend::Gpu(_)))
+    }
+
     pub fn clear_glyphs(&mut self) {
         if let Some(Backend::Gpu(gpu)) = &mut self.backend {
             gpu.clear_glyphs();
@@ -73,9 +77,16 @@ impl Display {
         renderer: &mut Renderer,
         terminal: &Terminal,
         preedit: &str,
+        request_frame_callback: bool,
     ) -> Result<()> {
         if let Some(Backend::Gpu(gpu)) = &mut self.backend {
-            match gpu.draw(window, renderer, terminal, preedit) {
+            match gpu.draw(
+                window,
+                renderer,
+                terminal,
+                preedit,
+                request_frame_callback,
+            ) {
                 Ok(()) => return Ok(()),
                 Err(error) if self.automatic => {
                     eprintln!(

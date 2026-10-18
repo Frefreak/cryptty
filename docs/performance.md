@@ -451,8 +451,9 @@ To train and install with Cargo:
 ```
 
 The script runs `cargo install --path . --locked --target <host> --force`
-with the profile-use flags and shared build directory. Cargo's normal
-installation settings, including `CARGO_INSTALL_ROOT`, apply. A plain
+with the profile-use flags and shared build directory. On Linux it adds
+`--root "${PREFIX:-$HOME/.local}"`, matching the Makefile's default prefix.
+Other platforms retain Cargo's normal installation settings. A plain
 `cargo install --path .` continues to produce a normal release build.
 
 The measurements above refer to the archived experimental builds and their
@@ -819,3 +820,49 @@ Combining-mark placement and generated cell geometry remain unchanged.
 
 The preceding counts and timings describe their historical revisions.
 Performance and macOS runtime appearance for this change remain unmeasured.
+
+
+## Linux keyboard presentation latency, 2026-10-18
+
+Linux GPU rendering now prefers Immediate presentation when advertised by
+its surface, with Mailbox and AutoVsync fallbacks. Immediate allows
+unsynchronized presentation; visible tearing depends on the compositor
+and display path.
+
+Keyboard presses and IME commits enable a 50 ms input-priority period.
+Pending output can draw during that period without waiting for a Wayland
+frame callback or requesting a new callback. The existing 2 ms quiet
+period, 5 ms batching limit, and synchronized-update waits still apply.
+Focus loss or occlusion cancels input priority. Ordinary output retains
+callback pacing; software rendering and macOS retain their presentation
+pacing. Redundant cursor redraws are also avoided when resetting blink
+leaves cursor visibility unchanged.
+
+Five alternating paired trials compared the installed PGO Cryptty binary
+with Alacritty 0.17.0 on Linux/KDE Wayland, using Intel UHD Graphics 770.
+Both used Fantasque at 17 pt and 14 by 31 pixel cells, with the same fish
+prompt, window geometry, keyboard injection, and capture pipeline. Each
+trial injected 60 discrete characters at 30 Hz, for 300 samples per
+terminal. Every character was matched to its first visible captured frame.
+
+Values below show the median of five per-trial percentiles, in milliseconds:
+
+| Terminal | p50 | p95 | p99 |
+| --- | ---: | ---: | ---: |
+| Cryptty, installed PGO | 23.108 | 39.654 | 39.679 |
+| Alacritty | 33.073 | 43.622 | 56.676 |
+
+The metric spans software key injection through capture-frame arrival,
+including compositor and recording transport delays. Median capture
+interarrival intervals differed: 16.706 ms for Cryptty and 32.098 ms for
+Alacritty. The comparison therefore includes capture-cadence effects.
+These observations
+apply to this desktop and workload. Physical keyboard-to-photon latency,
+tearing, power consumption, and macOS runtime latency were not measured.
+
+Validation: 188 tests passed and 11 remained ignored; formatting passed.
+Clippy completed with four existing warnings in unchanged code; strict
+`-D warnings` fails on those diagnostics. GPU and software PGO training
+completed. Raw recordings, timestamps, source snapshots, binary hashes,
+and analysis are retained in the local `cryptty-latency-iterate` artifact
+folder for this date.
