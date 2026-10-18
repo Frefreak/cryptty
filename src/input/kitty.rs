@@ -110,7 +110,7 @@ pub fn encode(event: &KeyInput<'_>, flags: Flags) -> Vec<u8> {
         }
         if let Some(base) = keys::base_layout(event.physical)
             && base as u32 != code
-            && text.chars().next() != Some(base)
+            && !text.starts_with(base)
         {
             if shifted.is_none() {
                 output.push(':');

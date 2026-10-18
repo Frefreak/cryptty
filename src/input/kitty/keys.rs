@@ -3,10 +3,10 @@ use winit::keyboard::{Key, KeyCode, KeyLocation, NamedKey, PhysicalKey};
 use super::{KeyInput, single_character};
 
 pub(super) fn code(event: &KeyInput<'_>) -> Option<(u32, char)> {
-    if event.location == KeyLocation::Numpad {
-        if let Some(code) = keypad(event) {
-            return Some((code, 'u'));
-        }
+    if event.location == KeyLocation::Numpad
+        && let Some(code) = keypad(event)
+    {
+        return Some((code, 'u'));
     }
     let Key::Named(key) = event.key else {
         return single_character(&event.unmodified).map(|ch| (ch as u32, 'u'));
