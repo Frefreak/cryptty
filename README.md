@@ -42,6 +42,8 @@ The desktop entry lives in `assets/cryptty.desktop` for distribution packaging.
 The Wayland application ID matches `org.cryptty.desktop`, so desktops can
 associate running windows with the installed icon. Linux uses the transparent
 coffin artwork in `assets/cryptty-linux.png`; macOS retains its rounded icon.
+The final SVG sources are separate: `assets/cryptty-dracula.svg` for Linux
+and `assets/cryptty-macos.svg` for the dark macOS tile.
 Run `make help` for the available targets.
 
 For profile-guided optimization (PGO), train and build with one command:
@@ -198,7 +200,8 @@ Font settings, padding, opacity, blur, colors, and bindings apply immediately;
 the shell and terminal contents stay in place. Reload reapplies the color
 palette and OSC color reset defaults. A failed reload retains the active
 settings, adds `config reload failed` to the window title, and reports the
-error to stderr. A successful retry clears that title message. Explicit
+error in a ten-second in-window toast and on stderr. A successful retry
+clears the toast and title message. Explicit
 text bindings retain precedence over built-in shortcuts.
 
 For a translucent background, add these settings under `window`:
@@ -216,11 +219,12 @@ light to avoid dark glyph edges. It adds an intermediate GPU texture and a
 full-window encoding pass. `opacity: 1.0` restores the opaque RGB path and
 disables blur. Defaults remain `opacity: 1.0` and `blur: false`.
 
-Transparency requires GPU rendering and a premultiplied surface. The GPU
+Transparency requires GPU rendering and a compatible alpha surface. The GPU
 renderer selects an 8-bit-alpha format to preserve smooth glyph edges.
-Software rendering and GPU surfaces without premultiplied alpha support
-retain an opaque background and log a notice. This includes the current
-Metal backend on macOS. Blur uses the native KDE Wayland effect; its
+Software rendering and unsupported GPU surfaces retain an opaque background
+and log a notice. Metal transparency uses premultiplied pixels with the
+surface mode advertised by wgpu. macOS blur uses the native window effect.
+On Linux, blur uses the native KDE Wayland effect; its
 strength follows desktop settings, without a per-window pixel radius.
 The standard `ext-background-effect-v1` protocol supports current KWin;
 the legacy KDE protocol remains a fallback. Other Wayland compositors may

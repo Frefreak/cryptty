@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg"
   width="1024" height="1024" viewBox="0 0 1024 1024">
   <rect x="48" y="48" width="928" height="928" rx="190"
-    fill="#f5f3ed"/>
+    fill="#282a36"/>
 
   <title id="title">Cryptty — Dracula coffin</title>
   <desc id="desc">A charcoal violet coffin with an offset lid,

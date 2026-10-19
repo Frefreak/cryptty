@@ -236,7 +236,7 @@ pub(super) fn build(
     }
     if let Some(layout) = scene
         .renderer
-        .tooltip_layout((size.0 as usize, size.1 as usize))
+        .overlay_layout((size.0 as usize, size.1 as usize))
     {
         let (left, top) = scene.renderer.cell_origin(layout.col, layout.row);
         let width = layout.cols * w;

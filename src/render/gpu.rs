@@ -184,33 +184,28 @@ impl Gpu {
                 failure,
                 needs_configure: false,
                 opaque_alpha,
-                transparent_alpha: capabilities
-                    .alpha_modes
-                    .iter()
-                    .copied()
-                    .find(|mode| {
-                        *mode == wgpu::CompositeAlphaMode::PreMultiplied
-                    }),
+                transparent_alpha: transparent_alpha(
+                    &capabilities.alpha_modes,
+                    info.backend,
+                ),
             });
         }
         bail!("No usable GPU found. {}", errors.join("; "))
     }
 
     pub fn set_opacity(&mut self, opacity: crate::config::Opacity) -> bool {
-        let (opacity, alpha) = match (
-            opacity.transparent(),
-            self.transparent_alpha,
-        ) {
-            (true, Some(alpha)) => (opacity, alpha),
-            (true, None) => {
-                eprintln!(
-                    "Cryptty: GPU surface lacks premultiplied transparency; \
+        let (opacity, alpha) =
+            match (opacity.transparent(), self.transparent_alpha) {
+                (true, Some(alpha)) => (opacity, alpha),
+                (true, None) => {
+                    eprintln!(
+                        "Cryptty: GPU surface lacks transparency support; \
                      using an opaque background"
-                );
-                (crate::config::Opacity::default(), self.opaque_alpha)
-            }
-            (false, _) => (opacity, self.opaque_alpha),
-        };
+                    );
+                    (crate::config::Opacity::default(), self.opaque_alpha)
+                }
+                (false, _) => (opacity, self.opaque_alpha),
+            };
         self.painter
             .set_opacity(&self.device, self.config.format, opacity);
         if self.config.alpha_mode != alpha {
@@ -291,6 +286,22 @@ impl Gpu {
     }
 }
 
+fn transparent_alpha(
+    modes: &[wgpu::CompositeAlphaMode],
+    backend: wgpu::Backend,
+) -> Option<wgpu::CompositeAlphaMode> {
+    use wgpu::CompositeAlphaMode::{PostMultiplied, PreMultiplied};
+    if modes.contains(&PreMultiplied) {
+        Some(PreMultiplied)
+    } else if backend == wgpu::Backend::Metal && modes.contains(&PostMultiplied)
+    {
+        // wgpu 30 labels Metal's premultiplied compositor as postmultiplied.
+        Some(PostMultiplied)
+    } else {
+        None
+    }
+}
+
 fn surface_format(
     formats: &[wgpu::TextureFormat],
 ) -> Option<wgpu::TextureFormat> {
@@ -305,8 +316,26 @@ fn surface_format(
 
 #[cfg(test)]
 mod tests {
-    use super::surface_format;
+    use super::{surface_format, transparent_alpha};
     use wgpu::TextureFormat::*;
+
+    #[test]
+    fn transparent_surface_uses_premultiplied_compositor_pixels() {
+        use wgpu::Backend::{Metal, Vulkan};
+        use wgpu::CompositeAlphaMode::{Opaque, PostMultiplied, PreMultiplied};
+        assert_eq!(transparent_alpha(&[Opaque], Metal), None);
+        assert_eq!(
+            transparent_alpha(&[Opaque, PostMultiplied], Metal),
+            Some(PostMultiplied),
+        );
+        assert_eq!(transparent_alpha(&[PostMultiplied], Vulkan), None);
+        for backend in [Metal, Vulkan] {
+            assert_eq!(
+                transparent_alpha(&[PostMultiplied, PreMultiplied], backend),
+                Some(PreMultiplied),
+            );
+        }
+    }
 
     #[test]
     fn surface_preserves_glyph_alpha_precision_without_srgb_encoding() {

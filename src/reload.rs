@@ -1,5 +1,6 @@
 use anyhow::Result;
 use cryptty::{config::Config, render::Renderer};
+use std::time::{Duration, Instant};
 
 use crate::{View, pty_size};
 
@@ -10,10 +11,21 @@ impl View {
             Config::load().and_then(|config| self.apply_config(config));
         self.config_reload_failed = result.is_err();
         match result {
-            Ok(()) => eprintln!("Cryptty: configuration reloaded"),
-            Err(error) => eprintln!("Cryptty: config reload failed: {error:#}"),
+            Ok(()) => {
+                self.config_error = None;
+                self.renderer.set_notice(None);
+                eprintln!("Cryptty: configuration reloaded");
+            }
+            Err(error) => {
+                let message = format!("Config reload failed: {error:#}");
+                eprintln!("Cryptty: {message}");
+                self.renderer.set_notice(Some(&message));
+                self.config_error =
+                    Some((message, Instant::now() + Duration::from_secs(10)));
+            }
         }
         self.update_title();
+        self.window.request_redraw();
     }
 
     fn apply_config(&mut self, config: Config) -> Result<()> {

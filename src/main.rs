@@ -56,6 +56,7 @@ struct View {
     displayed_title: String,
     backlog_full: bool,
     config_reload_failed: bool,
+    config_error: Option<(String, Instant)>,
 }
 
 struct App {
@@ -142,6 +143,7 @@ impl App {
             displayed_title: "Cryptty".into(),
             backlog_full: false,
             config_reload_failed: false,
+            config_error: None,
         });
         self.view.as_mut().unwrap().draw()?;
         self.view.as_ref().unwrap().window.set_visible(true);
@@ -277,6 +279,9 @@ impl View {
                     &self.font.codepoint_map,
                     &self.font.fallback,
                 )?;
+                if let Some((message, _)) = &self.config_error {
+                    self.renderer.set_notice(Some(message));
+                }
                 self.display.clear_glyphs();
                 self.resize()?;
             }
@@ -463,6 +468,14 @@ impl ApplicationHandler<()> for App {
         } else {
             view.terminal.synchronized_until()
         };
+        if let Some((_, deadline)) = view.config_error.as_ref() {
+            let deadline = *deadline;
+            if deadline <= now {
+                view.config_error = None;
+                view.renderer.set_notice(None);
+                view.window.request_redraw();
+            }
+        }
         if wake.is_some_and(|t| t <= now) {
             view.terminal.finish_synchronized_update();
             view.window.request_redraw();
@@ -516,6 +529,10 @@ impl ApplicationHandler<()> for App {
             wake = Some(wake.map_or(deadline, |t| t.min(deadline)));
         }
         if let Some(deadline) = view.tmux.deadline() {
+            wake = Some(wake.map_or(deadline, |t| t.min(deadline)));
+        }
+        if let Some((_, deadline)) = view.config_error.as_ref() {
+            let deadline = *deadline;
             wake = Some(wake.map_or(deadline, |t| t.min(deadline)));
         }
         events.set_control_flow(

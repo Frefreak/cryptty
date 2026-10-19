@@ -54,6 +54,7 @@ pub struct Renderer {
     old_preedit_row: Option<usize>,
     old_vim_mode: bool,
     tooltip: Option<tooltip::Tooltip>,
+    notice: Option<String>,
 }
 
 impl Renderer {
@@ -96,6 +97,7 @@ impl Renderer {
             old_preedit_row: None,
             old_vim_mode: false,
             tooltip: None,
+            notice: None,
         })
     }
 
@@ -156,7 +158,7 @@ impl Renderer {
         if self.old_vim_mode != terminal.vim_mode {
             self.invalidate();
         }
-        if self.tooltip.is_some() {
+        if self.tooltip.is_some() || self.notice.is_some() {
             self.invalidate();
         }
         if self.previous.is_empty() {
@@ -233,7 +235,7 @@ impl Renderer {
                 self.solid(x, y, w, h, terminal.theme().palette[5]);
             }
         }
-        if let Some(layout) = self.tooltip_layout((width, height)) {
+        if let Some(layout) = self.overlay_layout((width, height)) {
             let (left, top) = self.cell_origin(layout.col, layout.row);
             let w = layout.cols * self.cell_width;
             let h = layout.rows * self.cell_height;

@@ -17,6 +17,12 @@ pub(super) struct Layout {
 }
 
 impl Renderer {
+    pub fn set_notice(&mut self, message: Option<&str>) {
+        self.notice = message
+            .map(|text| text.split_whitespace().collect::<Vec<_>>().join(" "));
+        self.invalidate();
+    }
+
     pub fn set_link_tooltip(
         &mut self,
         uri: Option<&str>,
@@ -34,14 +40,17 @@ impl Renderer {
         true
     }
 
-    pub(super) fn tooltip_layout(
+    pub(super) fn overlay_layout(
         &self,
         size: (usize, usize),
     ) -> Option<Layout> {
-        let tooltip = self.tooltip.as_ref()?;
         let cols = size.0.saturating_sub(2 * self.padding.0) / self.cell_width;
         let rows = size.1.saturating_sub(2 * self.padding.1) / self.cell_height;
-        layout(&tooltip.uri, tooltip.pointer, (cols, rows))
+        if let Some(message) = &self.notice {
+            return layout(message, (0, rows), (cols, rows), 8);
+        }
+        let tooltip = self.tooltip.as_ref()?;
+        layout(&tooltip.uri, tooltip.pointer, (cols, rows), 4)
     }
 }
 
@@ -49,12 +58,13 @@ fn layout(
     uri: &str,
     pointer: (usize, usize),
     size: (usize, usize),
+    max_rows: usize,
 ) -> Option<Layout> {
     if size.0 < 4 || size.1 < 2 {
         return None;
     }
     let width = size.0.min(80) - 2;
-    let max_rows = size.1.saturating_sub(1).min(4);
+    let max_rows = size.1.saturating_sub(1).min(max_rows);
     let mut glyphs = Vec::new();
     let (mut x, mut y) = (0, 0);
     let mut used = 0;
@@ -106,6 +116,7 @@ mod tests {
                 &format!("file:///中文/{}", "abc".repeat(80)),
                 pointer,
                 (20, 6),
+                4,
             )
             .unwrap();
             assert!(result.col + result.cols <= 20);
@@ -116,7 +127,26 @@ mod tests {
                 assert!(y < result.row + result.rows);
             }
         }
-        assert!(layout("file:///tmp", (0, 0), (3, 1)).is_none());
+        assert!(layout("file:///tmp", (0, 0), (3, 1), 4).is_none());
+    }
+
+    #[test]
+    fn notice_overrides_hover_and_clears_without_changing_terminal() {
+        let mut renderer = Renderer::new(16.0).unwrap();
+        let terminal = crate::terminal::Terminal::new(40, 10);
+        renderer.set_link_tooltip(Some("file:///tmp"), (2, 2));
+        renderer.draw(&terminal, 640, 320, "");
+        let before = renderer.pixels.clone();
+        renderer
+            .set_notice(Some("Config reload failed:\nwindow: invalid value"));
+        let layout = renderer.overlay_layout((640, 320)).unwrap();
+        let text: String = layout.glyphs.iter().map(|g| g.0).collect();
+        assert_eq!(text, "Config reload failed: window: invalid value");
+        renderer.draw(&terminal, 640, 320, "");
+        assert_ne!(renderer.pixels, before);
+        renderer.set_notice(None);
+        renderer.draw(&terminal, 640, 320, "");
+        assert_eq!(renderer.pixels, before);
     }
 
     #[test]
