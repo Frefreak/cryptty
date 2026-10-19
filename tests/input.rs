@@ -2,6 +2,16 @@ use cryptty::input::{encode, focus, keypad, mouse, paste};
 use winit::keyboard::{Key, ModifiersState as M, NamedKey};
 
 #[test]
+fn alternate_scroll_sends_application_cursor_keys() {
+    use cryptty::input::alternate_scroll;
+    assert_eq!(alternate_scroll(0, 2), b"\x1bOA\x1bOA");
+    assert_eq!(alternate_scroll(0, -1), b"\x1bOB");
+    assert_eq!(alternate_scroll(1, 0), b"\x1bOD");
+    assert_eq!(alternate_scroll(-1, 0), b"\x1bOC");
+    assert!(alternate_scroll(0, 0).is_empty());
+}
+
+#[test]
 fn clipboard_and_new_window_shortcuts_are_platform_independent() {
     use cryptty::input::{Shortcut, shortcut};
     let modifiers = M::CONTROL | M::SHIFT;

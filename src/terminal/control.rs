@@ -282,6 +282,7 @@ impl Terminal {
             }
             1004 => self.focus_reporting = enabled,
             1006 => self.mouse_sgr = enabled,
+            1007 => self.alternate_scroll = enabled,
             1047 => {
                 if !enabled && self.alternate {
                     self.erase_display(2);
@@ -329,6 +330,7 @@ impl Terminal {
             1003 => self.mouse_mode == MouseMode::Motion,
             1004 => self.focus_reporting,
             1006 => self.mouse_sgr,
+            1007 => self.alternate_scroll,
             2004 => self.bracketed_paste,
             2026 => self.sync_deadline.is_some_and(|t| t > Instant::now()),
             _ => return 0,

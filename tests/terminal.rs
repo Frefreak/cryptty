@@ -360,3 +360,19 @@ colors:
     t.feed(b"\x1b[34mZ");
     assert_eq!(t.color(t.rows[0][0].style().fg), 0x102030);
 }
+#[test]
+fn alternate_scroll_mode_can_be_disabled_and_queried() {
+    let mut t = Terminal::new(80, 24);
+    assert!(t.alternate_scroll);
+    assert!(!t.alternate_screen());
+    assert_eq!(t.feed(b"\x1b[?1007$p"), b"\x1b[?1007;1$y");
+    t.feed(b"\x1b[?1049h\x1b[?1007l");
+    assert!(t.alternate_screen());
+    assert!(!t.alternate_scroll);
+    assert_eq!(t.feed(b"\x1b[?1007$p"), b"\x1b[?1007;2$y");
+    t.feed(b"\x1b[?1007h");
+    assert!(t.alternate_scroll);
+    t.feed(b"\x1b[?1007l\x1bc");
+    assert!(t.alternate_scroll);
+    assert!(!t.alternate_screen());
+}

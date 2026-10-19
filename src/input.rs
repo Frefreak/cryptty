@@ -3,6 +3,22 @@ use winit::keyboard::{Key, ModifiersState, NamedKey};
 pub mod kitty;
 mod xterm;
 
+pub fn alternate_scroll(columns: i32, lines: i32) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    for (count, positive, negative) in
+        [(lines, b'A', b'B'), (columns, b'D', b'C')]
+    {
+        for _ in 0..count.unsigned_abs() {
+            bytes.extend_from_slice(&[
+                0x1b,
+                b'O',
+                if count > 0 { positive } else { negative },
+            ]);
+        }
+    }
+    bytes
+}
+
 pub fn encode_key(
     event: &kitty::KeyInput<'_>,
     flags: crate::keyboard::Flags,

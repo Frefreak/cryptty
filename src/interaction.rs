@@ -495,7 +495,9 @@ impl View {
         if self.vim.is_some() {
             return Ok(());
         }
-        if self.terminal.mouse_mode == MouseMode::Off
+        let alternate_scroll =
+            self.terminal.alternate_screen() && self.terminal.alternate_scroll;
+        if (self.terminal.mouse_mode == MouseMode::Off && !alternate_scroll)
             || self.modifiers.shift_key()
         {
             return Ok(());
@@ -513,6 +515,9 @@ impl View {
         let dy = self.interaction.scroll.1.trunc().clamp(-32.0, 32.0) as i32;
         self.interaction.scroll.0 -= f64::from(dx);
         self.interaction.scroll.1 -= f64::from(dy);
+        if self.terminal.mouse_mode == MouseMode::Off {
+            return self.send_input(input::alternate_scroll(dx, dy));
+        }
         for _ in 0..dx.unsigned_abs() {
             self.send_mouse(if dx > 0 { 66 } else { 67 }, false)?;
         }
