@@ -72,13 +72,13 @@ location and the shortcut directory on `PATH`.
 To train and install through Cargo, run:
 
 ```fish
-./scripts/build-pgo --install
+make install-pgo
 ```
 
 This invokes `cargo install --path .` with the trained profile and the same
 build cache. On Linux, installation defaults to `~/.local/bin/cryptty`;
-set `PREFIX` to override the prefix. Other platforms use Cargo's normal
-installation directory.
+use `make install-pgo PREFIX=/your/prefix` to override it. Other platforms
+use Cargo's normal installation directory.
 See [the PGO workflow](docs/performance.md#one-command-pgo-build).
 
 Rendering uses wgpu with Metal on macOS and Vulkan on Linux. Automatic

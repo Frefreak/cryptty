@@ -4,7 +4,7 @@ CARGO ?= cargo
 UV ?= uv
 PREFIX ?= $(HOME)/.local
 
-.PHONY: help build test macos-app install-macos install-linux
+.PHONY: help build test macos-app install-macos install-linux install-pgo
 
 help:
 	@printf '%s\n' \
@@ -13,6 +13,7 @@ help:
 	  'make macos-app      Build target/macos/Cryptty.app' \
 	  'make install-macos  Install ~/Applications/Cryptty.app' \
 	  'make install-linux  Install binary, desktop entry, and icon' \
+	  'make install-pgo    Train and install the PGO binary and cimg' \
 	  '                    PREFIX defaults to ~/.local'
 
 build:
@@ -26,6 +27,9 @@ macos-app:
 
 install-macos:
 	$(UV) run --script scripts/build-macos-app --install
+
+install-pgo:
+	PREFIX="$(PREFIX)" ./scripts/build-pgo --install
 
 install-linux:
 	@test "$$(uname -s)" = Linux || \
