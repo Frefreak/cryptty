@@ -86,7 +86,10 @@ def main():
             'fi\n'
             'bundle_bin=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)\n'
             'cd "$HOME"\n'
-            'exec "$bundle_bin/../MacOS/cryptty" -- "$SHELL" -l\n'
+            'export CRYPTTY_LAUNCH_BINARY="$bundle_bin/../MacOS/cryptty"\n'
+            'exec "$SHELL" -lic \'exec /usr/bin/env -u '
+            'CRYPTTY_LAUNCH_BINARY "$CRYPTTY_LAUNCH_BINARY" '
+            '-- "$SHELL" -l\'\n'
         )
         iconset = Path(temporary) / "Cryptty.iconset"
         iconset.mkdir()

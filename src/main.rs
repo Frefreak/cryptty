@@ -56,7 +56,7 @@ struct View {
     displayed_title: String,
     backlog_full: bool,
     config_reload_failed: bool,
-    config_error: Option<(String, Instant)>,
+    notice: Option<(String, Instant)>,
 }
 
 struct App {
@@ -143,7 +143,7 @@ impl App {
             displayed_title: "Cryptty".into(),
             backlog_full: false,
             config_reload_failed: false,
-            config_error: None,
+            notice: None,
         });
         self.view.as_mut().unwrap().draw()?;
         self.view.as_ref().unwrap().window.set_visible(true);
@@ -279,7 +279,7 @@ impl View {
                     &self.font.codepoint_map,
                     &self.font.fallback,
                 )?;
-                if let Some((message, _)) = &self.config_error {
+                if let Some((message, _)) = &self.notice {
                     self.renderer.set_notice(Some(message));
                 }
                 self.display.clear_glyphs();
@@ -463,15 +463,25 @@ impl ApplicationHandler<()> for App {
             view.refresh_pointer();
         }
         view.refresh_vim();
+        if view.notice.is_none() && view.tmux.take_missing_binary_notice() {
+            let message = "tmux detected, but its executable was not found.\n\
+                Add tmux to Cryptty's PATH, then relaunch Cryptty.\n\
+                Pane-aware features are unavailable; Vim selection spans \
+                the full window.";
+            eprintln!("Cryptty: {message}");
+            view.renderer.set_notice(Some(message));
+            view.notice = Some((message.into(), now + Duration::from_secs(10)));
+            view.window.request_redraw();
+        }
         let mut wake = if view.vim.is_some() {
             None
         } else {
             view.terminal.synchronized_until()
         };
-        if let Some((_, deadline)) = view.config_error.as_ref() {
+        if let Some((_, deadline)) = view.notice.as_ref() {
             let deadline = *deadline;
             if deadline <= now {
-                view.config_error = None;
+                view.notice = None;
                 view.renderer.set_notice(None);
                 view.window.request_redraw();
             }
@@ -531,7 +541,7 @@ impl ApplicationHandler<()> for App {
         if let Some(deadline) = view.tmux.deadline() {
             wake = Some(wake.map_or(deadline, |t| t.min(deadline)));
         }
-        if let Some((_, deadline)) = view.config_error.as_ref() {
+        if let Some((_, deadline)) = view.notice.as_ref() {
             let deadline = *deadline;
             wake = Some(wake.map_or(deadline, |t| t.min(deadline)));
         }

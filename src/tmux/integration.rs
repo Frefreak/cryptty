@@ -20,6 +20,7 @@ struct Response {
     generation: u64,
     snapshot: Option<Snapshot>,
     failed: bool,
+    missing_binary: bool,
 }
 
 struct Worker {
@@ -53,6 +54,11 @@ impl Worker {
                     )
                 })();
                 let failed = result.is_err() && connection.is_some();
+                let missing_binary = result.as_ref().err().is_some_and(|e| {
+                    e.downcast_ref::<std::io::Error>().is_some_and(|e| {
+                        e.kind() == std::io::ErrorKind::NotFound
+                    })
+                }) && super::client::tmux_running(&tty);
                 if result.is_err() {
                     connection = None;
                 }
@@ -61,6 +67,7 @@ impl Worker {
                         generation: request.generation,
                         snapshot: result.ok(),
                         failed,
+                        missing_binary,
                     })
                     .is_err()
                 {
@@ -88,6 +95,8 @@ pub struct Integration {
     dirty: bool,
     snapshot: Option<Snapshot>,
     failed: bool,
+    missing_binary: bool,
+    missing_binary_notified: bool,
     next_request: Instant,
     idle_until: Option<Instant>,
 }
@@ -108,6 +117,8 @@ impl Integration {
             dirty: false,
             snapshot: None,
             failed: false,
+            missing_binary: false,
+            missing_binary_notified: false,
             next_request: Instant::now(),
             idle_until: None,
         }
@@ -147,6 +158,7 @@ impl Integration {
                 if self.active && response.generation == self.generation {
                     self.snapshot = response.snapshot;
                     self.failed = response.failed;
+                    self.missing_binary = response.missing_binary;
                     if self.snapshot.is_none() {
                         self.next_request = now + Duration::from_secs(1);
                     }
@@ -180,6 +192,15 @@ impl Integration {
             Some(self.next_request)
         } else {
             self.idle_until
+        }
+    }
+
+    pub fn take_missing_binary_notice(&mut self) -> bool {
+        if self.missing_binary && !self.missing_binary_notified {
+            self.missing_binary_notified = true;
+            true
+        } else {
+            false
         }
     }
 
@@ -218,6 +239,38 @@ mod tests {
     use super::*;
 
     #[test]
+    fn missing_binary_notice_survives_deactivation_and_appears_once() {
+        let mut integration = Integration::new(None, || {});
+        assert!(!integration.take_missing_binary_notice());
+        integration.missing_binary = true;
+        integration.update(false, (80, 24), Instant::now());
+        assert!(integration.take_missing_binary_notice());
+        assert!(!integration.take_missing_binary_notice());
+        integration.missing_binary = false;
+        assert!(!integration.take_missing_binary_notice());
+        integration.missing_binary = true;
+        assert!(!integration.take_missing_binary_notice());
+    }
+
+    #[test]
+    #[ignore = "called with a live tmux TTY and an empty PATH"]
+    fn missing_binary_with_live_tmux_shows_notice() {
+        let tty = std::env::var_os("CRYPTTY_TEST_TMUX_TTY").unwrap();
+        let mut integration = Integration::new(Some(tty.into()), || {});
+        let deadline = Instant::now() + Duration::from_secs(3);
+        loop {
+            integration.update(true, (81, 12), Instant::now());
+            if !integration.pending {
+                break;
+            }
+            assert!(Instant::now() < deadline, "tmux lookup timed out");
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert!(integration.take_missing_binary_notice());
+        assert!(!integration.take_missing_binary_notice());
+    }
+
+    #[test]
     fn inactive_integration_has_no_worker_or_deadlines() {
         let mut integration =
             Integration::new(Some("/dev/pts/1".into()), || {});
@@ -252,6 +305,7 @@ mod tests {
         integration.update(false, (80, 24), now);
         send.send(Response {
             failed: false,
+            missing_binary: false,
             generation: request.generation,
             snapshot: Some(Snapshot {
                 complete: true,

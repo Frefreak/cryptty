@@ -12,7 +12,7 @@ impl View {
         self.config_reload_failed = result.is_err();
         match result {
             Ok(()) => {
-                self.config_error = None;
+                self.notice = None;
                 self.renderer.set_notice(None);
                 eprintln!("Cryptty: configuration reloaded");
             }
@@ -20,7 +20,7 @@ impl View {
                 let message = format!("Config reload failed: {error:#}");
                 eprintln!("Cryptty: {message}");
                 self.renderer.set_notice(Some(&message));
-                self.config_error =
+                self.notice =
                     Some((message, Instant::now() + Duration::from_secs(10)));
             }
         }

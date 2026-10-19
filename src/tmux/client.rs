@@ -38,21 +38,11 @@ impl Server {
         current: &impl Fn() -> bool,
     ) -> Result<Control> {
         anyhow::ensure!(current(), "tmux request canceled");
-        let mut child = self
-            .command()
-            .args(["list-clients", "-F", super::CLIENT_FORMAT])
-            .spawn()?;
-        let stdout = child.stdout.take().context("missing tmux stdout")?;
-        let (send, receive) = mpsc::sync_channel(1);
-        thread::spawn(move || {
-            let mut text = String::new();
-            let result = stdout.take(MAX_REPLY).read_to_string(&mut text);
-            let _ = send.send(result.map(|_| text));
-        });
-        let result = receive.recv_timeout(TIMEOUT);
-        let _ = child.kill();
-        let _ = child.wait();
-        let text = result??;
+        let text = output(self.command().args([
+            "list-clients",
+            "-F",
+            super::CLIENT_FORMAT,
+        ]))?;
         let target = super::Client::find(&text, tty)
             .context("no tmux client on this terminal")?;
         anyhow::ensure!(current(), "tmux request canceled");
@@ -70,6 +60,47 @@ impl Server {
             .spawn()?;
         Control::new(child)
     }
+}
+
+fn output(command: &mut Command) -> Result<String> {
+    let mut child = command.spawn()?;
+    let stdout = child.stdout.take().context("missing command stdout")?;
+    let (send, receive) = mpsc::sync_channel(1);
+    thread::spawn(move || {
+        let mut text = String::new();
+        let result = stdout.take(MAX_REPLY).read_to_string(&mut text);
+        let _ = send.send(result.map(|_| text));
+    });
+    let result = receive.recv_timeout(TIMEOUT);
+    let _ = child.kill();
+    let _ = child.wait();
+    Ok(result??)
+}
+
+pub(super) fn tmux_running(tty: &Path) -> bool {
+    output(
+        Command::new("/bin/ps")
+            .arg("-t")
+            .arg(tty)
+            .args(["-o", "stat=", "-o", "comm="])
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null()),
+    )
+    .is_ok_and(|text| foreground_tmux(&text))
+}
+
+fn foreground_tmux(text: &str) -> bool {
+    text.lines().any(|line| {
+        let line = line.trim();
+        let Some((state, command)) = line.split_once(char::is_whitespace)
+        else {
+            return false;
+        };
+        state.contains('+')
+            && Path::new(command.trim()).file_name()
+                == Some(std::ffi::OsStr::new("tmux"))
+    })
 }
 
 pub(super) struct Control {
@@ -162,4 +193,18 @@ impl Drop for Control {
 
 pub(super) fn quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_only_foreground_tmux_clients() {
+        assert!(foreground_tmux("Ss /bin/fish\nS+ tmux\n"));
+        assert!(foreground_tmux(" S+ /opt/homebrew/bin/tmux\n"));
+        assert!(!foreground_tmux("S tmux\nS+ /usr/bin/ssh\n"));
+        assert!(!foreground_tmux("S+ tmux-helper\n"));
+        assert!(!foreground_tmux("S+ /bin/fish\n"));
+    }
 }

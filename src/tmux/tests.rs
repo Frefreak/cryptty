@@ -189,6 +189,18 @@ fn real_tmux_split_recovers_url_and_tracks_layout_changes() {
         }
     }
     assert_eq!(terminal.rows[1].wrapped, None);
+    let output = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "tmux::integration::tests::missing_binary_with_live_tmux_shows_notice",
+            "--ignored",
+            "--nocapture",
+        ])
+        .env("PATH", "")
+        .env("CRYPTTY_TEST_TMUX_TTY", &tty)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{:?}", output);
     assert_ne!(terminal.link_at(p(1, 45)).unwrap().uri, uri);
     let mut connection = client::Server {
         socket: Some(socket.clone()),

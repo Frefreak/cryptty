@@ -12,6 +12,8 @@ use winit::window::CursorIcon;
 
 use crate::View;
 
+mod hover;
+
 #[derive(Default)]
 pub(super) struct Interaction {
     clipboard: Option<arboard::Clipboard>,
@@ -23,6 +25,7 @@ pub(super) struct Interaction {
     clicks: Clicks,
     pointer_inside: bool,
     pending_link: Option<PendingLink>,
+    hover: hover::Hover,
 }
 
 struct PendingLink {
@@ -162,6 +165,7 @@ impl View {
 
     pub(super) fn refresh_pointer(&mut self) {
         if self.vim.is_some() {
+            self.interaction.hover.clear();
             if self.renderer.set_link_tooltip(None, (0, 0)) {
                 self.window.request_redraw();
             }
@@ -210,10 +214,10 @@ impl View {
         } else {
             Lookup::Ready(None)
         };
-        let link = match link {
-            Lookup::Ready(link) => link,
-            _ => None,
-        };
+        let link =
+            self.interaction
+                .hover
+                .update(link, position, &self.terminal);
         let hovered = link
             .as_ref()
             .map(|link| link.ranges.clone())
@@ -363,6 +367,9 @@ impl View {
     }
 
     pub(super) fn pointer_moved(&mut self, x: f64, y: f64) -> Result<()> {
+        if self.interaction.pointer != (x, y) {
+            self.interaction.hover.clear();
+        }
         self.interaction.pointer = (x, y);
         self.interaction.pointer_inside = true;
         self.refresh_pointer();
