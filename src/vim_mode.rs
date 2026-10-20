@@ -14,8 +14,16 @@ pub(super) enum Mode {
         screen: Box<Terminal>,
         keys: Vec<Key>,
         deadline: Instant,
+        kind: Kind,
     },
     Active(Box<Session>),
+    Marker(Box<cryptty::marker::Session>),
+}
+
+#[derive(Clone, Copy)]
+pub(super) enum Kind {
+    Vim,
+    Marker,
 }
 
 impl Mode {
@@ -23,20 +31,25 @@ impl Mode {
         match self {
             Self::Loading { screen, .. } => screen,
             Self::Active(session) => &session.screen,
+            Self::Marker(session) => &session.screen,
         }
     }
 
     pub fn status(&self) -> String {
         match self {
-            Self::Loading { .. } => "VIM — preparing".into(),
+            Self::Loading { kind, .. } => match kind {
+                Kind::Vim => "VIM — preparing".into(),
+                Kind::Marker => "MARK — preparing".into(),
+            },
             Self::Active(session) => session.status(),
+            Self::Marker(session) => session.status(),
         }
     }
 
     pub fn deadline(&self) -> Option<Instant> {
         match self {
             Self::Loading { deadline, .. } => Some(*deadline),
-            Self::Active(_) => None,
+            Self::Active(_) | Self::Marker(_) => None,
         }
     }
 }
@@ -82,15 +95,37 @@ fn mode_key(input: &KeyInput<'_>) -> Option<Key> {
 
 impl View {
     pub(super) fn vim_input(&mut self, input: &KeyInput<'_>) -> bool {
+        let marker = self
+            .keyboard
+            .enters_marker(&input.unmodified, input.modifiers);
+        if marker && self.preedit.is_empty() {
+            if input.state == ElementState::Pressed
+                && !input.repeat
+                && self.vim.is_none()
+            {
+                self.enter_mode(Kind::Marker);
+            }
+            return true;
+        }
         let trigger = self.preedit.is_empty()
             && (!input.repeat || self.vim.is_some())
             && self.keyboard.enters_vim(&input.unmodified, input.modifiers);
         if trigger {
             if input.state == ElementState::Pressed && !input.repeat {
+                if matches!(
+                    self.vim,
+                    Some(Mode::Marker(_))
+                        | Some(Mode::Loading {
+                            kind: Kind::Marker,
+                            ..
+                        })
+                ) {
+                    return true;
+                }
                 if self.vim.is_some() {
                     self.vim_key(Key::Char('s'));
                 } else {
-                    self.enter_vim();
+                    self.enter_mode(Kind::Vim);
                 }
             }
             return true;
@@ -114,7 +149,7 @@ impl View {
         true
     }
 
-    fn enter_vim(&mut self) {
+    fn enter_mode(&mut self, kind: Kind) {
         self.renderer.set_link_tooltip(None, (0, 0));
         self.interaction.reset_buttons();
         self.clear_selection();
@@ -127,6 +162,7 @@ impl View {
             screen: Box::new(screen),
             keys: Vec::new(),
             deadline: Instant::now() + Duration::from_secs(3),
+            kind,
         });
         self.refresh_vim();
         self.update_title();
@@ -186,10 +222,18 @@ impl View {
             }
             TextSnapshot::Ready(panes) => panes,
         };
-        let Some(Mode::Loading { screen, keys, .. }) = self.vim.take() else {
+        let Some(Mode::Loading {
+            screen, keys, kind, ..
+        }) = self.vim.take()
+        else {
             unreachable!();
         };
-        self.vim = Some(Mode::Active(Box::new(Session::new(*screen, panes))));
+        self.vim = Some(match kind {
+            Kind::Vim => Mode::Active(Box::new(Session::new(*screen, panes))),
+            Kind::Marker => Mode::Marker(Box::new(
+                cryptty::marker::Session::new(*screen, panes, &self.markers),
+            )),
+        });
         self.tmux.update(
             false,
             (self.terminal.cols(), self.terminal.rows.len()),
@@ -219,6 +263,7 @@ impl View {
                 }
             }
             Some(Mode::Active(session)) => session.key(key, Instant::now()),
+            Some(Mode::Marker(session)) => session.key(key),
             None => return,
         };
         match action {

@@ -128,6 +128,17 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
                 (shape == 6).then_some("file:///tmp/中文/test%20file.txt"),
                 (20, 3),
             );
+            let targets = if shape == 8 {
+                crate::marker::Session::new(
+                    terminal.visible_snapshot(),
+                    Vec::new(),
+                    &crate::marker::Options::default(),
+                )
+                .visible_targets()
+            } else {
+                Vec::new()
+            };
+            renderer.set_markers(targets);
             renderer.draw(&terminal, width, height, preedit);
             let texture = device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("pixel comparison"),

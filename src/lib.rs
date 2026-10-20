@@ -8,3 +8,5 @@ pub mod render;
 pub mod terminal;
 pub mod tmux;
 pub mod vim;
+
+pub mod marker;

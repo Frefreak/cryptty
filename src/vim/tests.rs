@@ -5,7 +5,9 @@ fn session(text: &str, cols: usize, rows: usize) -> Session {
     let mut terminal = Terminal::new(cols, rows);
     terminal.feed(text.as_bytes());
     let mut session = Session::new(terminal.visible_snapshot(), Vec::new());
-    session.key(Key::Escape, Instant::now());
+    session.phase = Phase::Navigate;
+    session.first_key = false;
+    session.render();
     session.cursor.position = Position { row: 0, col: 0 };
     session
 }
@@ -462,4 +464,27 @@ fn selected_wide_leap_match_preserves_character_and_selection_style() {
         assert_eq!(s.screen.rows[0][col].content, s.base.rows[0][col].content);
         assert!(s.screen.rows[0][col].style().inverse);
     }
+}
+
+#[test]
+fn first_escape_exits_fresh_leap_session() {
+    let mut terminal = Terminal::new(30, 3);
+    terminal.feed(b"alpha beta gamma");
+    let mut s = Session::new(terminal.visible_snapshot(), Vec::new());
+    assert!(matches!(s.phase, Phase::Leap(_)));
+    assert!(matches!(s.key(Key::Escape, Instant::now()), Action::Exit));
+}
+
+#[test]
+fn escape_after_search_input_cancels_before_exiting() {
+    let mut terminal = Terminal::new(30, 3);
+    terminal.feed(b"alpha beta gamma");
+    let mut s = Session::new(terminal.visible_snapshot(), Vec::new());
+    assert!(matches!(
+        s.key(Key::Char('b'), Instant::now()),
+        Action::Stay
+    ));
+    assert!(matches!(s.key(Key::Escape, Instant::now()), Action::Stay));
+    assert!(matches!(s.phase, Phase::Navigate));
+    assert!(matches!(s.key(Key::Escape, Instant::now()), Action::Exit));
 }

@@ -47,6 +47,7 @@ struct View {
     modifiers: ModifiersState,
     keyboard_input: keyboard_input::State,
     keyboard: Keyboard,
+    markers: cryptty::marker::Options,
     preedit: String,
     padding: Padding,
     font: Font,
@@ -134,6 +135,7 @@ impl App {
             modifiers: ModifiersState::empty(),
             keyboard_input: keyboard_input::State::default(),
             keyboard: self.config.keyboard.clone(),
+            markers: self.config.markers.clone(),
             preedit: String::new(),
             padding: self.config.window.padding,
             font: self.config.font.clone(),
@@ -236,6 +238,11 @@ impl View {
             return Ok(());
         }
         let request_frame_callback = !self.input_priority(now);
+        let targets = match &self.vim {
+            Some(vim_mode::Mode::Marker(session)) => session.visible_targets(),
+            _ => Vec::new(),
+        };
+        self.renderer.set_markers(targets);
         self.display.draw(
             &self.window,
             &mut self.renderer,

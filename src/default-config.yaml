@@ -32,6 +32,16 @@ keyboard:
     - key: j
       modifiers: [Control, Shift]
       action: VimMode
+    - key: m
+      modifiers: [Control, Shift]
+      action: MarkerMode
+markers:
+  # Minimum styled phrase length, including internal spaces.
+  styled_min_length: 5
+  # Hexadecimal tokens must include at least one letter.
+  hash_min_length: 7
+  # Maximum targets sharing a character; URL internals are suppressed.
+  overlap_max: 2
 selection:
   # Additional word characters beside Unicode letters and digits.
   word_characters: '/\._-~:@%+=,#?'

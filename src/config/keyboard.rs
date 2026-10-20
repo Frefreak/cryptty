@@ -27,6 +27,13 @@ impl Keyboard {
         )
     }
 
+    pub fn enters_marker(&self, key: &Key, modifiers: ModifiersState) -> bool {
+        matches!(
+            self.output_for(key, modifiers),
+            Some(Output::Action(Action::MarkerMode))
+        )
+    }
+
     fn output_for(
         &self,
         key: &Key,
@@ -45,6 +52,15 @@ impl Keyboard {
             && modifiers == (ModifiersState::CONTROL | ModifiersState::SHIFT)
         {
             return Some(&Output::Action(Action::VimMode));
+        }
+        let custom_marker = self.bindings.iter().any(|binding| {
+            matches!(binding.output, Output::Action(Action::MarkerMode))
+        });
+        if !custom_marker
+            && *key == Key::Character("m".into())
+            && modifiers == (ModifiersState::CONTROL | ModifiersState::SHIFT)
+        {
+            return Some(&Output::Action(Action::MarkerMode));
         }
         None
     }
@@ -77,6 +93,7 @@ enum Output {
 #[derive(Clone, Debug, Deserialize)]
 enum Action {
     VimMode,
+    MarkerMode,
 }
 
 #[derive(Deserialize)]

@@ -22,6 +22,7 @@ pub struct Config {
     pub colors: Colors,
     pub keyboard: Keyboard,
     pub selection: Selection,
+    pub markers: crate::marker::Options,
 }
 
 #[derive(Clone, Debug, Deserialize)]

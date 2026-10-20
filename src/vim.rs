@@ -61,6 +61,7 @@ pub struct Session {
     preferred_column: Option<usize>,
     last_query: Option<leap::Query>,
     last_find: Option<Find>,
+    first_key: bool,
 }
 
 impl Session {
@@ -102,6 +103,7 @@ impl Session {
             preferred_column: None,
             last_query: None,
             last_find: None,
+            first_key: true,
         };
         session.render();
         session
@@ -130,6 +132,10 @@ impl Session {
     }
 
     pub fn key(&mut self, key: Key, _now: Instant) -> Action {
+        let first = std::mem::replace(&mut self.first_key, false);
+        if first && key == Key::Escape {
+            return Action::Exit;
+        }
         let action = self.handle(key);
         self.render();
         action

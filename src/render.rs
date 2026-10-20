@@ -23,6 +23,7 @@ pub mod gpu;
 mod gpu_tests;
 mod images;
 mod linear;
+mod markers;
 #[cfg(target_os = "macos")]
 mod native_fallback;
 #[cfg(target_os = "macos")]
@@ -55,6 +56,7 @@ pub struct Renderer {
     old_vim_mode: bool,
     tooltip: Option<tooltip::Tooltip>,
     notice: Option<String>,
+    markers: markers::Markers,
 }
 
 impl Renderer {
@@ -98,6 +100,7 @@ impl Renderer {
             old_vim_mode: false,
             tooltip: None,
             notice: None,
+            markers: markers::Markers::default(),
         })
     }
 
@@ -234,6 +237,10 @@ impl Renderer {
             {
                 self.solid(x, y, w, h, terminal.theme().palette[5]);
             }
+        }
+        for rect in self.marker_rects((width, height)) {
+            let [x, y, w, h] = rect.bounds;
+            self.solid(x, y, w, h, rect.color);
         }
         if let Some(layout) = self.overlay_layout((width, height)) {
             let (left, top) = self.cell_origin(layout.col, layout.row);

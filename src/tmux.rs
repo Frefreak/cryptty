@@ -183,11 +183,9 @@ impl CapturedPane {
 
     fn visible(&self, display: &Terminal) -> Option<PaneText> {
         let pane = self.pane();
-        if matches!(self, Self::Application(_)) {
-            return pane.matches(display).then(|| PaneText {
-                origin: pane.origin,
-                terminal: pane.terminal.visible_snapshot(),
-            });
+        let application = matches!(self, Self::Application(_));
+        if application && !pane.matches(display) {
+            return None;
         }
         let mut terminal = pane.terminal.visible_snapshot();
         let mut matching = Vec::new();
@@ -203,7 +201,10 @@ impl CapturedPane {
         }
         // Copy-mode headers and prompts replace backing text on screen.
         for (y, row) in terminal.rows.iter_mut().enumerate() {
-            if !matching[y] || !matching.get(y + 1).copied().unwrap_or(false) {
+            if !application
+                && (!matching[y]
+                    || !matching.get(y + 1).copied().unwrap_or(false))
+            {
                 row.wrapped = None;
             }
         }

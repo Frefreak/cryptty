@@ -311,3 +311,43 @@ fn copy_mode_uses_visible_headers_and_preserves_matching_wraps() {
     assert_eq!(visible.terminal.rows[2].wrapped, None);
     assert_eq!(visible.terminal.link_at(p(1, 2)).unwrap().uri, "https://a/");
 }
+
+#[test]
+fn application_capture_uses_visible_styles_for_marker_targets() {
+    let plain = "even-cloud-core::connection::Connection TerminalEndpoint";
+    let mut capture = Terminal::new(30, 3);
+    capture.feed(plain.as_bytes());
+    let mut display = Terminal::new(34, 5);
+    for (y, row) in capture.rows.iter().enumerate() {
+        let text: String = row
+            .iter()
+            .filter_map(|cell| match &cell.content {
+                Content::Text { text } => Some(text.chars()),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+        display
+            .feed(format!("\x1b[{};3H\x1b[33m{text}\x1b[0m", y + 2).as_bytes());
+    }
+    let captured = CapturedPane::Application(PaneText {
+        origin: p(1, 2),
+        terminal: capture,
+    });
+    let pane = captured.visible(&display).unwrap();
+    assert_eq!(
+        pane.terminal.rows[0][0].style().fg,
+        display.rows[1][2].style().fg
+    );
+    assert_eq!(pane.terminal.rows[0].wrapped, Some(30));
+    let session = crate::marker::Session::new(
+        display,
+        vec![pane],
+        &crate::marker::Options::default(),
+    );
+    let targets = session.visible_targets();
+    assert_eq!(targets.len(), 1);
+    assert_eq!(targets[0].text, plain);
+    assert_eq!(targets[0].segments[0].start, p(1, 2));
+    assert_eq!(targets[0].segments.len(), 2);
+}

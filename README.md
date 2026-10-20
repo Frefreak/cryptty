@@ -319,3 +319,23 @@ this implementation.
 
 See [performance experiments and measurements](docs/performance.md).
 See [deferred work and follow-up notes](docs/roadmap.md).
+
+### Marker copy
+
+Press `Ctrl+Shift+M` to freeze the visible viewport and show copy labels.
+Type a label to copy its target and leave the mode; `Esc` cancels and
+`Backspace` removes the last label character. Existing Vim/Leap shortcuts
+remain available through `Ctrl+Shift+J`.
+
+Markers recognize URLs, paths, IP addresses, UUIDs, hexadecimal hashes,
+and colored or bold phrases. Paths omit a trailing `:line:column` when
+copied. Recognition examines visible text on demand without filesystem
+lookups. Soft-wrapped text and tmux pane boundaries are preserved.
+
+The `markers` configuration accepts `styled_min_length` (default `5`,
+including internal spaces), `hash_min_length` (default `7`, with at least
+one hexadecimal letter), and `overlap_max` (default `2`). Each must be
+positive. A styled phrase and an embedded path may have separate labels;
+components inside recognized URLs or other machine tokens are suppressed.
+Badges use their own small font and pixel layout. A custom keyboard binding
+can use `action: MarkerMode` to replace the default shortcut.

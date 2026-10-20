@@ -234,6 +234,13 @@ pub(super) fn build(
             scene.solid(x, y, w, h, terminal.theme().palette[5]);
         }
     }
+    for rect in scene
+        .renderer
+        .marker_rects((size.0 as usize, size.1 as usize))
+    {
+        let [x, y, w, h] = rect.bounds;
+        scene.solid(x, y, w, h, rect.color);
+    }
     if let Some(layout) = scene
         .renderer
         .overlay_layout((size.0 as usize, size.1 as usize))

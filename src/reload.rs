@@ -65,6 +65,7 @@ impl View {
         self.font = config.font;
         self.padding = config.window.padding;
         self.keyboard = config.keyboard;
+        self.markers = config.markers;
         self.clear_selection();
         self.refresh_pointer();
         self.window.request_redraw();
