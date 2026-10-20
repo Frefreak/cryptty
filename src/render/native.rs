@@ -105,7 +105,7 @@ impl Rasterizer {
         }
         super::glyph_fit::fit(
             ch,
-            image,
+            super::native_fallback::trim(image),
             self.cell_width,
             self.cell_height,
             self.baseline,

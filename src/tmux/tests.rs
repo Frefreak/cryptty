@@ -351,3 +351,26 @@ fn application_capture_uses_visible_styles_for_marker_targets() {
     assert_eq!(targets[0].segments[0].start, p(1, 2));
     assert_eq!(targets[0].segments.len(), 2);
 }
+
+#[test]
+fn captured_tabs_preserve_pane_text_and_reject_changes() {
+    let capture = "origin\thttps://example.com\n中e\u{301}\tpath\n";
+    let terminal = pane_terminal(40, 2, capture, capture).unwrap();
+    assert_eq!(
+        terminal.link_at(p(0, 8)).unwrap().uri,
+        "https://example.com"
+    );
+    assert_eq!(
+        terminal.selected_text(TextRange::between(p(1, 0), p(1, 12))),
+        "中e\u{301}     path"
+    );
+    assert!(
+        pane_terminal(
+            40,
+            2,
+            capture,
+            "origin\thttps://example.com\n中e\u{301}\tother\n"
+        )
+        .is_none()
+    );
+}

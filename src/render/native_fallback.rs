@@ -16,10 +16,12 @@ pub(super) fn rasterize(
 ) -> Option<Image> {
     let bounds =
         font.get_bounding_rects_for_glyphs(kCTFontDefaultOrientation, &[glyph]);
-    let left = bounds.origin.x.floor();
-    let bottom = bounds.origin.y.floor();
-    let top = (bounds.origin.y + bounds.size.height).ceil();
-    let width = (bounds.origin.x + bounds.size.width).ceil() - left;
+    let colored = font.symbolic_traits() & kCTFontColorGlyphsTrait != 0;
+    let padding = if smooth && !colored { 2.0 } else { 0.0 };
+    let left = bounds.origin.x.floor() - padding;
+    let bottom = bounds.origin.y.floor() - padding;
+    let top = (bounds.origin.y + bounds.size.height).ceil() + padding;
+    let width = (bounds.origin.x + bounds.size.width).ceil() + padding - left;
     let height = top - bottom;
     if width <= 0.0 || height <= 0.0 {
         return Some(Image::default());
@@ -33,7 +35,6 @@ pub(super) fn rasterize(
         &CGColorSpace::create_device_rgb(),
         kCGImageAlphaPremultipliedLast,
     );
-    let colored = font.symbolic_traits() & kCTFontColorGlyphsTrait != 0;
     context.set_rgb_fill_color(0.0, 0.0, 0.0, 0.0);
     context.fill_rect(CGRect::new(
         &CGPoint::new(0.0, 0.0),
@@ -66,7 +67,7 @@ pub(super) fn rasterize(
             pixels.as_chunks::<4>().0.iter().map(|p| p[3]).collect(),
         )
     };
-    Some(Image {
+    Some(trim(Image {
         content,
         data,
         placement: Placement {
@@ -76,5 +77,51 @@ pub(super) fn rasterize(
             height: height as u32,
         },
         ..Image::default()
-    })
+    }))
+}
+
+// Transparent raster margins must not influence fallback sizing.
+pub(super) fn trim(mut image: Image) -> Image {
+    let p = image.placement;
+    let stride = if image.content == Content::Mask { 1 } else { 4 };
+    let (mut left, mut top, mut right, mut bottom) = (p.width, p.height, 0, 0);
+    for y in 0..p.height {
+        for x in 0..p.width {
+            let offset = (y * p.width + x) as usize * stride;
+            let visible = match image.content {
+                Content::Mask => image.data[offset] != 0,
+                Content::Color => image.data[offset + 3] != 0,
+                Content::SubpixelMask => image.data[offset..offset + 3]
+                    .iter()
+                    .any(|&channel| channel != 0),
+            };
+            if visible {
+                left = left.min(x);
+                top = top.min(y);
+                right = right.max(x + 1);
+                bottom = bottom.max(y + 1);
+            }
+        }
+    }
+    if right == 0 {
+        return Image::default();
+    }
+    if (left, top, right, bottom) == (0, 0, p.width, p.height) {
+        return image;
+    }
+    let mut data =
+        Vec::with_capacity(((right - left) * (bottom - top)) as usize * stride);
+    for y in top..bottom {
+        let start = (y * p.width + left) as usize * stride;
+        let end = (y * p.width + right) as usize * stride;
+        data.extend_from_slice(&image.data[start..end]);
+    }
+    image.data = data;
+    image.placement = Placement {
+        left: p.left + left as i32,
+        top: p.top - top as i32,
+        width: right - left,
+        height: bottom - top,
+    };
+    image
 }

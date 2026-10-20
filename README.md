@@ -309,7 +309,9 @@ keyboard:
 ```
 
 Each binding requires exactly one of `text` or `action`. `VimMode` enters
-Vim mode and starts Leap; pressing it again starts another Leap. The action
+Vim mode and starts Leap; pressing it again starts another Leap. In
+navigation and selection mode, `q` behaves like `Esc`; Leap and `f`/`t`
+searches still accept `q` as input. The action
 runs once per press. Text composition takes precedence. Any configured
 `VimMode` binding replaces the default Ctrl+Shift+J shortcut. Multiple entry
 bindings are allowed. Later bindings win, including text bindings on the

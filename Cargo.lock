@@ -438,8 +438,6 @@ checksum = "a31eee39dddec8330830986fcd7625edb5a24ec90ea038215273bbc3adb08ac6"
 [[package]]
 name = "crossfont"
 version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1efedb5e91df8e36e458f03a935b5f71495f73211ce7c5e341c668ded8571261"
 dependencies = [
  "core-foundation 0.10.1",
  "core-foundation-sys",

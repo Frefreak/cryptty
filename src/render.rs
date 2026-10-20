@@ -695,8 +695,29 @@ mod tests {
                     let image = renderer.glyphs[&(ch, FontStyle::default())]
                         .as_ref()
                         .unwrap();
+                    let stride = if image.content == ImageContent::Mask {
+                        1
+                    } else {
+                        4
+                    };
+                    let last_ink = image
+                        .data
+                        .chunks_exact(image.placement.width as usize * stride)
+                        .rposition(|row| {
+                            row.chunks_exact(stride).any(|pixel| {
+                                match image.content {
+                                    ImageContent::Mask => pixel[0] != 0,
+                                    ImageContent::Color => pixel[3] != 0,
+                                    ImageContent::SubpixelMask => pixel[..3]
+                                        .iter()
+                                        .any(|&value| value != 0),
+                                }
+                            })
+                        })
+                        .unwrap();
                     let bottom = renderer.baseline - image.placement.top
-                        + image.placement.height as i32;
+                        + last_ink as i32
+                        + 1;
                     assert!(
                         bottom <= renderer.cell_height as i32,
                         "descender clipped for {ch} at font size {size}"

@@ -59,3 +59,6 @@ fontdb = "0.23"
 
 [dev-dependencies]
 fontdb = "0.23"
+
+[patch.crates-io]
+crossfont = { path = "vendor/crossfont" }

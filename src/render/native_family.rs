@@ -215,3 +215,51 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[test]
+#[ignore = "requires FantasqueSansM Nerd Font Mono and font smoothing"]
+fn smoothing_preserves_fantasque_glyph_tops() {
+    use core_text::font_descriptor::kCTFontDefaultOrientation;
+    for size in [38.0, 76.0] {
+        let mut inner = crossfont::Rasterizer::new().unwrap();
+        let family = Family::load(
+            &mut inner,
+            "FantasqueSansM Nerd Font Mono",
+            Size::new(size),
+        )
+        .unwrap();
+        for face in &family.faces[..2] {
+            for ch in ['e', 'p'] {
+                let id = glyph(&face.font, ch).unwrap();
+                let bounds = face.font.get_bounding_rects_for_glyphs(
+                    kCTFontDefaultOrientation,
+                    &[id],
+                );
+                let geometric_top =
+                    (bounds.origin.y + bounds.size.height).ceil() as i32;
+                let raster = inner
+                    .get_glyph(crossfont::GlyphKey {
+                        character: ch,
+                        font_key: face.key.unwrap(),
+                        size: family.size,
+                    })
+                    .unwrap();
+                let crossfont::BitmapBuffer::Rgb(data) = raster.buffer else {
+                    panic!("Expected monochrome glyph");
+                };
+                let extra_rows = (raster.top - geometric_top).max(0) as usize;
+                assert!(
+                    data[..extra_rows * raster.width as usize * 3]
+                        .iter()
+                        .any(|&value| value != 0),
+                    "{ch} size {size}"
+                );
+                let fallback =
+                    super::native_fallback::rasterize(&face.font, id, true)
+                        .unwrap();
+                assert!(fallback.placement.top > geometric_top);
+            }
+        }
+    }
+}

@@ -488,3 +488,25 @@ fn escape_after_search_input_cancels_before_exiting() {
     assert!(matches!(s.phase, Phase::Navigate));
     assert!(matches!(s.key(Key::Escape, Instant::now()), Action::Exit));
 }
+
+#[test]
+fn q_unwinds_selection_then_exits_navigation() {
+    let mut s = session("alpha beta", 20, 2);
+    keys(&mut s, "v2");
+    assert!(matches!(keys(&mut s, "q"), Action::Stay));
+    assert!(s.selection.is_none());
+    assert_eq!(s.count, 0);
+    assert!(matches!(keys(&mut s, "q"), Action::Exit));
+}
+
+#[test]
+fn q_remains_a_search_character() {
+    let mut s = session("a quick fox", 20, 2);
+    assert!(matches!(keys(&mut s, "squ"), Action::Stay));
+    assert_eq!(s.cursor.position.col, 2);
+    for (command, column) in [("fq", 2), ("tq", 1)] {
+        let mut s = session("a quick fox", 20, 2);
+        assert!(matches!(keys(&mut s, command), Action::Stay));
+        assert_eq!(s.cursor.position.col, column);
+    }
+}

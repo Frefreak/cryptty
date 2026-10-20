@@ -184,7 +184,9 @@ impl Session {
             }
             return Action::Stay;
         }
-        if key == Key::Escape {
+        if key == Key::Escape
+            || (key == Key::Char('q') && matches!(self.phase, Phase::Navigate))
+        {
             self.count = 0;
             if matches!(self.phase, Phase::Yank(_)) {
                 self.phase = Phase::Navigate;

@@ -411,6 +411,22 @@ fn pane_terminal(
             })
             .flatten()
             .collect();
+        let expanded;
+        let line = if line.contains('\t') {
+            let mut physical = Terminal::new(width, 1);
+            physical.feed(line.as_bytes());
+            expanded = physical.rows[0]
+                .iter()
+                .filter_map(|cell| match &cell.content {
+                    Content::Text { text } => Some(text.chars()),
+                    _ => None,
+                })
+                .flatten()
+                .collect::<String>();
+            expanded.as_str()
+        } else {
+            line
+        };
         if text.trim_end_matches(' ') != line.trim_end_matches(' ') {
             return None;
         }
