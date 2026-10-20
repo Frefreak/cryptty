@@ -242,6 +242,7 @@ impl View {
             Some(vim_mode::Mode::Marker(session)) => session.visible_targets(),
             _ => Vec::new(),
         };
+        self.renderer.set_marker_opacity(&self.markers);
         self.renderer.set_markers(targets);
         self.display.draw(
             &self.window,

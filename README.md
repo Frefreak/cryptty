@@ -339,3 +339,14 @@ positive. A styled phrase and an embedded path may have separate labels;
 components inside recognized URLs or other machine tokens are suppressed.
 Badges use their own small font and pixel layout. A custom keyboard binding
 can use `action: MarkerMode` to replace the default shortcut.
+
+Marker background and indicator opacity can be adjusted independently:
+
+```yaml
+markers:
+  label_opacity: 0.7
+  indicator_opacity: 0.85
+```
+
+Both accept values from `0.0` (transparent) to `1.0` (opaque). Label text
+retains full opacity. Press `Ctrl+Shift+R` to reload, then reopen marker mode.

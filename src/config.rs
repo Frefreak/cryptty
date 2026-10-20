@@ -252,7 +252,7 @@ impl TryFrom<f32> for Opacity {
 
     fn try_from(value: f32) -> Result<Self, Self::Error> {
         if !value.is_finite() || !(0.0..=1.0).contains(&value) {
-            return Err("Window opacity must be a finite number from 0 to 1");
+            return Err("Opacity must be a finite number from 0 to 1");
         }
         Ok(Self(value))
     }

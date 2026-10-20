@@ -161,7 +161,10 @@ impl Renderer {
         if self.old_vim_mode != terminal.vim_mode {
             self.invalidate();
         }
-        if self.tooltip.is_some() || self.notice.is_some() {
+        if self.tooltip.is_some()
+            || self.notice.is_some()
+            || !self.markers.is_empty()
+        {
             self.invalidate();
         }
         if self.previous.is_empty() {
@@ -240,7 +243,7 @@ impl Renderer {
         }
         for rect in self.marker_rects((width, height)) {
             let [x, y, w, h] = rect.bounds;
-            self.solid(x, y, w, h, rect.color);
+            self.solid_alpha(x, y, w, h, rect.color, rect.alpha);
         }
         if let Some(layout) = self.overlay_layout((width, height)) {
             let (left, top) = self.cell_origin(layout.col, layout.row);
@@ -272,11 +275,29 @@ impl Renderer {
     }
 
     fn solid(&mut self, x: usize, y: usize, w: usize, h: usize, rgb: u32) {
+        self.solid_alpha(x, y, w, h, rgb, 255);
+    }
+
+    fn solid_alpha(
+        &mut self,
+        x: usize,
+        y: usize,
+        w: usize,
+        h: usize,
+        rgb: u32,
+        alpha: u8,
+    ) {
         let (right, bottom) = self.content_end();
         for py in y..(y + h).min(bottom) {
             let start = py * self.width + x.min(right);
             let end = py * self.width + (x + w).min(right);
-            self.pixels[start..end].fill(rgb);
+            if alpha == 255 {
+                self.pixels[start..end].fill(rgb);
+            } else {
+                for pixel in &mut self.pixels[start..end] {
+                    *pixel = blend(*pixel, rgb, alpha);
+                }
+            }
         }
     }
 

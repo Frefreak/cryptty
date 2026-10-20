@@ -7,20 +7,44 @@ use super::{Renderer, font};
 use crate::marker::Target;
 use crate::terminal::FontStyle;
 
+const ER_YELLOW: u32 = 0xfef991;
+const ER_INK: u32 = 0x232323;
+const ER_GRAY_60: u32 = 0x7b7b7b;
+const CLIP_CORNER: usize = 1;
+
 #[derive(Clone, Copy)]
 pub(super) struct Rect {
     pub bounds: [usize; 4],
     pub color: u32,
+    pub alpha: u8,
 }
 
 #[derive(Default)]
 pub(super) struct Markers {
     targets: Vec<Target>,
+    options: crate::marker::Options,
     font: Option<font::Rasterizer>,
     glyphs: HashMap<char, Image>,
 }
 
+impl Markers {
+    pub(super) fn is_empty(&self) -> bool {
+        self.targets.is_empty()
+    }
+}
+
 impl Renderer {
+    pub fn set_marker_opacity(&mut self, options: &crate::marker::Options) {
+        if self.markers.options.label_opacity != options.label_opacity
+            || self.markers.options.indicator_opacity
+                != options.indicator_opacity
+        {
+            self.markers.options.label_opacity = options.label_opacity;
+            self.markers.options.indicator_opacity = options.indicator_opacity;
+            self.invalidate();
+        }
+    }
+
     pub fn set_markers(&mut self, targets: Vec<Target>) {
         if self.markers.targets != targets {
             self.markers.targets = targets;
@@ -50,6 +74,11 @@ impl Renderer {
         let Some(font) = &mut self.markers.font else {
             return Vec::new();
         };
+        let label_alpha =
+            (self.markers.options.label_opacity.get() * 255.0).round() as u8;
+        let indicator_alpha = (self.markers.options.indicator_opacity.get()
+            * 255.0)
+            .round() as u8;
         let padding = (font.cell_height / 5).max(2);
         let height = font.cell_height + padding * 2;
         let size = (
@@ -64,28 +93,37 @@ impl Renderer {
                 let x = self.padding.0 + segment.start.col * self.cell_width;
                 let y = self.padding.1 + segment.start.row * self.cell_height;
                 let width = segment.columns * self.cell_width;
-                let color = 0x89cbd4;
+                let color = ER_YELLOW;
+                let tick = self.cell_height.min(4);
                 rects.push(Rect {
                     bounds: [
                         x,
-                        y + self.cell_height.saturating_sub(2),
+                        y + self.cell_height.saturating_sub(1),
                         width,
-                        2,
+                        1,
                     ],
                     color,
+                    alpha: indicator_alpha,
                 });
                 rects.push(Rect {
-                    bounds: [x, y + 2, 1, self.cell_height.saturating_sub(4)],
+                    bounds: [
+                        x,
+                        y + self.cell_height - tick,
+                        1,
+                        tick.saturating_sub(1),
+                    ],
                     color,
+                    alpha: indicator_alpha,
                 });
                 rects.push(Rect {
                     bounds: [
                         x + width - 1,
-                        y + 2,
+                        y + self.cell_height - tick,
                         1,
-                        self.cell_height.saturating_sub(4),
+                        tick.saturating_sub(1),
                     ],
                     color,
+                    alpha: indicator_alpha,
                 });
             }
             let Some(segment) = target.segments.first() else {
@@ -107,18 +145,20 @@ impl Renderer {
                     anchor.0.abs_diff(center.0) + 1,
                     1,
                 ],
-                color: 0x89cbd4,
+                color: ER_GRAY_60,
+                alpha: indicator_alpha,
             });
             rects.push(Rect {
                 bounds: [
                     center.0,
-                    anchor.1.min(center.1),
+                    anchor.1.min(center.1) + usize::from(center.1 > anchor.1),
                     1,
-                    anchor.1.abs_diff(center.1) + 1,
+                    anchor.1.abs_diff(center.1),
                 ],
-                color: 0x89cbd4,
+                color: ER_GRAY_60,
+                alpha: indicator_alpha,
             });
-            rounded(&mut badges, bounds, padding, 0xe8d9a8);
+            stepped(&mut badges, bounds, ER_YELLOW, label_alpha);
             for (index, ch) in target.label.chars().enumerate() {
                 if !self.markers.glyphs.contains_key(&ch)
                     && let Some(image) =
@@ -189,20 +229,18 @@ fn intersects(a: [usize; 4], b: [usize; 4]) -> bool {
         && b[1] < a[1] + a[3] + 2
 }
 
-fn rounded(rects: &mut Vec<Rect>, rect: [usize; 4], radius: usize, color: u32) {
+fn stepped(rects: &mut Vec<Rect>, rect: [usize; 4], color: u32, alpha: u8) {
     let [x, y, w, h] = rect;
     for row in 0..h {
-        let edge = row.min(h - 1 - row);
-        let inset = if edge < radius {
-            let dy = (radius - edge) as f32 - 0.5;
-            (radius as f32 - ((radius * radius) as f32 - dy * dy).sqrt()).ceil()
-                as usize
+        let inset = if row == 0 || row + 1 == h {
+            CLIP_CORNER.min(w / 2)
         } else {
             0
         };
         rects.push(Rect {
             bounds: [x + inset, y + row, w - inset * 2, 1],
             color,
+            alpha,
         });
     }
 }
@@ -226,19 +264,14 @@ fn glyph_rects(
             if alpha == 0 {
                 continue;
             }
-            let mut color = 0;
-            for shift in [0, 8, 16] {
-                let bg = (0xe8d9a8 >> shift) & 255;
-                let fg = (0x20252c >> shift) & 255;
-                color |= ((fg * alpha + bg * (255 - alpha)) / 255) << shift;
-            }
             let left = origin.0 as i64 + p.left as i64 + x as i64;
             let top =
                 origin.1 as i64 + baseline as i64 - p.top as i64 + y as i64;
             if left >= 0 && top >= 0 {
                 rects.push(Rect {
                     bounds: [left as usize, top as usize, 1, 1],
-                    color,
+                    color: ER_INK,
+                    alpha: alpha as u8,
                 });
             }
         }
@@ -285,6 +318,17 @@ mod tests {
         assert_ne!(marked, original);
         renderer.draw(&terminal, width, height, "");
         assert_eq!(renderer.pixels, marked);
+        let options = crate::marker::Options {
+            label_opacity: 0.7.try_into().unwrap(),
+            indicator_opacity: 0.0.try_into().unwrap(),
+            ..Default::default()
+        };
+        renderer.set_marker_opacity(&options);
+        renderer.draw(&terminal, width, height, "");
+        let adjusted = renderer.pixels.clone();
+        assert_ne!(adjusted, marked);
+        renderer.draw(&terminal, width, height, "");
+        assert_eq!(renderer.pixels, adjusted);
         renderer.set_markers(Vec::new());
         renderer.draw(&terminal, width, height, "");
         assert_eq!(renderer.pixels, original);

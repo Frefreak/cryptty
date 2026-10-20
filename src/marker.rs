@@ -12,6 +12,8 @@ mod tests;
 #[derive(Clone, Debug, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Options {
+    pub label_opacity: crate::config::Opacity,
+    pub indicator_opacity: crate::config::Opacity,
     pub styled_min_length: std::num::NonZeroUsize,
     pub hash_min_length: std::num::NonZeroUsize,
     pub overlap_max: std::num::NonZeroUsize,
@@ -20,6 +22,8 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Self {
+            label_opacity: 0.7.try_into().unwrap(),
+            indicator_opacity: 0.85.try_into().unwrap(),
             styled_min_length: 5.try_into().unwrap(),
             hash_min_length: 7.try_into().unwrap(),
             overlap_max: 2.try_into().unwrap(),

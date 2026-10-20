@@ -54,14 +54,28 @@ struct Scene<'a> {
 
 impl Scene<'_> {
     fn solid(&mut self, x: usize, y: usize, w: usize, h: usize, rgb: u32) {
+        self.solid_alpha(x, y, w, h, rgb, 255);
+    }
+
+    fn solid_alpha(
+        &mut self,
+        x: usize,
+        y: usize,
+        w: usize,
+        h: usize,
+        rgb: u32,
+        alpha: u8,
+    ) {
         let right = (x + w).min(self.end.0);
         let bottom = (y + h).min(self.end.1);
         if right <= x || bottom <= y {
             return;
         }
+        let mut rgba = color(rgb);
+        rgba[3] = alpha as f32 / 255.0;
         self.quads.push(Quad {
             rect: [x as f32, y as f32, (right - x) as f32, (bottom - y) as f32],
-            color: color(rgb),
+            color: rgba,
             ..Quad::zeroed()
         });
     }
@@ -239,7 +253,7 @@ pub(super) fn build(
         .marker_rects((size.0 as usize, size.1 as usize))
     {
         let [x, y, w, h] = rect.bounds;
-        scene.solid(x, y, w, h, rect.color);
+        scene.solid_alpha(x, y, w, h, rect.color, rect.alpha);
     }
     if let Some(layout) = scene
         .renderer

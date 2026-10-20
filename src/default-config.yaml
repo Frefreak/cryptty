@@ -36,6 +36,9 @@ keyboard:
       modifiers: [Control, Shift]
       action: MarkerMode
 markers:
+  # Opacity from 0 (transparent) to 1 (opaque); label text stays opaque.
+  label_opacity: 0.7
+  indicator_opacity: 0.85
   # Minimum styled phrase length, including internal spaces.
   styled_min_length: 5
   # Hexadecimal tokens must include at least one letter.
