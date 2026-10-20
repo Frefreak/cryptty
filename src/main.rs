@@ -27,6 +27,8 @@ mod interaction;
 mod keyboard_input;
 #[cfg(target_os = "macos")]
 mod macos_input;
+#[cfg(target_os = "macos")]
+mod macos_reopen;
 mod notifications;
 mod redraw;
 mod reload;
@@ -389,6 +391,12 @@ impl ApplicationHandler<()> for App {
     }
 
     fn user_event(&mut self, events: &ActiveEventLoop, _: ()) {
+        #[cfg(target_os = "macos")]
+        for _ in 0..macos_reopen::take_requests() {
+            if let Some(view) = &self.view {
+                view.new_window();
+            }
+        }
         let Some(view) = self.view.as_mut() else {
             return;
         };
@@ -589,6 +597,8 @@ fn main() -> Result<()> {
         .build()
         .context("Cannot open a desktop display")?;
     events.set_control_flow(ControlFlow::Wait);
+    #[cfg(target_os = "macos")]
+    macos_reopen::install(events.create_proxy())?;
     let mut app = App {
         view: None,
         proxy: events.create_proxy(),
