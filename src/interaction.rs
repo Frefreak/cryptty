@@ -7,7 +7,7 @@ use cryptty::{
     terminal::{Effect, MouseMode, Position, Row, TextRange, supported_uri},
     tmux::{Lookup, ScreenLink},
 };
-use winit::event::{ElementState, MouseButton, MouseScrollDelta};
+use winit::event::{ElementState, MouseButton, MouseScrollDelta, TouchPhase};
 use winit::window::CursorIcon;
 
 use crate::View;
@@ -75,6 +75,40 @@ impl Clicks {
 }
 
 impl Interaction {
+    fn scroll_lines(
+        &mut self,
+        delta: MouseScrollDelta,
+        phase: TouchPhase,
+        cell_width: f64,
+        cell_height: f64,
+    ) -> (i32, i32) {
+        let (x, y) = match delta {
+            MouseScrollDelta::LineDelta(x, y) => (f64::from(x), f64::from(y)),
+            MouseScrollDelta::PixelDelta(p) => match phase {
+                TouchPhase::Started => {
+                    self.scroll = (0.0, 0.0);
+                    return (0, 0);
+                }
+                TouchPhase::Moved => {
+                    // Suppress cross-axis drift in touchpad gestures.
+                    if p.x.abs() > 0.9 * p.x.hypot(p.y) {
+                        (p.x / cell_width, 0.0)
+                    } else {
+                        (0.0, p.y / cell_height)
+                    }
+                }
+                _ => return (0, 0),
+            },
+        };
+        self.scroll.0 += x;
+        self.scroll.1 += y;
+        let dx = self.scroll.0.trunc().clamp(-32.0, 32.0) as i32;
+        let dy = self.scroll.1.trunc().clamp(-32.0, 32.0) as i32;
+        self.scroll.0 -= f64::from(dx);
+        self.scroll.1 -= f64::from(dy);
+        (dx, dy)
+    }
+
     pub(super) fn reset_buttons(&mut self) {
         self.buttons = [false; 3];
         self.last_motion = None;
@@ -491,6 +525,7 @@ impl View {
     pub(super) fn mouse_wheel(
         &mut self,
         delta: MouseScrollDelta,
+        phase: TouchPhase,
     ) -> Result<()> {
         if self.vim.is_some() {
             return Ok(());
@@ -502,19 +537,12 @@ impl View {
         {
             return Ok(());
         }
-        let (x, y) = match delta {
-            MouseScrollDelta::LineDelta(x, y) => (f64::from(x), f64::from(y)),
-            MouseScrollDelta::PixelDelta(p) => (
-                p.x / self.renderer.cell_width as f64,
-                p.y / self.renderer.cell_height as f64,
-            ),
-        };
-        self.interaction.scroll.0 += x;
-        self.interaction.scroll.1 += y;
-        let dx = self.interaction.scroll.0.trunc().clamp(-32.0, 32.0) as i32;
-        let dy = self.interaction.scroll.1.trunc().clamp(-32.0, 32.0) as i32;
-        self.interaction.scroll.0 -= f64::from(dx);
-        self.interaction.scroll.1 -= f64::from(dy);
+        let (dx, dy) = self.interaction.scroll_lines(
+            delta,
+            phase,
+            self.renderer.cell_width as f64,
+            self.renderer.cell_height as f64,
+        );
         if self.terminal.mouse_mode == MouseMode::Off {
             return self.send_input(input::alternate_scroll(dx, dy));
         }
@@ -560,6 +588,88 @@ fn open_link(uri: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn pixels(x: f64, y: f64) -> MouseScrollDelta {
+        MouseScrollDelta::PixelDelta(winit::dpi::PhysicalPosition::new(x, y))
+    }
+
+    #[test]
+    fn vertical_touchpad_scroll_does_not_pan_the_pager() {
+        let mut interaction = Interaction::default();
+        let mut bytes = Vec::new();
+        for _ in 0..12 {
+            let (x, y) = interaction.scroll_lines(
+                pixels(-10.0, -20.0),
+                TouchPhase::Moved,
+                10.0,
+                20.0,
+            );
+            bytes.extend(input::alternate_scroll(x, y));
+        }
+        assert_eq!(bytes, b"\x1bOB".repeat(12));
+    }
+
+    #[test]
+    fn horizontal_touchpad_scroll_preserves_intentional_panning() {
+        let mut interaction = Interaction::default();
+        for direction in [-1.0, 1.0] {
+            assert_eq!(
+                interaction.scroll_lines(
+                    pixels(20.0 * direction, 4.0),
+                    TouchPhase::Moved,
+                    10.0,
+                    20.0,
+                ),
+                (2 * direction as i32, 0)
+            );
+        }
+    }
+
+    #[test]
+    fn touchpad_gestures_reset_fractional_scroll() {
+        let mut interaction = Interaction::default();
+        let half_line = pixels(0.0, 10.0);
+        let moved = TouchPhase::Moved;
+        assert_eq!(
+            interaction.scroll_lines(half_line, moved, 10.0, 20.0),
+            (0, 0)
+        );
+        assert_eq!(
+            interaction.scroll_lines(half_line, moved, 10.0, 20.0),
+            (0, 1)
+        );
+        interaction.scroll_lines(half_line, moved, 10.0, 20.0);
+        interaction.scroll_lines(
+            pixels(0.0, 0.0),
+            TouchPhase::Started,
+            10.0,
+            20.0,
+        );
+        assert_eq!(
+            interaction.scroll_lines(half_line, moved, 10.0, 20.0),
+            (0, 0)
+        );
+        for phase in [TouchPhase::Ended, TouchPhase::Cancelled] {
+            assert_eq!(
+                interaction.scroll_lines(half_line, phase, 10.0, 20.0),
+                (0, 0)
+            );
+        }
+    }
+
+    #[test]
+    fn discrete_wheel_preserves_both_axes() {
+        let mut interaction = Interaction::default();
+        assert_eq!(
+            interaction.scroll_lines(
+                MouseScrollDelta::LineDelta(2.0, -3.0),
+                TouchPhase::Moved,
+                10.0,
+                20.0,
+            ),
+            (2, -3)
+        );
+    }
 
     #[test]
     fn output_preserves_pending_drag_and_double_clicks() {

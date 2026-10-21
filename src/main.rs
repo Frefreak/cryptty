@@ -334,7 +334,9 @@ impl View {
                 self.mouse_button(button, state)?;
                 self.refresh_pointer();
             }
-            WindowEvent::MouseWheel { delta, .. } => self.mouse_wheel(delta)?,
+            WindowEvent::MouseWheel { delta, phase, .. } => {
+                self.mouse_wheel(delta, phase)?;
+            }
             WindowEvent::Ime(Ime::Preedit(text, _)) => {
                 self.preedit = text;
                 self.renderer.invalidate();
