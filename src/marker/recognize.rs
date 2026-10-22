@@ -203,7 +203,8 @@ fn trailing_punctuation(text: &str) -> usize {
             }
             _ => false,
         };
-        if !unmatched && !matches!(ch, ',' | ';' | '.' | ':' | '!' | '?') {
+        if !unmatched && !matches!(ch, ',' | '，' | ';' | '.' | ':' | '!' | '?')
+        {
             break;
         }
         end -= ch.len_utf8();

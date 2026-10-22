@@ -344,7 +344,9 @@ fn trim_url(mut uri: &str) -> &str {
         .is_some_and(|open| {
             uri.matches(last).count() > uri.matches(open).count()
         });
-        if matches!(last, '.' | ',' | ';' | ':' | '!' | '\'') || unmatched {
+        if matches!(last, '.' | ',' | '，' | ';' | ':' | '!' | '\'')
+            || unmatched
+        {
             uri = &uri[..uri.len() - last.len_utf8()];
         } else {
             return uri;

@@ -137,6 +137,31 @@ fn punctuation_and_url_internals_do_not_create_extra_targets() {
 }
 
 #[test]
+fn parenthesized_paths_exclude_trailing_chinese_comma() {
+    for path in [
+        "/Users/even/cryptty/src/main.rs",
+        "./中文/a_(b).rs",
+        "src/main.rs",
+        r"C:\work\src\main.rs",
+    ] {
+        for suffix in ["", ":12:4"] {
+            for cols in [16, 80] {
+                let mut s = session(
+                    &format!("({path}{suffix})，"),
+                    cols,
+                    8,
+                    Options::default(),
+                );
+                assert_eq!(texts(&s), vec![path]);
+                let label = s.targets[0].label.clone();
+                let action = s.key(Key::Char(label.chars().next().unwrap()));
+                assert!(matches!(action, Action::Copy(text) if text == path));
+            }
+        }
+    }
+}
+
+#[test]
 fn invalid_options_rejected_at_parse_time() {
     assert!(
         crate::config::Config::parse("markers:\n  overlap_max: 0").is_err()

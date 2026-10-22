@@ -66,6 +66,24 @@ fn punctuation_and_balanced_parentheses_preserve_the_url() {
 }
 
 #[test]
+fn chinese_comma_after_parenthesized_url_is_excluded() {
+    let prefix = "已创建 MR !1071 (";
+    let uri = "http://192.168.2.101/even/applications/backend/admin-portal/-/merge_requests/1071";
+    let start = unicode_width::UnicodeWidthStr::width(prefix);
+    for cols in [32, 80, 160] {
+        let mut terminal = Terminal::new(cols, 8);
+        terminal.feed(format!("{prefix}{uri})，").as_bytes());
+        for index in start..start + uri.len() {
+            let link = terminal.link_at(p(index / cols, index % cols)).unwrap();
+            assert_eq!(link.uri, uri);
+            assert_eq!(terminal.selected_text(link.range), uri);
+        }
+        let end = start + uri.len();
+        assert!(terminal.link_at(p(end / cols, end % cols)).is_none());
+    }
+}
+
+#[test]
 fn selection_includes_wide_and_combining_characters_without_wrap_padding() {
     let mut terminal = Terminal::new(4, 4);
     terminal.feed("abc中e\u{301}".as_bytes());
