@@ -6,7 +6,9 @@ use cryptty::terminal::{Content, MouseMode};
 use std::io::Write;
 use std::process::{Command, Stdio};
 use winit::application::ApplicationHandler;
-use winit::event::{Ime, MouseButton, MouseScrollDelta, WindowEvent};
+use winit::event::{
+    Ime, MouseButton, MouseScrollDelta, TouchPhase, WindowEvent,
+};
 use winit::event_loop::{ActiveEventLoop, EventLoop};
 use winit::keyboard::{KeyCode, KeyLocation, PhysicalKey};
 use winit::platform::wayland::EventLoopBuilderExtWayland;
@@ -254,8 +256,11 @@ fn frozen_tmux_vim_mode_copies_and_returns_to_live_output() {
             view.pointer_moved(20.0, 20.0).unwrap();
             view.mouse_button(MouseButton::Middle, ElementState::Pressed)
                 .unwrap();
-            view.mouse_wheel(MouseScrollDelta::LineDelta(0.0, 1.0))
-                .unwrap();
+            view.mouse_wheel(
+                MouseScrollDelta::LineDelta(0.0, 1.0),
+                TouchPhase::Moved,
+            )
+            .unwrap();
             press(
                 view,
                 WindowKey::Character("v".into()),

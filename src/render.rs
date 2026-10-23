@@ -15,6 +15,7 @@ mod font;
 mod font;
 
 mod atlas;
+mod compositing;
 mod decoration;
 mod generated;
 mod glyph_fit;
@@ -47,6 +48,7 @@ pub struct Renderer {
     width: usize,
     height: usize,
     pub pixels: Vec<u32>,
+    opacity: crate::config::Opacity,
     previous: std::collections::VecDeque<crate::terminal::Row>,
     color_revision: u64,
     image_revision: u64,
@@ -94,6 +96,7 @@ impl Renderer {
             width: 0,
             height: 0,
             pixels: Vec::new(),
+            opacity: Default::default(),
             previous: std::collections::VecDeque::new(),
             color_revision: 0,
             image_revision: 0,
@@ -136,6 +139,13 @@ impl Renderer {
         self.previous.clear();
     }
 
+    pub fn set_opacity(&mut self, opacity: crate::config::Opacity) {
+        if self.opacity != opacity {
+            self.opacity = opacity;
+            self.invalidate();
+        }
+    }
+
     pub fn draw(
         &mut self,
         terminal: &Terminal,
@@ -171,7 +181,8 @@ impl Renderer {
             self.invalidate();
         }
         if self.previous.is_empty() {
-            self.pixels.fill(terminal.theme().background);
+            let background = self.background(terminal.theme().background);
+            self.pixels.fill(background);
         }
         let cursor = terminal.cursor_drawn().then_some(terminal.cursor);
         let preedit_row = (!preedit.is_empty()).then_some(terminal.cursor.1);
@@ -295,10 +306,20 @@ impl Renderer {
             let start = py * self.width + x.min(right);
             let end = py * self.width + (x + w).min(right);
             if alpha == 255 {
-                self.pixels[start..end].fill(rgb);
+                let alpha = if self.opacity.transparent() {
+                    0xff000000
+                } else {
+                    0
+                };
+                self.pixels[start..end].fill(rgb | alpha);
             } else {
                 for pixel in &mut self.pixels[start..end] {
-                    *pixel = blend(*pixel, rgb, alpha);
+                    *pixel = compositing::blend(
+                        *pixel,
+                        rgb,
+                        alpha,
+                        self.opacity.transparent(),
+                    );
                 }
             }
         }
@@ -316,13 +337,14 @@ impl Renderer {
             self.content_end(),
         );
         let (left, _) = self.cell_origin(0, y);
-        self.solid(
-            left,
-            top,
-            row.len() * self.cell_width,
-            self.cell_height,
-            terminal.theme().background,
-        );
+        let background = self.background(terminal.theme().background);
+        let (right, bottom) = self.content_end();
+        for py in top..(top + self.cell_height).min(bottom) {
+            let start = py * self.width + left.min(right);
+            let end = py * self.width
+                + (left + row.len() * self.cell_width).min(right);
+            self.pixels[start..end].fill(background);
+        }
         for tile in tiles.iter().filter(|t| t.z < -1_073_741_824) {
             self.paint_image(tile);
         }
@@ -390,7 +412,12 @@ impl Renderer {
                 let rgb = u32::from(rgba[0]) << 16
                     | u32::from(rgba[1]) << 8
                     | u32::from(rgba[2]);
-                self.pixels[index] = blend(self.pixels[index], rgb, rgba[3]);
+                self.pixels[index] = compositing::blend(
+                    self.pixels[index],
+                    rgb,
+                    rgba[3],
+                    self.opacity.transparent(),
+                );
             }
         }
     }
@@ -444,6 +471,15 @@ impl Renderer {
                         )
                     }
                     ImageContent::SubpixelMask => {
+                        if self.opacity.transparent() {
+                            let alpha = image.data[i * 4..i * 4 + 3]
+                                .iter()
+                                .copied()
+                                .max()
+                                .unwrap();
+                            *dst = compositing::blend(*dst, color, alpha, true);
+                            continue;
+                        }
                         *dst = blend_rgb(
                             *dst,
                             color,
@@ -452,7 +488,12 @@ impl Renderer {
                         continue;
                     }
                 };
-                *dst = blend(*dst, fg, alpha);
+                *dst = compositing::blend(
+                    *dst,
+                    fg,
+                    alpha,
+                    self.opacity.transparent(),
+                );
             }
         }
     }
@@ -471,6 +512,14 @@ impl Renderer {
             )
             .or_else(|| self.rasterizer.rasterize(ch, font));
             self.glyphs.insert(key, image);
+        }
+    }
+
+    fn background(&self, rgb: u32) -> u32 {
+        if self.opacity.transparent() {
+            compositing::premultiply(rgb, self.opacity.get())
+        } else {
+            rgb
         }
     }
 }
@@ -493,6 +542,33 @@ fn blend_rgb(bg: u32, fg: u32, alpha: &[u8]) -> u32 {
 mod tests {
     use super::*;
     use crate::terminal::BACKGROUND;
+
+    #[test]
+    fn software_opacity_preserves_explicit_backgrounds_and_reloads() {
+        let mut renderer = Renderer::new(19.0).unwrap();
+        let mut terminal = Terminal::new(4, 2);
+        terminal.feed(b"\x1b[?25l\x1b[41m \x1b[0m");
+        let width = (renderer.cell_width * 4) as u32;
+        let height = (renderer.cell_height * 2) as u32;
+        renderer.set_opacity(0.5.try_into().unwrap());
+        renderer.draw(&terminal, width, height, "");
+        assert_eq!(
+            renderer.pixels[0],
+            0xff000000 | terminal.theme().palette[1]
+        );
+        let default_pixel = renderer.cell_width;
+        assert_eq!(renderer.pixels[default_pixel] >> 24, 128);
+        let first = renderer.pixels.clone();
+        renderer.draw(&terminal, width, height, "");
+        assert_eq!(renderer.pixels, first);
+        renderer.set_opacity(0.0.try_into().unwrap());
+        renderer.draw(&terminal, width, height, "");
+        assert_eq!(renderer.pixels[default_pixel], 0);
+        assert_eq!(renderer.pixels[0] >> 24, 255);
+        renderer.set_opacity(Default::default());
+        renderer.draw(&terminal, width, height, "");
+        assert_eq!(renderer.pixels[default_pixel], terminal.theme().background);
+    }
 
     #[test]
     fn generated_glyphs_override_mappings_and_font_styles() {

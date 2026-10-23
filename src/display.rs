@@ -9,7 +9,7 @@ use cryptty::{
     render::{Renderer, gpu::Gpu},
     terminal::Terminal,
 };
-use softbuffer::{Context, Surface};
+use softbuffer::{AlphaMode, Context, Pixel, Surface};
 use winit::window::Window;
 
 enum Backend {
@@ -20,6 +20,8 @@ enum Backend {
 pub struct Display {
     backend: Option<Backend>,
     automatic: bool,
+    settings: config::Window,
+    software_opacity: config::Opacity,
     #[cfg(target_os = "linux")]
     blur: std::cell::OnceCell<Option<crate::wayland_blur::Blur>>,
 }
@@ -54,6 +56,8 @@ impl Display {
         let mut display = Self {
             backend: Some(backend),
             automatic: choice == RendererChoice::Auto,
+            settings,
+            software_opacity: Default::default(),
             #[cfg(target_os = "linux")]
             blur: std::cell::OnceCell::new(),
         };
@@ -66,15 +70,24 @@ impl Display {
         window: &Arc<Window>,
         settings: config::Window,
     ) {
+        self.settings = settings;
         let transparent = if let Some(Backend::Gpu(gpu)) = &mut self.backend {
             gpu.set_opacity(settings.opacity)
         } else {
-            if settings.opacity.transparent() {
+            let supported = cfg!(target_os = "linux")
+                && matches!(&self.backend, Some(Backend::Software(surface))
+                    if surface.supports_alpha_mode(AlphaMode::Premultiplied));
+            self.software_opacity = if supported {
+                settings.opacity
+            } else {
+                Default::default()
+            };
+            if settings.opacity.transparent() && !supported {
                 eprintln!(
-                    "Cryptty: software rendering uses an opaque background"
+                    "Cryptty: software surface does not support transparency"
                 );
             }
-            false
+            self.software_opacity.transparent()
         };
         window.set_transparent(transparent);
         self.set_blur(window, transparent && settings.blur);
@@ -154,6 +167,7 @@ impl Display {
                     self.set_blur(window, false);
                     self.backend.take();
                     self.backend = Some(software(window.clone())?);
+                    self.configure_window(window, self.settings);
                     renderer.invalidate();
                 }
                 Err(error) => return Err(error),
@@ -168,14 +182,36 @@ impl Display {
         else {
             return Ok(());
         };
+        let transparent = self.software_opacity.transparent();
         surface
-            .resize(width, height)
+            .configure(
+                width,
+                height,
+                if transparent {
+                    AlphaMode::Premultiplied
+                } else {
+                    AlphaMode::Opaque
+                },
+            )
             .map_err(|e| anyhow::anyhow!("resize software surface: {e}"))?;
+        renderer.set_opacity(self.software_opacity);
         renderer.draw(terminal, size.width, size.height, preedit);
         let mut buffer = surface
-            .buffer_mut()
+            .next_buffer()
             .map_err(|e| anyhow::anyhow!("acquire software buffer: {e}"))?;
-        buffer.copy_from_slice(&renderer.pixels);
+        for (dst, src) in buffer
+            .pixel_rows()
+            .zip(renderer.pixels.chunks_exact(size.width as usize))
+        {
+            for (dst, &src) in dst.iter_mut().zip(src) {
+                *dst = Pixel {
+                    r: (src >> 16) as u8,
+                    g: (src >> 8) as u8,
+                    b: src as u8,
+                    a: if transparent { (src >> 24) as u8 } else { 255 },
+                };
+            }
+        }
         window.pre_present_notify();
         buffer
             .present()

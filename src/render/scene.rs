@@ -9,7 +9,7 @@ use super::{
 use crate::terminal::{Content, CursorShape, FontStyle, Terminal};
 
 #[repr(C)]
-#[derive(Clone, Copy, Pod, Zeroable)]
+#[derive(Clone, Copy, PartialEq, Pod, Zeroable)]
 pub(super) struct Quad {
     rect: [f32; 4],
     uv: [f32; 4],
@@ -22,6 +22,39 @@ pub(super) struct Frame {
     pub quads: Vec<Quad>,
     pub overlay: usize,
     pub backgrounds: usize,
+}
+
+#[derive(Default)]
+pub(super) struct Cache {
+    key: Option<CacheKey>,
+    rows: Vec<CachedRow>,
+    #[cfg(test)]
+    pub rebuilt_rows: usize,
+}
+
+#[derive(PartialEq)]
+struct CacheKey {
+    size: (u32, u32),
+    cell: (usize, usize),
+    padding: (usize, usize),
+    baseline: i32,
+    colors: u64,
+    images: u64,
+    blink: u8,
+    selection: Option<crate::terminal::TextRange>,
+    hovered: Vec<crate::terminal::TextRange>,
+}
+
+struct CachedRow {
+    row: crate::terminal::Row,
+    backgrounds: Vec<Quad>,
+    text: Vec<Quad>,
+}
+
+impl Cache {
+    pub fn clear(&mut self) {
+        self.rows.clear();
+    }
 }
 
 impl Quad {
@@ -136,7 +169,28 @@ pub(super) fn build(
     terminal: &Terminal,
     size: (u32, u32),
     preedit: &str,
+    cache: &mut Cache,
 ) -> Option<Frame> {
+    let key = CacheKey {
+        size,
+        cell: (renderer.cell_width, renderer.cell_height),
+        padding: renderer.padding,
+        baseline: renderer.baseline,
+        colors: terminal.color_revision,
+        images: terminal.graphics.revision,
+        blink: terminal.text_blink_phase,
+        selection: terminal.selection,
+        hovered: terminal.hovered_link.clone(),
+    };
+    if cache.key.as_ref() != Some(&key) {
+        cache.clear();
+        cache.key = Some(key);
+    }
+    cache.rows.truncate(terminal.rows.len());
+    #[cfg(test)]
+    {
+        cache.rebuilt_rows = 0;
+    }
     let end = (
         (size.0 as usize).saturating_sub(renderer.padding.0),
         (size.1 as usize).saturating_sub(renderer.padding.1),
@@ -150,15 +204,21 @@ pub(super) fn build(
         quads: Vec::new(),
     };
     for (y, row) in terminal.rows.iter().enumerate() {
+        if cache.rows.get(y).is_some_and(|cached| cached.row == *row) {
+            continue;
+        }
+        #[cfg(test)]
+        {
+            cache.rebuilt_rows += 1;
+        }
+        scene.quads.clear();
         for x in 0..row.len() {
             if let Some(bg) = super::cell_background(terminal, x, y) {
                 let (left, top) = scene.renderer.cell_origin(x, y);
                 scene.solid(left, top, w, h, bg);
             }
         }
-    }
-    let backgrounds = scene.quads.len();
-    for (y, row) in terminal.rows.iter().enumerate() {
+        let backgrounds = std::mem::take(&mut scene.quads);
         for (x, cell) in row.iter().enumerate() {
             let Content::Text { text } = &cell.content else {
                 continue;
@@ -189,6 +249,23 @@ pub(super) fn build(
                 );
             });
         }
+        let cached = CachedRow {
+            row: row.clone(),
+            backgrounds,
+            text: std::mem::take(&mut scene.quads),
+        };
+        if y < cache.rows.len() {
+            cache.rows[y] = cached;
+        } else {
+            cache.rows.push(cached);
+        }
+    }
+    for row in &cache.rows {
+        scene.quads.extend_from_slice(&row.backgrounds);
+    }
+    let backgrounds = scene.quads.len();
+    for row in &cache.rows {
+        scene.quads.extend_from_slice(&row.text);
     }
     let overlay = scene.quads.len();
     let (mut x, y) = terminal.cursor;

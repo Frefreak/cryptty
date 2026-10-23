@@ -3,6 +3,115 @@ use crate::terminal::{Position, Terminal, TextRange};
 
 #[test]
 #[ignore = "requires a working GPU adapter"]
+fn gpu_row_cache_matches_fresh_scenes() {
+    use super::{atlas::Atlas, scene};
+    let instance = super::gpu::instance(
+        wgpu::InstanceDescriptor::new_without_display_handle(),
+    );
+    let adapter = pollster::block_on(
+        instance.request_adapter(&wgpu::RequestAdapterOptions::default()),
+    )
+    .unwrap();
+    let (device, queue) = pollster::block_on(
+        adapter.request_device(&wgpu::DeviceDescriptor::default()),
+    )
+    .unwrap();
+    let mut atlas = Atlas::new(&device);
+    let mut renderer = Renderer::new(19.0).unwrap();
+    let mut terminal = Terminal::new(120, 40);
+    for _ in 0..39 {
+        terminal.feed(b"Cached text with \x1b[31mcolors\x1b[0m\r\n");
+    }
+    let size = (1440, 1000);
+    let mut cache = scene::Cache::default();
+    for step in 0..10 {
+        match step {
+            2 => {
+                terminal.feed(b"x");
+            }
+            3 => {
+                terminal.feed(b"\x1b[H");
+            }
+            4 => {
+                terminal.selection = Some(TextRange::between(
+                    Position { row: 0, col: 0 },
+                    Position { row: 1, col: 4 },
+                ))
+            }
+            5 => terminal.hovered_link.push(TextRange::between(
+                Position { row: 2, col: 0 },
+                Position { row: 2, col: 5 },
+            )),
+            6 => {
+                terminal.feed(b"\x1b[?5h");
+            }
+            7 => terminal.text_blink_phase = 1,
+            8 => {
+                atlas.clear();
+                cache.clear();
+            }
+            9 => terminal.resize(80, 20),
+            _ => (),
+        }
+        let frame = scene::build(
+            &mut renderer,
+            &mut atlas,
+            &queue,
+            &terminal,
+            size,
+            "",
+            &mut cache,
+        )
+        .unwrap();
+        if step == 1 || step == 3 {
+            assert_eq!(cache.rebuilt_rows, 0);
+        } else if step == 2 {
+            assert_eq!(cache.rebuilt_rows, 1);
+        } else {
+            assert_eq!(cache.rebuilt_rows, terminal.rows.len());
+        }
+        let fresh = scene::build(
+            &mut renderer,
+            &mut atlas,
+            &queue,
+            &terminal,
+            size,
+            "",
+            &mut scene::Cache::default(),
+        )
+        .unwrap();
+        assert_eq!(frame.backgrounds, fresh.backgrounds);
+        assert_eq!(frame.overlay, fresh.overlay);
+        assert_eq!(
+            bytemuck::cast_slice::<_, u8>(&frame.quads),
+            bytemuck::cast_slice::<_, u8>(&fresh.quads),
+        );
+    }
+    for cached in [false, true] {
+        let start = std::time::Instant::now();
+        for _ in 0..500 {
+            if !cached {
+                cache.clear();
+            }
+            std::hint::black_box(
+                scene::build(
+                    &mut renderer,
+                    &mut atlas,
+                    &queue,
+                    &terminal,
+                    size,
+                    "",
+                    &mut cache,
+                )
+                .unwrap(),
+            );
+        }
+        eprintln!("scene build cached={cached}: {:?} / 500", start.elapsed());
+    }
+}
+
+#[test]
+#[ignore = "requires a working GPU adapter"]
 fn gpu_pixels_match_software_across_resize_and_font_changes() {
     let instance = super::gpu::instance(
         wgpu::InstanceDescriptor::new_without_display_handle(),
@@ -355,6 +464,21 @@ fn check_transparent_pixels(color_format: crate::config::OpenGlColorFormat) {
         if glyph_coverage.is_empty() {
             // With no background alpha, these isolated glyphs expose the mask.
             glyph_coverage.extend(bytes.chunks_exact(4).map(|p| p[3]));
+        }
+        renderer.set_opacity(alpha.try_into().unwrap());
+        renderer.draw(&terminal, size.0, size.1, "");
+        for (i, &cpu) in renderer.pixels.iter().enumerate() {
+            for (channel, shift) in [16, 8, 0, 24].into_iter().enumerate() {
+                if alpha == 1.0 && channel == 3 {
+                    continue;
+                }
+                let expected = ((cpu >> shift) & 255) as u8;
+                let actual = bytes[i * 4 + channel];
+                assert!(
+                    actual.abs_diff(expected) <= 3,
+                    "alpha={alpha} pixel={i} channel={channel}: GPU={actual} CPU={expected}"
+                );
+            }
         }
         let pixel = |x: usize, y: usize| {
             let offset = (y * size.0 as usize + x) * 4;

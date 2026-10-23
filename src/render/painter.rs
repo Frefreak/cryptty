@@ -3,6 +3,36 @@ use anyhow::{Context, Result};
 use super::{Renderer, atlas::Atlas, linear, scene};
 use crate::terminal::Terminal;
 
+fn changed_quads<T: PartialEq>(
+    old: &[T],
+    new: &[T],
+) -> Option<std::ops::Range<usize>> {
+    let start = old.iter().zip(new).take_while(|(a, b)| a == b).count();
+    let mut end = new.len();
+    if old.len() == new.len() {
+        while end > start && old[end - 1] == new[end - 1] {
+            end -= 1;
+        }
+    }
+    (start < end).then_some(start..end)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::changed_quads;
+
+    #[test]
+    fn uploads_cover_changes_growth_and_shrinkage() {
+        assert_eq!(changed_quads(&[1, 2, 3], &[1, 2, 3]), None);
+        assert_eq!(changed_quads(&[1, 2, 3], &[1, 4, 3]), Some(1..2));
+        assert_eq!(changed_quads(&[1, 2], &[1, 2, 3]), Some(2..3));
+        assert_eq!(changed_quads(&[1, 2, 3], &[1, 2]), None);
+        assert_eq!(changed_quads(&[1, 2, 3], &[1, 4]), Some(1..2));
+        assert_eq!(changed_quads::<u32>(&[], &[]), None);
+        assert_eq!(changed_quads(&[], &[1, 2]), Some(0..2));
+    }
+}
+
 pub(super) struct Painter {
     atlas: Atlas,
     linear: Option<linear::LinearFrame>,
@@ -14,6 +44,8 @@ pub(super) struct Painter {
     vertices: wgpu::Buffer,
     layout: wgpu::BindGroupLayout,
     images: std::collections::BTreeMap<u64, super::images::GpuImage>,
+    scene: scene::Cache,
+    uploaded: Vec<scene::Quad>,
 }
 
 impl Painter {
@@ -87,6 +119,8 @@ impl Painter {
             vertices,
             layout,
             images: Default::default(),
+            scene: Default::default(),
+            uploaded: Vec::new(),
         }
     }
 
@@ -120,6 +154,7 @@ impl Painter {
 
     pub fn clear_glyphs(&mut self) {
         self.atlas.clear();
+        self.scene.clear();
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -140,9 +175,10 @@ impl Painter {
             terminal,
             size,
             preedit,
+            &mut self.scene,
         )
         .or_else(|| {
-            self.atlas.clear();
+            self.clear_glyphs();
             scene::build(
                 renderer,
                 &mut self.atlas,
@@ -150,6 +186,7 @@ impl Painter {
                 terminal,
                 size,
                 preedit,
+                &mut self.scene,
             )
         })
         .context("Visible glyphs exceed GPU atlas capacity")?;
@@ -185,12 +222,21 @@ impl Painter {
         let mut quads = frame.quads;
         let text_end = quads.len();
         quads.extend(tiles.iter().map(scene::Quad::image));
-        let bytes = bytemuck::cast_slice(&quads);
+        let bytes: &[u8] = bytemuck::cast_slice(&quads);
         if bytes.len() as u64 > self.vertices.size() {
             self.vertices =
                 vertex_buffer(device, bytes.len().next_power_of_two() as u64);
+            self.uploaded.clear();
         }
-        queue.write_buffer(&self.vertices, 0, bytes);
+        if let Some(range) = changed_quads(&self.uploaded, &quads) {
+            let stride = std::mem::size_of::<scene::Quad>();
+            queue.write_buffer(
+                &self.vertices,
+                (range.start * stride) as u64,
+                bytemuck::cast_slice(&quads[range]),
+            );
+        }
+        self.uploaded = quads;
         queue.write_buffer(
             &self.viewport,
             0,

@@ -246,21 +246,28 @@ window:
 Opacity accepts values from `0.0` to `1.0` and affects the default background.
 Explicit cell backgrounds, selections, cursors, and images retain their own
 opacity. Transparent mode uses grayscale text coverage and blends in linear
-light to avoid dark glyph edges. It adds an intermediate GPU texture and a
-full-window encoding pass. `opacity: 1.0` restores the opaque RGB path and
+light to avoid dark glyph edges. On the GPU it adds an intermediate texture
+and a full-window encoding pass. `opacity: 1.0` restores the opaque RGB path and
 disables blur. Defaults remain `opacity: 1.0` and `blur: false`.
 
-Transparency requires GPU rendering and a compatible alpha surface. The GPU
-renderer selects an 8-bit-alpha format to preserve smooth glyph edges.
-Software rendering and unsupported GPU surfaces retain an opaque background
-and log a notice. Metal transparency uses premultiplied pixels with the
+Transparency works with GPU rendering on compatible alpha surfaces and with
+software rendering on Linux/Wayland. Software rendering supplies premultiplied
+pixels to the compositor through softbuffer's alpha-buffer API, pinned to an
+upstream commit until that API is released. Unsupported surfaces retain an
+opaque background and log a notice. The GPU renderer selects an 8-bit-alpha
+format to preserve smooth glyph edges. Metal uses premultiplied pixels with the
 surface mode advertised by wgpu. macOS blur uses the native window effect.
-On Linux, blur uses the native KDE Wayland effect; its
+On Linux, the compositor performs blur for both rendering backends; its
 strength follows desktop settings, without a per-window pixel radius.
-The standard `ext-background-effect-v1` protocol supports current KWin;
+The standard `ext-background-effect-v1` protocol supports niri 26.04 and KWin;
 the legacy KDE protocol remains a fallback. Other Wayland compositors may
 ignore the blur hint.
 Ctrl+Shift+R applies both settings to the current window.
+
+The GPU renderer caches unchanged rows' background and text geometry and
+uploads the changed span of its geometry buffer. Cursor and other overlays
+are rebuilt independently. Presentation still draws the full frame; the
+cache reduces CPU scene-building work and GPU uploads during small updates.
 
 On macOS, fonts use CoreText through crossfont and follow the system's
 font-smoothing setting. On Linux, fonts use Swash; `font.hinting` applies
