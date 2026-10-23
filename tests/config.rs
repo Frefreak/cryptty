@@ -431,44 +431,31 @@ fn invalid_font_mapping_ranges_are_rejected_during_parsing() {
 }
 
 #[test]
-fn default_mapping_covers_cjk_and_preserves_latin_and_symbols() {
-    let config = Config::parse("").unwrap();
-    let maps = &config.font.codepoint_map;
-    assert_eq!(maps.len(), if cfg!(target_os = "macos") { 2 } else { 1 });
-    assert_eq!(maps[0].family(), "LXGW WenKai Mono Screen");
-    for ch in ['中', '文', '。', '，', '「', 'Ａ', '\u{20000}'] {
-        assert!(maps[0].contains(ch), "{ch:?}");
-    }
-    for ch in ['A', 'é', '█', '▲', '\u{e0b0}', '😀'] {
-        assert!(!maps[0].contains(ch), "{ch:?}");
-    }
-    if cfg!(target_os = "macos") {
-        assert_eq!(maps[1].family(), "Menlo");
-        for ch in ['⏎', '▲', '▼', '─', '│', '█', '░', '▟'] {
-            assert!(maps[1].contains(ch), "{ch:?}");
-        }
-        for ch in ['A', '中', '\u{e0b0}', '😀'] {
-            assert!(!maps[1].contains(ch), "{ch:?}");
-        }
+fn omitted_font_mappings_leave_fallback_selection_unrestricted() {
+    for text in [
+        "",
+        "font: {}",
+        "font: {fallback: ['LXGW WenKai GB Screen']}",
+        "font: {codepoint_map: []}",
+    ] {
+        let config = Config::parse(text).unwrap();
+        assert!(config.font.codepoint_map.is_empty(), "{text}");
     }
 }
 
 #[test]
-fn old_empty_mapping_comments_do_not_repeat_new_defaults() {
+fn mapping_comments_do_not_enable_implicit_mappings() {
     let directory = TestDirectory::new();
     let path = directory.path().join("cryptty.yaml");
     for text in [
         "font:\n  size: 21\n  # codepoint_map: []\n",
         "# font:\n#   codepoint_map: []\n",
+        "font:\n  # codepoint_map:\n  # - family: LXGW WenKai Mono Screen\n  #   ranges: [U+2E80-U+9FFF]\n",
     ] {
         std::fs::write(&path, text).unwrap();
-        Config::read(&path).unwrap();
+        assert!(Config::read(&path).unwrap().font.codepoint_map.is_empty());
         let updated = std::fs::read_to_string(&path).unwrap();
-        assert_eq!(
-            updated.matches("family: LXGW WenKai Mono Screen").count(),
-            1
-        );
-        Config::read(&path).unwrap();
+        assert!(Config::read(&path).unwrap().font.codepoint_map.is_empty());
         assert_eq!(std::fs::read_to_string(&path).unwrap(), updated);
     }
 }

@@ -8,17 +8,9 @@ pub(super) fn updated(text: &str) -> Result<String> {
 }
 
 fn values() -> Result<Value> {
-    let mut defaults: Value =
-        serde_yaml_ng::from_str(include_str!("../default-config.yaml"))?;
-    if cfg!(target_os = "macos") {
-        defaults["font"]["codepoint_map"]
-            .as_sequence_mut()
-            .expect("Default font mappings are a list")
-            .push(serde_yaml_ng::from_str(include_str!(
-                "../default-font-macos.yaml"
-            ))?);
-    }
-    Ok(defaults)
+    Ok(serde_yaml_ng::from_str(include_str!(
+        "../default-config.yaml"
+    ))?)
 }
 
 fn insert_missing(text: &str, defaults: &Value) -> Result<String> {

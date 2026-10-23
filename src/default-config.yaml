@@ -10,15 +10,7 @@ font:
   fallback:
     - LXGW WenKai Mono Screen
   # Per-font lists of Unicode ranges; later mappings take priority.
-  codepoint_map:
-    - family: LXGW WenKai Mono Screen
-      ranges:
-        - U+2E80-U+9FFF
-        - U+F900-U+FAFF
-        - U+FE10-U+FE1F
-        - U+FE30-U+FE4F
-        - U+FF00-U+FFEF
-        - U+20000-U+3FFFF
+  codepoint_map: []
 window:
   # GPU background opacity, from 0.0 to 1.0; software remains opaque.
   opacity: 1.0

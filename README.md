@@ -276,14 +276,11 @@ font:
 ```
 
 The built-in defaults use FantasqueSansM Nerd Font Mono at 19 pt, with
-LXGW WenKai Mono Screen mapped to CJK ideographs, punctuation, and fullwidth
-forms. Install both families to obtain this appearance. The ranges are
-`U+2E80-U+9FFF`, `U+F900-U+FAFF`, `U+FE10-U+FE1F`, `U+FE30-U+FE4F`,
-`U+FF00-U+FFEF`, and `U+20000-U+3FFFF`. An explicit `codepoint_map` replaces
-the default list; use `codepoint_map: []` to disable it.
+LXGW WenKai Mono Screen as the first fallback family. Install both families
+to obtain this appearance. Omitting `codepoint_map` or setting it to `[]`
+leaves all characters to the primary font and normal fallback selection.
+Only explicit mappings override font selection for Unicode ranges.
 
-On macOS, the defaults also map `⏎ ▲ ▼` (`U+23CE`, `U+25B2`, `U+25BC`)
-and box drawing/block elements (`U+2500-U+259F`) to the system Menlo font.
 The renderer generates U+2500–U+259F directly from cell geometry, taking
 priority over font mappings. Existing mappings for these ranges may remain
 in the config. Shades fill the whole cell with uniform 25%, 50%, or 75%

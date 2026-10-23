@@ -193,7 +193,7 @@ impl Default for Font {
             hinting: false,
             embolden: FontEmbolden::default(),
             fallback: vec!["LXGW WenKai Mono Screen".to_string()],
-            codepoint_map: FontMapping::defaults(),
+            codepoint_map: Vec::new(),
         }
     }
 }
