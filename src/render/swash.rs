@@ -44,6 +44,7 @@ pub struct Rasterizer {
     scale: ScaleContext,
     size: f32,
     hinting: bool,
+    embolden: crate::config::FontEmbolden,
     pub cell_width: usize,
     pub cell_height: usize,
     pub baseline: i32,
@@ -56,6 +57,7 @@ impl Rasterizer {
         family: &str,
         mappings: &[FontMapping],
         fallbacks: &[String],
+        embolden: crate::config::FontEmbolden,
     ) -> Result<Self> {
         let mut db = Database::new();
         db.load_system_fonts();
@@ -141,6 +143,7 @@ impl Rasterizer {
             scale: ScaleContext::new(),
             size,
             hinting,
+            embolden,
             cell_width,
             cell_height,
             baseline,
@@ -183,6 +186,7 @@ impl Rasterizer {
             Source::ColorBitmap(StrikeWith::BestFit),
             Source::Outline,
         ])
+        .embolden(self.embolden.pixels())
         .format(swash::zeno::Format::Alpha)
         .render(&mut scaler, glyph)
     }
@@ -235,6 +239,55 @@ fn styled_faces(db: &Database, regular: ID) -> [ID; 4] {
 mod tests {
     use super::*;
 
+    #[test]
+    fn embolden_increases_outline_coverage_without_changing_cell_metrics() {
+        let mut normal = Rasterizer::new(
+            38.0,
+            false,
+            "monospace",
+            &[],
+            &[],
+            Default::default(),
+        )
+        .unwrap();
+        let mut heavier = Rasterizer::new(
+            38.0,
+            false,
+            "monospace",
+            &[],
+            &[],
+            0.15.try_into().unwrap(),
+        )
+        .unwrap();
+        assert_eq!(
+            (normal.cell_width, normal.cell_height, normal.baseline),
+            (heavier.cell_width, heavier.cell_height, heavier.baseline),
+        );
+        for bold in [false, true] {
+            let style = FontStyle {
+                bold,
+                italic: false,
+            };
+            for ch in ['M', 'i', 'g', '@'] {
+                let before = normal.rasterize(ch, style).unwrap();
+                let after = heavier.rasterize(ch, style).unwrap();
+                assert_eq!(before.content, swash::scale::image::Content::Mask);
+                assert_eq!(after.content, before.content);
+                let coverage = |image: &Image| {
+                    image
+                        .data
+                        .iter()
+                        .map(|&alpha| u64::from(alpha))
+                        .sum::<u64>()
+                };
+                assert!(
+                    coverage(&after) > coverage(&before),
+                    "{ch}, bold={bold}"
+                );
+            }
+        }
+    }
+
     #[cfg(target_os = "macos")]
     #[test]
     fn fallback_order_primary_and_explicit_mapping() {
@@ -253,6 +306,7 @@ mod tests {
                 "Menlo",
                 &config.font.codepoint_map,
                 &config.font.fallback,
+                Default::default(),
             )
             .unwrap();
             for style in [
@@ -306,6 +360,7 @@ mod tests {
             "FantasqueSansM Nerd Font Mono",
             &[],
             &["DejaVu Sans Mono".to_owned()],
+            Default::default(),
         )
         .unwrap();
         let style = FontStyle::default();
@@ -333,6 +388,7 @@ mod tests {
                 "FantasqueSansM Nerd Font Mono",
                 &[],
                 &["DejaVu Sans Mono".to_owned()],
+                Default::default(),
             )
             .unwrap();
             for bold in [false, true] {
@@ -382,6 +438,7 @@ mod tests {
             &crate::config::Font::default().family,
             &[],
             &[],
+            Default::default(),
         )
         .unwrap();
         let default_family =
@@ -398,7 +455,9 @@ mod tests {
             .families[0]
             .0
             .clone();
-        let selected = Rasterizer::new(19.0, false, &family, &[], &[]).unwrap();
+        let selected =
+            Rasterizer::new(19.0, false, &family, &[], &[], Default::default())
+                .unwrap();
         for id in selected.faces {
             assert!(
                 selected
@@ -417,7 +476,15 @@ mod tests {
 
     #[test]
     fn disjoint_mappings_and_later_overrides_preserve_font_styles() {
-        let base = Rasterizer::new(28.0, false, "monospace", &[], &[]).unwrap();
+        let base = Rasterizer::new(
+            28.0,
+            false,
+            "monospace",
+            &[],
+            &[],
+            Default::default(),
+        )
+        .unwrap();
         let primary =
             base.db.face(base.faces[0]).unwrap().families[0].0.clone();
         let alternate = base
@@ -442,6 +509,7 @@ mod tests {
             &primary,
             &config.font.codepoint_map,
             &config.font.fallback,
+            Default::default(),
         )
         .unwrap();
         for style in [

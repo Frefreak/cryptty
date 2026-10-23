@@ -4,6 +4,8 @@ font:
   size: 19
   # Swash hinting on Linux; macOS uses native font rendering.
   hinting: false
+  # Linux outline stroke thickening in physical pixels, from 0.0 to 1.0.
+  embolden: 0.0
   # Ordered fallback families for characters missing from the primary font.
   fallback:
     - LXGW WenKai Mono Screen
@@ -22,6 +24,8 @@ window:
   opacity: 1.0
   # Native KDE Wayland blur; strength follows desktop settings.
   blur: false
+  # OpenGL transparency storage: rgba16f or compact rgba8. Reopen to apply.
+  opengl_color_format: rgba16f
   # macOS only: none, only_left, only_right, or both.
   option_as_alt: only_left
   padding:

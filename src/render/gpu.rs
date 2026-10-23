@@ -76,13 +76,18 @@ pub struct Gpu {
 }
 
 impl Gpu {
-    pub fn new(window: Arc<Window>, selected: Option<usize>) -> Result<Self> {
-        pollster::block_on(Self::initialize(window, selected))
+    pub fn new(
+        window: Arc<Window>,
+        selected: Option<usize>,
+        color_format: crate::config::OpenGlColorFormat,
+    ) -> Result<Self> {
+        pollster::block_on(Self::initialize(window, selected, color_format))
     }
 
     async fn initialize(
         window: Arc<Window>,
         selected: Option<usize>,
+        color_format: crate::config::OpenGlColorFormat,
     ) -> Result<Self> {
         let instance =
             instance(wgpu::InstanceDescriptor::new_with_display_handle(
@@ -181,7 +186,12 @@ impl Gpu {
             config.desired_maximum_frame_latency = 2;
             let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
             surface.configure(&device, &config);
-            let painter = Painter::new(&device, config.format);
+            let painter = Painter::new(
+                &device,
+                config.format,
+                info.backend,
+                color_format,
+            );
             if let Some(error) = scope.pop().await {
                 errors.push(format!("adapter {index}: {error}"));
                 continue;

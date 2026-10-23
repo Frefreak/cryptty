@@ -1,9 +1,22 @@
 use wgpu::{Device, TextureFormat, TextureView};
 
-pub(super) const FORMAT: TextureFormat = TextureFormat::Rgba16Float;
+pub(super) fn format(
+    backend: wgpu::Backend,
+    color_format: crate::config::OpenGlColorFormat,
+) -> TextureFormat {
+    use crate::config::OpenGlColorFormat;
+    match (backend, color_format) {
+        // sRGB storage preserves linear blending with less bandwidth on GL.
+        (wgpu::Backend::Gl, OpenGlColorFormat::Rgba8) => {
+            TextureFormat::Rgba8UnormSrgb
+        }
+        _ => TextureFormat::Rgba16Float,
+    }
+}
 
 pub(super) struct LinearFrame {
     pipeline: wgpu::RenderPipeline,
+    format: TextureFormat,
     target: Option<Target>,
 }
 
@@ -14,7 +27,11 @@ struct Target {
 }
 
 impl LinearFrame {
-    pub fn new(device: &Device, format: TextureFormat) -> Self {
+    pub fn new(
+        device: &Device,
+        format: TextureFormat,
+        intermediate: TextureFormat,
+    ) -> Self {
         let shader =
             device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("linear frame encoding"),
@@ -50,6 +67,7 @@ impl LinearFrame {
             });
         Self {
             pipeline,
+            format: intermediate,
             target: None,
         }
     }
@@ -74,7 +92,7 @@ impl LinearFrame {
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
-                format: FORMAT,
+                format: self.format,
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT
                     | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
@@ -128,5 +146,28 @@ pub(super) fn decode(value: f64) -> f64 {
         value / 12.92
     } else {
         ((value + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::OpenGlColorFormat::{Rgba8, Rgba16f};
+
+    #[test]
+    fn compact_storage_is_opt_in_and_gl_only() {
+        for backend in [wgpu::Backend::Metal, wgpu::Backend::Vulkan] {
+            for choice in [Rgba8, Rgba16f] {
+                assert_eq!(format(backend, choice), TextureFormat::Rgba16Float);
+            }
+        }
+        assert_eq!(
+            format(wgpu::Backend::Gl, Rgba16f),
+            TextureFormat::Rgba16Float,
+        );
+        assert_eq!(
+            format(wgpu::Backend::Gl, Rgba8),
+            TextureFormat::Rgba8UnormSrgb,
+        );
     }
 }

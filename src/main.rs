@@ -68,6 +68,7 @@ struct App {
     command: Vec<OsString>,
     config: Config,
     renderer_choice: RendererChoice,
+    opengl_color_format: Option<cryptty::config::OpenGlColorFormat>,
     error: Option<anyhow::Error>,
 }
 
@@ -91,10 +92,14 @@ impl App {
         macos_input::install(&window)?;
         #[cfg(target_os = "macos")]
         macos_input::configure(&window, self.config.window.option_as_alt);
+        let mut window_settings = self.config.window;
+        if let Some(format) = self.opengl_color_format {
+            window_settings.opengl_color_format = format;
+        }
         let display = display::Display::new(
             window.clone(),
             self.renderer_choice,
-            self.config.window,
+            window_settings,
         )?;
         let renderer = Renderer::with_options(
             self.config.font.size.pixels(window.scale_factor()),
@@ -103,6 +108,7 @@ impl App {
             &self.config.font.family,
             &self.config.font.codepoint_map,
             &self.config.font.fallback,
+            self.config.font.embolden,
         )?;
         let size = window.inner_size();
         let (cols, rows) = renderer.grid_size(size.width, size.height);
@@ -288,6 +294,7 @@ impl View {
                     &self.font.family,
                     &self.font.codepoint_map,
                     &self.font.fallback,
+                    self.font.embolden,
                 )?;
                 if let Some((message, _)) = &self.notice {
                     self.renderer.set_notice(Some(message));
@@ -584,7 +591,7 @@ fn pty_size(cols: usize, rows: usize, renderer: &Renderer) -> PtySize {
 }
 
 fn main() -> Result<()> {
-    let (renderer_choice, command) =
+    let (renderer_choice, opengl_color_format, command) =
         match options::parse(std::env::args_os().skip(1))? {
             Action::Image { paths, pane } => {
                 if pane {
@@ -611,7 +618,11 @@ fn main() -> Result<()> {
                 cryptty::render::gpu::list_adapters(descriptor);
                 return Ok(());
             }
-            Action::Run { renderer, command } => (renderer, command),
+            Action::Run {
+                renderer,
+                opengl_color_format,
+                command,
+            } => (renderer, opengl_color_format, command),
         };
     let config = Config::load()?;
     let events = EventLoop::with_user_event()
@@ -626,6 +637,7 @@ fn main() -> Result<()> {
         command,
         config,
         renderer_choice,
+        opengl_color_format,
         error: None,
     };
     events.run_app(&mut app)?;

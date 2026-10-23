@@ -2,6 +2,8 @@ use std::ffi::OsString;
 
 use anyhow::{Result, bail};
 
+use crate::config::OpenGlColorFormat;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum RendererChoice {
     #[default]
@@ -20,6 +22,7 @@ pub enum Action {
     },
     Run {
         renderer: RendererChoice,
+        opengl_color_format: Option<OpenGlColorFormat>,
         command: Vec<OsString>,
     },
     ListGpus,
@@ -30,6 +33,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Action> {
     let mut args = args.into_iter();
     let mut renderer = RendererChoice::Auto;
     let mut adapter = None;
+    let mut opengl_color_format = None;
     let mut command = Vec::new();
     let mut list = false;
     while let Some(arg) = args.next() {
@@ -37,7 +41,8 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Action> {
             Some("image")
                 if renderer == RendererChoice::Auto
                     && adapter.is_none()
-                    && !list =>
+                    && !list
+                    && opengl_color_format.is_none() =>
             {
                 let mut paths = Vec::new();
                 let mut pane = false;
@@ -75,6 +80,18 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Action> {
                     _ => bail!("--renderer requires auto, software, or gpu"),
                 };
             }
+            Some("--opengl-color-format") => {
+                opengl_color_format = Some(
+                    args.next()
+                        .and_then(|s| s.into_string().ok())
+                        .and_then(|s| s.parse().ok())
+                        .ok_or_else(|| {
+                            anyhow::anyhow!(
+                                "--opengl-color-format requires rgba8 or rgba16f"
+                            )
+                        })?,
+                );
+            }
             Some("--gpu") => {
                 adapter = Some(
                     args.next()
@@ -97,12 +114,21 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Action> {
         };
     }
     if list {
-        if renderer != RendererChoice::Auto || !command.is_empty() {
-            bail!("Use --list-gpus without renderer or command arguments");
+        if renderer != RendererChoice::Auto
+            || !command.is_empty()
+            || opengl_color_format.is_some()
+        {
+            bail!(
+                "Use --list-gpus without renderer, format, or command arguments"
+            );
         }
         return Ok(Action::ListGpus);
     }
-    Ok(Action::Run { renderer, command })
+    Ok(Action::Run {
+        renderer,
+        opengl_color_format,
+        command,
+    })
 }
 
 pub const HELP: &str = "Cryptty — terminal for macOS and Linux
@@ -113,6 +139,9 @@ Usage: cryptty [OPTIONS] [-- PROGRAM [ARG...]]
   image --pane                Open a right-side tmux preview; Enter closes it
 
   --renderer auto|software|gpu  Renderer (default: auto)
+  --opengl-color-format rgba8|rgba16f
+                              Override window.opengl_color_format
+                              (default: rgba16f; OpenGL transparency only)
   --list-gpus                  List adapters and exit
   --gpu INDEX                  Require a specific adapter from --list-gpus
   -h, --help                   Show this help
@@ -135,10 +164,35 @@ mod tests {
             args(&["--gpu", "2", "--", "fish", "--no-config"]).unwrap(),
             Action::Run {
                 renderer: RendererChoice::Gpu { adapter: Some(2) },
+                opengl_color_format: None,
                 command: vec!["fish".into(), "--no-config".into()],
             }
         );
         assert_eq!(args(&["--list-gpus"]).unwrap(), Action::ListGpus);
+    }
+
+    #[test]
+    fn opengl_format_override_preserves_commands() {
+        for (name, expected) in [
+            ("rgba8", OpenGlColorFormat::Rgba8),
+            ("rgba16f", OpenGlColorFormat::Rgba16f),
+        ] {
+            assert_eq!(
+                args(&["--opengl-color-format", name, "--", "fish"]).unwrap(),
+                Action::Run {
+                    renderer: RendererChoice::Auto,
+                    opengl_color_format: Some(expected),
+                    command: vec!["fish".into()],
+                }
+            );
+        }
+        for values in [
+            vec!["--opengl-color-format"],
+            vec!["--opengl-color-format", "rgba32"],
+            vec!["--list-gpus", "--opengl-color-format", "rgba8"],
+        ] {
+            assert!(args(&values).is_err(), "{values:?}");
+        }
     }
 
     #[test]

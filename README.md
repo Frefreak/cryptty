@@ -103,6 +103,18 @@ hardware or driver changes. Selection uses one adapter per process.
 Font rasterization remains on the CPU; the GPU caches glyph images and
 draws text, backgrounds, underlines, preedit, and the cursor.
 
+For heavier text on Linux, adjust outline thickness in physical pixels:
+
+```yaml
+font:
+  embolden: 0.15
+```
+
+The default is `0.0`; values from `0.0` to `1.0` are accepted.
+Press Ctrl+Shift+R to reload. Cell spacing stays unchanged. This affects
+outline text on Linux; macOS, bitmap emoji, and generated box glyphs retain
+their existing rendering.
+
 The offscreen rendering comparison requires a working GPU:
 
 ```sh
@@ -147,6 +159,24 @@ Jump with two characters and, when needed, a target label; continue with
 Vim motions, counts, and character, line, or block selection. `y` copies
 and returns to the live display. See [Vim mode](docs/vim-mode.md) for the
 personal key mappings and visible-pane scope.
+
+OpenGL transparency uses a high-precision intermediate image by default.
+For lower graphics-memory bandwidth, select compact 8-bit sRGB storage:
+
+```yaml
+window:
+  opengl_color_format: rgba8
+```
+
+Use `rgba16f` (the default) for 16-bit floating-point color and alpha.
+The `rgba8` mode reduces precision, especially for translucent layers.
+Reopen the window after changing this setting. Metal, Vulkan, software,
+and fully opaque rendering retain their existing formats.
+A launch option overrides the configuration file:
+
+```fish
+cryptty --opengl-color-format rgba16f
+```
 
 Ctrl-Shift-N opens a fresh shell in
 a new window, using the original launch directory and renderer options.

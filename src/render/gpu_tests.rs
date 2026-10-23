@@ -15,7 +15,12 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
         adapter.request_device(&wgpu::DeviceDescriptor::default()),
     )
     .unwrap();
-    let mut painter = Painter::new(&device, wgpu::TextureFormat::Rgba8Unorm);
+    let mut painter = Painter::new(
+        &device,
+        wgpu::TextureFormat::Rgba8Unorm,
+        adapter.get_info().backend,
+        crate::config::OpenGlColorFormat::default(),
+    );
     let mut terminal = Terminal::new(26, 16);
     terminal.feed(
         concat!(
@@ -92,6 +97,7 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
                 &defaults.codepoint_map
             },
             &defaults.fallback,
+            Default::default(),
         )
         .unwrap();
         painter.clear_glyphs();
@@ -220,6 +226,16 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
 #[test]
 #[ignore = "requires a working GPU adapter"]
 fn transparent_pixels_and_opaque_restoration() {
+    check_transparent_pixels(crate::config::OpenGlColorFormat::Rgba16f);
+}
+
+#[test]
+#[ignore = "requires a working GPU adapter"]
+fn compact_transparent_pixels_and_opaque_restoration() {
+    check_transparent_pixels(crate::config::OpenGlColorFormat::Rgba8);
+}
+
+fn check_transparent_pixels(color_format: crate::config::OpenGlColorFormat) {
     let instance = super::gpu::instance(
         wgpu::InstanceDescriptor::new_without_display_handle(),
     );
@@ -232,8 +248,19 @@ fn transparent_pixels_and_opaque_restoration() {
     )
     .unwrap();
     let format = wgpu::TextureFormat::Rgba8Unorm;
-    let mut painter = Painter::new(&device, format);
-    let mut renderer = Renderer::new(19.0).unwrap();
+    let mut painter =
+        Painter::new(&device, format, adapter.get_info().backend, color_format);
+    let defaults = crate::config::Font::default();
+    let mut renderer = Renderer::with_options(
+        19.0,
+        (0, 0),
+        false,
+        &defaults.family,
+        &[],
+        &[],
+        0.15.try_into().unwrap(),
+    )
+    .unwrap();
     let mut terminal = Terminal::new(6, 3);
     terminal.feed(b"A\x1b[41m \x1b[0m\x1b[?25l");
     terminal.feed(
@@ -259,9 +286,14 @@ fn transparent_pixels_and_opaque_restoration() {
     let (cw, ch) = (renderer.cell_width, renderer.cell_height);
     let origin = renderer.cell_origin(0, 0);
     let mut opaque = Vec::new();
+    let mut glyph_coverage = Vec::new();
     for (alpha, size) in [
+        (0.0, (256, 128)),
         (1.0, (256, 128)),
         (0.8, (256, 128)),
+        (0.4, (256, 128)),
+        (0.05, (256, 128)),
+        (0.001, (256, 128)),
         (0.82, (512, 192)),
         (0.0, (128, 64)),
         (1.0, (256, 128)),
@@ -320,6 +352,10 @@ fn transparent_pixels_and_opaque_restoration() {
         device.poll(wgpu::PollType::wait_indefinitely()).unwrap();
         receive.recv().unwrap().unwrap();
         let bytes = buffer.slice(..).get_mapped_range().unwrap();
+        if glyph_coverage.is_empty() {
+            // With no background alpha, these isolated glyphs expose the mask.
+            glyph_coverage.extend(bytes.chunks_exact(4).map(|p| p[3]));
+        }
         let pixel = |x: usize, y: usize| {
             let offset = (y * size.0 as usize + x) * 4;
             &bytes[offset..offset + 4]
@@ -367,7 +403,10 @@ fn transparent_pixels_and_opaque_restoration() {
                         let rgba = pixel(x, y);
                         let a = f32::from(rgba[3]) / 255.0;
                         let coverage =
-                            ((a - alpha) / (1.0 - alpha)).clamp(0.0, 1.0);
+                            f32::from(glyph_coverage[y * 256 + x]) / 255.0;
+                        let expected_alpha =
+                            coverage + alpha * (1.0 - coverage);
+                        assert!((a - expected_alpha).abs() <= 1.0 / 255.0);
                         if !(0.1..0.9).contains(&coverage) {
                             continue;
                         }

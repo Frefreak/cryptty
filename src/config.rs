@@ -180,6 +180,7 @@ pub struct Font {
     pub family: String,
     pub size: FontSize,
     pub hinting: bool,
+    pub embolden: FontEmbolden,
     pub fallback: Vec<String>,
     pub codepoint_map: Vec<FontMapping>,
 }
@@ -190,9 +191,33 @@ impl Default for Font {
             family: "FantasqueSansM Nerd Font Mono".to_string(),
             size: FontSize::default(),
             hinting: false,
+            embolden: FontEmbolden::default(),
             fallback: vec!["LXGW WenKai Mono Screen".to_string()],
             codepoint_map: FontMapping::defaults(),
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize)]
+#[serde(try_from = "f32")]
+pub struct FontEmbolden(f32);
+
+impl TryFrom<f32> for FontEmbolden {
+    type Error = &'static str;
+
+    fn try_from(pixels: f32) -> Result<Self, Self::Error> {
+        if !pixels.is_finite() || !(0.0..=1.0).contains(&pixels) {
+            return Err(
+                "Font embolden must be between 0 and 1 physical pixels",
+            );
+        }
+        Ok(Self(pixels))
+    }
+}
+
+impl FontEmbolden {
+    pub fn pixels(self) -> f32 {
+        self.0
     }
 }
 
@@ -235,6 +260,27 @@ pub struct Window {
     pub option_as_alt: OptionAsAlt,
     pub opacity: Opacity,
     pub blur: bool,
+    pub opengl_color_format: OpenGlColorFormat,
+}
+
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum OpenGlColorFormat {
+    Rgba8,
+    #[default]
+    Rgba16f,
+}
+
+impl std::str::FromStr for OpenGlColorFormat {
+    type Err = &'static str;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value {
+            "rgba8" => Ok(Self::Rgba8),
+            "rgba16f" => Ok(Self::Rgba16f),
+            _ => Err("OpenGL color format requires rgba8 or rgba16f"),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq)]

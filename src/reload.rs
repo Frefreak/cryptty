@@ -37,6 +37,7 @@ impl View {
             &config.font.family,
             &config.font.codepoint_map,
             &config.font.fallback,
+            config.font.embolden,
         )?;
         let size = self.window.inner_size();
         let (cols, rows) = if size.width == 0 || size.height == 0 {
@@ -134,6 +135,7 @@ mod tests {
                         command: vec!["/bin/cat".into()],
                         config: Config::parse("font: {size: 17}").unwrap(),
                         renderer_choice,
+                        opengl_color_format: None,
                         error: None,
                     };
                     app.create(events).unwrap();

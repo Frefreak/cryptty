@@ -155,6 +155,7 @@ fn frozen_tmux_vim_mode_copies_and_returns_to_live_output() {
                 } else {
                     RendererChoice::Software
                 },
+                opengl_color_format: None,
                 error: None,
             };
             app.create(events).unwrap();

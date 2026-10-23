@@ -25,6 +25,7 @@ impl Rasterizer {
         family: &str,
         mappings: &[FontMapping],
         fallbacks: &[String],
+        _embolden: crate::config::FontEmbolden,
     ) -> Result<Self> {
         // CoreText takes the scaled macOS point size directly.
         let size = Size::new(size);
@@ -226,6 +227,7 @@ mod tests {
                 "Menlo",
                 &config.font.codepoint_map,
                 &config.font.fallback,
+                Default::default(),
             )
             .unwrap();
             for style in [
@@ -259,7 +261,8 @@ mod tests {
     #[test]
     fn hidden_fallback_faces_remain_available() {
         let mut native =
-            Rasterizer::new(38.0, false, "Menlo", &[], &[]).unwrap();
+            Rasterizer::new(38.0, false, "Menlo", &[], &[], Default::default())
+                .unwrap();
         for ch in ['\u{0526}', '\u{08ab}', '\u{0afe}', '\u{324e}'] {
             let index = native.family_for(ch, FontStyle::default());
             assert_ne!(index, 0, "Missing fallback for {ch}");
@@ -278,6 +281,7 @@ mod tests {
             "Cryptty deliberately nonexistent font family",
             &[],
             &[],
+            Default::default(),
         )
         .unwrap();
         let image = native.rasterize('M', FontStyle::default()).unwrap();
@@ -287,7 +291,8 @@ mod tests {
     #[test]
     fn requested_family_and_weight_match_coretext() {
         let mut native =
-            Rasterizer::new(38.0, false, "Menlo", &[], &[]).unwrap();
+            Rasterizer::new(38.0, false, "Menlo", &[], &[], Default::default())
+                .unwrap();
         let mut reference = crossfont::Rasterizer::new().unwrap();
         let size = Size::new(38.0);
         let metrics = native
@@ -346,7 +351,8 @@ mod tests {
     #[test]
     fn native_fallback_renders_cjk_and_color_emoji() {
         let mut native =
-            Rasterizer::new(38.0, false, "Menlo", &[], &[]).unwrap();
+            Rasterizer::new(38.0, false, "Menlo", &[], &[], Default::default())
+                .unwrap();
         for ch in ['中', '😀'] {
             let family = native.family_for(ch, FontStyle::default());
             assert_ne!(family, 0, "Expected an automatic fallback for {ch}");

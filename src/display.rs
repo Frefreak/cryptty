@@ -37,7 +37,11 @@ impl Display {
                     RendererChoice::Gpu { adapter } => adapter,
                     _ => None,
                 };
-                match Gpu::new(window.clone(), selected) {
+                match Gpu::new(
+                    window.clone(),
+                    selected,
+                    settings.opengl_color_format,
+                ) {
                     Ok(gpu) => Backend::Gpu(Box::new(gpu)),
                     Err(error) if choice == RendererChoice::Auto => {
                         eprintln!("Cryptty: GPU unavailable: {error:#}");

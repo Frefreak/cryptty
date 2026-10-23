@@ -171,6 +171,7 @@ fn quick_ctrl_click_opens_complete_tmux_url_and_reaps_helper() {
                 .collect(),
                 config: Config::parse("font: {size: 14}").unwrap(),
                 renderer_choice: RendererChoice::Software,
+                opengl_color_format: None,
                 error: None,
             };
             app.create(events).unwrap();

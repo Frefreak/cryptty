@@ -68,6 +68,7 @@ impl Renderer {
             &crate::config::Font::default().family,
             &[],
             &[],
+            Default::default(),
         )
     }
 
@@ -78,9 +79,11 @@ impl Renderer {
         family: &str,
         mappings: &[crate::config::FontMapping],
         fallbacks: &[String],
+        embolden: crate::config::FontEmbolden,
     ) -> Result<Self> {
-        let rasterizer =
-            font::Rasterizer::new(size, hinting, family, mappings, fallbacks)?;
+        let rasterizer = font::Rasterizer::new(
+            size, hinting, family, mappings, fallbacks, embolden,
+        )?;
         Ok(Self {
             cell_width: rasterizer.cell_width,
             cell_height: rasterizer.cell_height,
@@ -503,6 +506,7 @@ mod tests {
             &config.font.family,
             &config.font.codepoint_map,
             &config.font.fallback,
+            Default::default(),
         )
         .unwrap();
         for ch in ['█', '░', '╬', '╭', '▚'] {
@@ -672,6 +676,7 @@ mod tests {
                     family,
                     &[],
                     &[],
+                    Default::default(),
                 )
                 .unwrap();
                 let mut terminal = Terminal::new(6, 2);
@@ -772,6 +777,7 @@ colors:
             &crate::config::Font::default().family,
             &[],
             &[],
+            Default::default(),
         )
         .unwrap();
         let width = plain.cell_width * 8;

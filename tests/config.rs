@@ -573,3 +573,39 @@ fn opacity_and_blur_defaults_ranges_and_types() {
     }
     assert!(Config::parse("window: {blur: 7}").is_err());
 }
+
+#[test]
+fn opengl_format_defaults_to_float_and_rejects_unknown_values() {
+    use cryptty::config::OpenGlColorFormat;
+
+    assert_eq!(
+        Config::parse("").unwrap().window.opengl_color_format,
+        OpenGlColorFormat::Rgba16f,
+    );
+    for (name, expected) in [
+        ("rgba8", OpenGlColorFormat::Rgba8),
+        ("rgba16f", OpenGlColorFormat::Rgba16f),
+    ] {
+        let text = format!("window: {{opengl_color_format: {name}}}");
+        assert_eq!(
+            Config::parse(&text).unwrap().window.opengl_color_format,
+            expected,
+        );
+    }
+    assert!(Config::parse("window: {opengl_color_format: rgba32}").is_err());
+}
+
+#[test]
+fn font_embolden_defaults_to_zero_and_accepts_bounded_pixel_values() {
+    assert_eq!(Config::parse("").unwrap().font.embolden.pixels(), 0.0);
+    for value in [0.0, 0.15, 1.0] {
+        let config =
+            Config::parse(&format!("font: {{embolden: {value}}}")).unwrap();
+        assert_eq!(config.font.embolden.pixels(), value);
+    }
+    for value in ["-0.1", "1.01", ".nan", ".inf", "true", "heavy"] {
+        assert!(
+            Config::parse(&format!("font: {{embolden: {value}}}")).is_err()
+        );
+    }
+}

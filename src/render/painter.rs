@@ -6,6 +6,7 @@ use crate::terminal::Terminal;
 pub(super) struct Painter {
     atlas: Atlas,
     linear: Option<linear::LinearFrame>,
+    linear_format: wgpu::TextureFormat,
     opacity: crate::config::Opacity,
     viewport: wgpu::Buffer,
     bindings: wgpu::BindGroup,
@@ -16,7 +17,12 @@ pub(super) struct Painter {
 }
 
 impl Painter {
-    pub fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
+    pub fn new(
+        device: &wgpu::Device,
+        format: wgpu::TextureFormat,
+        backend: wgpu::Backend,
+        color_format: crate::config::OpenGlColorFormat,
+    ) -> Self {
         let atlas = Atlas::new(device);
         let viewport = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("viewport"),
@@ -73,6 +79,7 @@ impl Painter {
         Self {
             atlas,
             linear: None,
+            linear_format: linear::format(backend, color_format),
             opacity: Default::default(),
             viewport,
             bindings,
@@ -91,8 +98,12 @@ impl Painter {
     ) {
         if self.opacity.transparent() != opacity.transparent() {
             let target_format = if opacity.transparent() {
-                self.linear = Some(linear::LinearFrame::new(device, format));
-                linear::FORMAT
+                self.linear = Some(linear::LinearFrame::new(
+                    device,
+                    format,
+                    self.linear_format,
+                ));
+                self.linear_format
             } else {
                 self.linear = None;
                 format
