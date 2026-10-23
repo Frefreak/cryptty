@@ -2,12 +2,11 @@ use super::{Renderer, painter::Painter};
 use crate::terminal::{Position, Terminal, TextRange};
 
 #[test]
-#[ignore = "requires a working Metal or Vulkan adapter"]
+#[ignore = "requires a working GPU adapter"]
 fn gpu_pixels_match_software_across_resize_and_font_changes() {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::METAL | wgpu::Backends::VULKAN,
-        ..wgpu::InstanceDescriptor::new_without_display_handle()
-    });
+    let instance = super::gpu::instance(
+        wgpu::InstanceDescriptor::new_without_display_handle(),
+    );
     let adapter = pollster::block_on(
         instance.request_adapter(&wgpu::RequestAdapterOptions::default()),
     )
@@ -219,12 +218,11 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
 }
 
 #[test]
-#[ignore = "requires a working Metal or Vulkan adapter"]
+#[ignore = "requires a working GPU adapter"]
 fn transparent_pixels_and_opaque_restoration() {
-    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::METAL | wgpu::Backends::VULKAN,
-        ..wgpu::InstanceDescriptor::new_without_display_handle()
-    });
+    let instance = super::gpu::instance(
+        wgpu::InstanceDescriptor::new_without_display_handle(),
+    );
     let adapter = pollster::block_on(
         instance.request_adapter(&wgpu::RequestAdapterOptions::default()),
     )

@@ -597,7 +597,18 @@ fn main() -> Result<()> {
                 return Ok(());
             }
             Action::ListGpus => {
-                cryptty::render::gpu::list_adapters();
+                #[cfg(target_os = "linux")]
+                let descriptor = {
+                    let events = EventLoop::new()
+                        .context("Cannot open a desktop display")?;
+                    wgpu::InstanceDescriptor::new_with_display_handle(Box::new(
+                        events.owned_display_handle(),
+                    ))
+                };
+                #[cfg(not(target_os = "linux"))]
+                let descriptor =
+                    wgpu::InstanceDescriptor::new_without_display_handle();
+                cryptty::render::gpu::list_adapters(descriptor);
                 return Ok(());
             }
             Action::Run { renderer, command } => (renderer, command),

@@ -6,17 +6,36 @@ use winit::window::Window;
 use super::{Renderer, painter::Painter};
 use crate::terminal::Terminal;
 
-fn instance() -> wgpu::Instance {
+fn backends() -> wgpu::Backends {
+    let mut backends = wgpu::Backends::METAL | wgpu::Backends::VULKAN;
+    if cfg!(target_os = "linux") {
+        backends |= wgpu::Backends::GL;
+    }
+    backends
+}
+
+fn adapter_priority(
+    device: wgpu::DeviceType,
+    backend: wgpu::Backend,
+) -> (u8, bool) {
+    let device = match device {
+        wgpu::DeviceType::IntegratedGpu => 0,
+        wgpu::DeviceType::DiscreteGpu => 1,
+        wgpu::DeviceType::VirtualGpu => 2,
+        _ => 3,
+    };
+    (device, backend == wgpu::Backend::Gl)
+}
+
+pub(super) fn instance(descriptor: wgpu::InstanceDescriptor) -> wgpu::Instance {
     wgpu::Instance::new(wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::METAL | wgpu::Backends::VULKAN,
-        ..wgpu::InstanceDescriptor::new_without_display_handle()
+        backends: backends(),
+        ..descriptor
     })
 }
 
 async fn adapters(instance: &wgpu::Instance) -> Vec<wgpu::Adapter> {
-    let mut adapters = instance
-        .enumerate_adapters(wgpu::Backends::METAL | wgpu::Backends::VULKAN)
-        .await;
+    let mut adapters = instance.enumerate_adapters(backends()).await;
     adapters.sort_by_key(|adapter| {
         let info = adapter.get_info();
         (
@@ -29,11 +48,11 @@ async fn adapters(instance: &wgpu::Instance) -> Vec<wgpu::Adapter> {
     adapters
 }
 
-pub fn list_adapters() {
-    let instance = instance();
+pub fn list_adapters(descriptor: wgpu::InstanceDescriptor) {
+    let instance = instance(descriptor);
     let adapters = pollster::block_on(adapters(&instance));
     if adapters.is_empty() {
-        println!("No Metal or Vulkan adapters found.");
+        println!("No compatible GPU adapters found.");
     }
     for (index, adapter) in adapters.iter().enumerate() {
         let info = adapter.get_info();
@@ -65,7 +84,10 @@ impl Gpu {
         window: Arc<Window>,
         selected: Option<usize>,
     ) -> Result<Self> {
-        let instance = instance();
+        let instance =
+            instance(wgpu::InstanceDescriptor::new_with_display_handle(
+                Box::new(window.clone()),
+            ));
         let surface = instance.create_surface(window.clone())?;
         let mut candidates: Vec<_> =
             adapters(&instance).await.into_iter().enumerate().collect();
@@ -78,11 +100,9 @@ impl Gpu {
             candidates.retain(|(_, a)| {
                 a.get_info().device_type != wgpu::DeviceType::Cpu
             });
-            candidates.sort_by_key(|(_, a)| match a.get_info().device_type {
-                wgpu::DeviceType::IntegratedGpu => 0,
-                wgpu::DeviceType::DiscreteGpu => 1,
-                wgpu::DeviceType::VirtualGpu => 2,
-                _ => 3,
+            candidates.sort_by_key(|(_, a)| {
+                let info = a.get_info();
+                adapter_priority(info.device_type, info.backend)
             });
         }
         let mut errors = Vec::new();
@@ -290,13 +310,19 @@ fn transparent_alpha(
     modes: &[wgpu::CompositeAlphaMode],
     backend: wgpu::Backend,
 ) -> Option<wgpu::CompositeAlphaMode> {
-    use wgpu::CompositeAlphaMode::{PostMultiplied, PreMultiplied};
+    use wgpu::CompositeAlphaMode::{Opaque, PostMultiplied, PreMultiplied};
     if modes.contains(&PreMultiplied) {
         Some(PreMultiplied)
     } else if backend == wgpu::Backend::Metal && modes.contains(&PostMultiplied)
     {
         // wgpu 30 labels Metal's premultiplied compositor as postmultiplied.
         Some(PostMultiplied)
+    } else if cfg!(target_os = "linux")
+        && backend == wgpu::Backend::Gl
+        && modes.contains(&Opaque)
+    {
+        // wgpu 30 reports only Opaque for EGL; Wayland composites its alpha.
+        Some(Opaque)
     } else {
         None
     }
@@ -316,12 +342,34 @@ fn surface_format(
 
 #[cfg(test)]
 mod tests {
-    use super::{surface_format, transparent_alpha};
+    use super::{adapter_priority, surface_format, transparent_alpha};
     use wgpu::TextureFormat::*;
 
     #[test]
+    fn native_backend_precedes_gl_without_changing_device_preference() {
+        use wgpu::Backend::{Gl, Vulkan};
+        use wgpu::DeviceType::{DiscreteGpu, IntegratedGpu};
+        let mut adapters = [
+            (IntegratedGpu, Gl),
+            (DiscreteGpu, Vulkan),
+            (IntegratedGpu, Vulkan),
+        ];
+        adapters.sort_by_key(|&(device, backend)| {
+            adapter_priority(device, backend)
+        });
+        assert_eq!(
+            adapters,
+            [
+                (IntegratedGpu, Vulkan),
+                (IntegratedGpu, Gl),
+                (DiscreteGpu, Vulkan),
+            ]
+        );
+    }
+
+    #[test]
     fn transparent_surface_uses_premultiplied_compositor_pixels() {
-        use wgpu::Backend::{Metal, Vulkan};
+        use wgpu::Backend::{Gl, Metal, Vulkan};
         use wgpu::CompositeAlphaMode::{Opaque, PostMultiplied, PreMultiplied};
         assert_eq!(transparent_alpha(&[Opaque], Metal), None);
         assert_eq!(
@@ -329,7 +377,12 @@ mod tests {
             Some(PostMultiplied),
         );
         assert_eq!(transparent_alpha(&[PostMultiplied], Vulkan), None);
-        for backend in [Metal, Vulkan] {
+        assert_eq!(
+            transparent_alpha(&[Opaque], Gl),
+            cfg!(target_os = "linux").then_some(Opaque),
+        );
+        assert_eq!(transparent_alpha(&[], Gl), None);
+        for backend in [Metal, Vulkan, Gl] {
             assert_eq!(
                 transparent_alpha(&[PostMultiplied, PreMultiplied], backend),
                 Some(PreMultiplied),

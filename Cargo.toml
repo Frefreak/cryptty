@@ -50,6 +50,7 @@ objc2-foundation = { version = "0.2.2", features = [
 ] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
+wgpu = { version = "30", default-features = false, features = ["gles"] }
 wayland-client = "0.31"
 wayland-backend = { version = "0.3", features = ["client_system", "dlopen"] }
 wayland-protocols = { version = "0.32", features = ["client", "staging"] }

@@ -81,7 +81,8 @@ use `make install-pgo PREFIX=/your/prefix` to override it. Other platforms
 use Cargo's normal installation directory.
 See [the PGO workflow](docs/performance.md#one-command-pgo-build).
 
-Rendering uses wgpu with Metal on macOS and Vulkan on Linux. Automatic
+Rendering uses wgpu with Metal on macOS and Vulkan or OpenGL ES on Linux.
+OpenGL ES supports virtual graphics devices without a Vulkan driver. Automatic
 selection prefers an integrated GPU, then discrete and virtual GPUs.
 If initialization or rendering fails, automatic mode switches to the
 software renderer. CPU-only graphics adapters are skipped in automatic
