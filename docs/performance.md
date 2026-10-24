@@ -867,3 +867,57 @@ Clippy completed with four existing warnings in unchanged code; strict
 completed. Raw recordings, timestamps, source snapshots, binary hashes,
 and analysis are retained in the local `cryptty-latency-iterate` artifact
 folder for this date.
+
+## Linux memory and CPU use, 2026-10-24
+
+Automatic GPU selection now attempts integrated Vulkan before initializing
+OpenGL. A successful integrated Vulkan device already outranks every OpenGL
+candidate under the existing selection policy. Other cases retain full
+adapter discovery, including explicit GPU indices and software fallback.
+
+An idle Wayland trace exposed an IME feedback loop: presentation updated the
+IME cursor rectangle, its acknowledgment produced an empty preedit event,
+and the unchanged preedit triggered another redraw. Preedit events now
+request a redraw when the displayed text changes. A three-second trace
+changed from 176 cursor-rectangle requests to one.
+
+GPU drawing now recycles whole-frame and changed-row buffers, including row
+snapshots. Empty image stores skip placeholder scans. Row comparison and
+blinking-text detection avoid repeatedly scanning implicit blank suffixes.
+
+Three trials per build used ordinary release builds from baseline
+`3da5d05`, with identical isolated configuration, Intel UHD Graphics 770,
+Vulkan Mailbox presentation, and niri. Each window contained an 89 by 42
+grid; niri reported a 1000 by 1080 window and focus at every phase boundary.
+After three seconds of warmup, each run measured four seconds of idle,
+ten seconds updating six counters at 10 Hz, and ten seconds repainting a
+colored text screen at 30 Hz. The cursor was hidden in all phases.
+
+| Measurement | Before, median | After, median |
+| --- | ---: | ---: |
+| Resident memory, RSS | 333.7 MiB | 202.4 MiB |
+| Proportional memory, PSS | 217.9 MiB | 154.0 MiB |
+| Idle CPU, one logical core | 7.25% | 0.25% |
+| Small updates, 10 Hz | 8.10% | 2.00% |
+| Full-screen updates, 30 Hz | 9.30% | 5.50% |
+
+Actual btop at one-second updates was also measured in before/after/after/
+before order. Each run used three seconds of warmup and twelve seconds of
+measurement, with matching window size and focus at both boundaries.
+Cryptty CPU use changed from 8.33% and 8.58% to 0.42% and 0.42% of one
+logical core. The displayed system statistics varied naturally between runs.
+
+CPU values use process CPU-time deltas, excluding the workload child.
+The counters have 10 ms granularity: optimized idle trials consumed zero
+or one tick over four seconds, including the final cursor-position query.
+RSS includes shared libraries; PSS depends on concurrent sharing. These
+normal-desktop measurements describe this hardware and workload. Physical
+input latency and macOS runtime behavior were not measured.
+
+Validation: 287 default tests and four explicit GPU tests passed, including
+cached/fresh scene comparisons, image rendering, resize, font changes, and
+transparency. Formatting and independent review passed. Clippy completed
+with existing warnings in unchanged code.
+
+[Raw measurements](benchmarks/2026-10-24-resources.json) contain build hashes,
+phase timings, memory totals, and focus/geometry observations.

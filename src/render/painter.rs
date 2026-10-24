@@ -236,7 +236,7 @@ impl Painter {
                 bytemuck::cast_slice(&quads[range]),
             );
         }
-        self.uploaded = quads;
+        self.scene.spare = std::mem::replace(&mut self.uploaded, quads);
         queue.write_buffer(
             &self.viewport,
             0,

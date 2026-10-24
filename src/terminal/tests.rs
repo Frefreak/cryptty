@@ -1,6 +1,54 @@
 use super::*;
 
 #[test]
+fn row_equality_matches_visible_cells_with_different_storage() {
+    let mut rows = Vec::new();
+    for width in [4, 8] {
+        for bg in [Color::Background, Color::Indexed(3)] {
+            for prefix in [0, 2, 4] {
+                let mut row = Row::new(
+                    width,
+                    Style {
+                        bg,
+                        ..Style::default()
+                    },
+                );
+                for x in 0..prefix {
+                    let blank = row.blank.clone();
+                    row.set(x, blank);
+                }
+                rows.push(row.clone());
+                row[1].hyperlink = Some(Arc::new("https://example.org".into()));
+                rows.push(row.clone());
+                row.wrapped = Some(width);
+                rows.push(row);
+            }
+        }
+    }
+    for a in &rows {
+        for b in &rows {
+            assert_eq!(a == b, a.wrapped == b.wrapped && a.iter().eq(b.iter()));
+        }
+    }
+}
+
+#[test]
+fn blinking_text_ignores_erased_storage_and_follows_screen_switches() {
+    let mut terminal = Terminal::new(20, 3);
+    assert!(!terminal.has_blinking_text());
+    terminal.feed(b"\x1b[5mblink\x1b[0m");
+    assert!(terminal.has_blinking_text());
+    terminal.feed(b"\x1b[?1049h");
+    assert!(!terminal.has_blinking_text());
+    terminal.feed(b"\x1b[?1049l");
+    assert!(terminal.has_blinking_text());
+    terminal.feed(b"\x1b[H\x1b[2J");
+    assert!(!terminal.has_blinking_text());
+    terminal.resize(40, 5);
+    assert!(!terminal.has_blinking_text());
+}
+
+#[test]
 fn cursor_blink_reset_reports_visible_changes() {
     for (visible, blinking, phase, changed) in [
         (true, true, false, true),

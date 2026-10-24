@@ -89,10 +89,39 @@ impl Gpu {
         selected: Option<usize>,
         color_format: crate::config::OpenGlColorFormat,
     ) -> Result<Self> {
-        let instance =
-            instance(wgpu::InstanceDescriptor::new_with_display_handle(
-                Box::new(window.clone()),
-            ));
+        // Integrated Vulkan outranks every GL candidate. Defer GL discovery
+        // until it can affect selection, keeping explicit indices unchanged.
+        if cfg!(target_os = "linux")
+            && selected.is_none()
+            && let Ok(gpu) = Self::initialize_candidates(
+                window.clone(),
+                selected,
+                color_format,
+                true,
+            )
+            .await
+        {
+            return Ok(gpu);
+        }
+        Self::initialize_candidates(window, selected, color_format, false).await
+    }
+
+    async fn initialize_candidates(
+        window: Arc<Window>,
+        selected: Option<usize>,
+        color_format: crate::config::OpenGlColorFormat,
+        integrated_vulkan: bool,
+    ) -> Result<Self> {
+        let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+            backends: if integrated_vulkan {
+                wgpu::Backends::VULKAN
+            } else {
+                backends()
+            },
+            ..wgpu::InstanceDescriptor::new_with_display_handle(Box::new(
+                window.clone(),
+            ))
+        });
         let surface = instance.create_surface(window.clone())?;
         let mut candidates: Vec<_> =
             adapters(&instance).await.into_iter().enumerate().collect();
@@ -103,7 +132,12 @@ impl Gpu {
             }
         } else {
             candidates.retain(|(_, a)| {
-                a.get_info().device_type != wgpu::DeviceType::Cpu
+                let info = a.get_info();
+                if integrated_vulkan {
+                    info.device_type == wgpu::DeviceType::IntegratedGpu
+                } else {
+                    info.device_type != wgpu::DeviceType::Cpu
+                }
             });
             candidates.sort_by_key(|(_, a)| {
                 let info = a.get_info();
@@ -200,8 +234,13 @@ impl Gpu {
                 errors.push(format!("adapter {index}: {error}"));
                 continue;
             }
+            let label = if integrated_vulkan {
+                "GPU".to_owned()
+            } else {
+                format!("GPU {index}")
+            };
             eprintln!(
-                "Cryptty: GPU {index}: {} ({:?}, {:?})",
+                "Cryptty: {label}: {} ({:?}, {:?})",
                 info.name, info.backend, config.present_mode
             );
             let opaque_alpha = config.alpha_mode;

@@ -344,7 +344,9 @@ impl View {
             WindowEvent::MouseWheel { delta, phase, .. } => {
                 self.mouse_wheel(delta, phase)?;
             }
-            WindowEvent::Ime(Ime::Preedit(text, _)) => {
+            // Wayland can acknowledge the cursor area with an unchanged
+            // preedit. Redrawing it would send another cursor-area update.
+            WindowEvent::Ime(Ime::Preedit(text, _)) if self.preedit != text => {
                 self.preedit = text;
                 self.renderer.invalidate();
                 self.window.request_redraw();
@@ -369,7 +371,7 @@ impl View {
                 self.send_input(text.into_bytes())?;
                 self.window.request_redraw();
             }
-            WindowEvent::Ime(Ime::Disabled) => {
+            WindowEvent::Ime(Ime::Disabled) if !self.preedit.is_empty() => {
                 self.preedit.clear();
                 self.renderer.invalidate();
                 self.window.request_redraw();

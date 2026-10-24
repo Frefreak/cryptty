@@ -86,6 +86,7 @@ fn gpu_row_cache_matches_fresh_scenes() {
             bytemuck::cast_slice::<_, u8>(&frame.quads),
             bytemuck::cast_slice::<_, u8>(&fresh.quads),
         );
+        cache.spare = frame.quads;
     }
     for cached in [false, true] {
         let start = std::time::Instant::now();
@@ -93,7 +94,7 @@ fn gpu_row_cache_matches_fresh_scenes() {
             if !cached {
                 cache.clear();
             }
-            std::hint::black_box(
+            let frame = std::hint::black_box(
                 scene::build(
                     &mut renderer,
                     &mut atlas,
@@ -105,6 +106,7 @@ fn gpu_row_cache_matches_fresh_scenes() {
                 )
                 .unwrap(),
             );
+            cache.spare = frame.quads;
         }
         eprintln!("scene build cached={cached}: {:?} / 500", start.elapsed());
     }

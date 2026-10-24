@@ -20,6 +20,9 @@ pub(super) fn tiles<'a>(
     origin: (usize, usize),
     end: (usize, usize),
 ) -> Vec<Tile<'a>> {
+    if terminal.graphics.images.is_empty() {
+        return Vec::new();
+    }
     let mut previous = None;
     let mut tiles = Vec::new();
     for (x, c) in row.iter().enumerate() {

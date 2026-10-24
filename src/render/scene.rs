@@ -28,6 +28,7 @@ pub(super) struct Frame {
 pub(super) struct Cache {
     key: Option<CacheKey>,
     rows: Vec<CachedRow>,
+    pub spare: Vec<Quad>,
     #[cfg(test)]
     pub rebuilt_rows: usize,
 }
@@ -211,6 +212,11 @@ pub(super) fn build(
         {
             cache.rebuilt_rows += 1;
         }
+        scene.quads = cache
+            .rows
+            .get_mut(y)
+            .map(|cached| std::mem::take(&mut cached.backgrounds))
+            .unwrap_or_default();
         scene.quads.clear();
         for x in 0..row.len() {
             if let Some(bg) = super::cell_background(terminal, x, y) {
@@ -219,6 +225,12 @@ pub(super) fn build(
             }
         }
         let backgrounds = std::mem::take(&mut scene.quads);
+        scene.quads = cache
+            .rows
+            .get_mut(y)
+            .map(|cached| std::mem::take(&mut cached.text))
+            .unwrap_or_default();
+        scene.quads.clear();
         for (x, cell) in row.iter().enumerate() {
             let Content::Text { text } = &cell.content else {
                 continue;
@@ -249,17 +261,21 @@ pub(super) fn build(
                 );
             });
         }
-        let cached = CachedRow {
-            row: row.clone(),
-            backgrounds,
-            text: std::mem::take(&mut scene.quads),
-        };
-        if y < cache.rows.len() {
-            cache.rows[y] = cached;
+        let text = std::mem::take(&mut scene.quads);
+        if let Some(cached) = cache.rows.get_mut(y) {
+            cached.row.clone_from(row);
+            cached.backgrounds = backgrounds;
+            cached.text = text;
         } else {
-            cache.rows.push(cached);
+            cache.rows.push(CachedRow {
+                row: row.clone(),
+                backgrounds,
+                text,
+            });
         }
     }
+    scene.quads = std::mem::take(&mut cache.spare);
+    scene.quads.clear();
     for row in &cache.rows {
         scene.quads.extend_from_slice(&row.backgrounds);
     }

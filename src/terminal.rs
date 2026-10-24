@@ -320,7 +320,14 @@ impl Clone for Row {
 
 impl PartialEq for Row {
     fn eq(&self, other: &Self) -> bool {
-        self.wrapped == other.wrapped && self.iter().eq(other.iter())
+        if self.wrapped != other.wrapped || self.len() != other.len() {
+            return false;
+        }
+        if self.occupied == other.occupied && self.blank == other.blank {
+            return self.cells[..self.occupied]
+                == other.cells[..other.occupied];
+        }
+        self.iter().eq(other.iter())
     }
 }
 
@@ -818,10 +825,13 @@ impl Terminal {
     }
 
     pub fn has_blinking_text(&self) -> bool {
-        self.rows
-            .iter()
-            .flatten()
-            .any(|cell| cell.style().blink != Blink::None)
+        self.rows.iter().any(|row| {
+            row.cells[..row.occupied]
+                .iter()
+                .any(|cell| cell.style().blink != Blink::None)
+                || (row.occupied < row.len()
+                    && row.blank.style().blink != Blink::None)
+        })
     }
 
     pub fn text_visible(&self, style: Style) -> bool {

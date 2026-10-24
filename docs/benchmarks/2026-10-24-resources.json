@@ -1,0 +1,1236 @@
+{
+  "date": "2026-10-24",
+  "baseline_commit": "3da5d05ed67766de711f515adb2502e9d7191bc0",
+  "build": "cargo build --release --locked; no PGO in either build",
+  "binaries_sha256": {
+    "before": "28e4717b88f057b4a3c0e42cea6bc68547527c49bfd8dc7171862b4b82b2791d",
+    "after": "b249fe209426386551775a4c900c48a2fe5de01abe788e7a472a1338a5144c02"
+  },
+  "environment": {
+    "os": "Linux 7.2.11-arch1-1",
+    "compositor": "niri",
+    "adapter": "Intel UHD Graphics 770 (ADL-S GT1)",
+    "backend": "Vulkan",
+    "presentation": "Mailbox",
+    "font_size_points": 17,
+    "configuration": "isolated defaults"
+  },
+  "method": {
+    "cpu": "/proc/PID/stat utime + stime deltas; percent of one logical CPU",
+    "clock_ticks_per_second": 100,
+    "memory": "/proc/PID/smaps_rollup after all phases",
+    "warmup_seconds": 3,
+    "idle": "4 seconds, hidden cursor, no output except final cursor-position query",
+    "small": "10 seconds at 10 Hz; six six-digit counters over a colored text grid",
+    "full": "10 seconds at 30 Hz; repaint colored text grid, then six counters",
+    "synchronization": "cursor-position query/reply at each phase end",
+    "focus": "focused at every recorded phase boundary",
+    "limits": [
+      "Normal desktop session; focus recorded at boundaries only",
+      "10 ms CPU counter granularity",
+      "These synthetic workloads do not measure key-to-photon latency",
+      "PSS depends on concurrent sharing of graphics libraries"
+    ]
+  },
+  "runs": [
+    {
+      "name": "after-2",
+      "build": "after",
+      "grid": [
+        89,
+        42
+      ],
+      "phases": {
+        "idle": {
+          "seconds": 4.000986641000054,
+          "cpu_seconds": 0.0,
+          "cpu_percent": 0.0,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        "small": {
+          "seconds": 10.00092484400011,
+          "cpu_seconds": 0.21999999999999997,
+          "cpu_percent": 2.1997965531356365,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        "full": {
+          "seconds": 10.00066171200001,
+          "cpu_seconds": 0.52,
+          "cpu_percent": 5.199655932527352,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        }
+      },
+      "Rss_KiB": 207540,
+      "Pss_KiB": 157851,
+      "Private_Dirty_KiB": 50456
+    },
+    {
+      "name": "before-3",
+      "build": "before",
+      "grid": [
+        89,
+        42
+      ],
+      "phases": {
+        "idle": {
+          "seconds": 4.000672162000001,
+          "cpu_seconds": 0.29,
+          "cpu_percent": 7.248781911063272,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        "small": {
+          "seconds": 10.000775542000156,
+          "cpu_seconds": 0.7799999999999999,
+          "cpu_percent": 7.799395124150539,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        "full": {
+          "seconds": 10.000350487000105,
+          "cpu_seconds": 0.97,
+          "cpu_percent": 9.699660039525071,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        }
+      },
+      "Rss_KiB": 341724,
+      "Pss_KiB": 223148,
+      "Private_Dirty_KiB": 61756
+    },
+    {
+      "name": "after-3",
+      "build": "after",
+      "grid": [
+        89,
+        42
+      ],
+      "phases": {
+        "idle": {
+          "seconds": 4.000935948999995,
+          "cpu_seconds": 0.010000000000000009,
+          "cpu_percent": 0.24994151687180685,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        "small": {
+          "seconds": 10.000681063000002,
+          "cpu_seconds": 0.2,
+          "cpu_percent": 1.999863796676304,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        "full": {
+          "seconds": 10.00050305600007,
+          "cpu_seconds": 0.56,
+          "cpu_percent": 5.599718302810907,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        }
+      },
+      "Rss_KiB": 207220,
+      "Pss_KiB": 157505,
+      "Private_Dirty_KiB": 50136
+    },
+    {
+      "name": "after-4",
+      "build": "after",
+      "grid": [
+        89,
+        42
+      ],
+      "phases": {
+        "idle": {
+          "seconds": 4.0010581099998035,
+          "cpu_seconds": 0.010000000000000009,
+          "cpu_percent": 0.24993388561408572,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        "small": {
+          "seconds": 10.000950019999891,
+          "cpu_seconds": 0.19999999999999998,
+          "cpu_percent": 1.999810014049067,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        "full": {
+          "seconds": 10.000613750999946,
+          "cpu_seconds": 0.55,
+          "cpu_percent": 5.499662457666725,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        }
+      },
+      "Rss_KiB": 207276,
+      "Pss_KiB": 157695,
+      "Private_Dirty_KiB": 50324
+    },
+    {
+      "name": "before-4",
+      "build": "before",
+      "grid": [
+        89,
+        42
+      ],
+      "phases": {
+        "idle": {
+          "seconds": 4.000998510000045,
+          "cpu_seconds": 0.26,
+          "cpu_percent": 6.49837782618912,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        "small": {
+          "seconds": 10.000455998000007,
+          "cpu_seconds": 0.8099999999999999,
+          "cpu_percent": 8.099630658461894,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        "full": {
+          "seconds": 10.000806023000223,
+          "cpu_seconds": 0.9300000000000002,
+          "cpu_percent": 9.29925045902452,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        }
+      },
+      "Rss_KiB": 337632,
+      "Pss_KiB": 218983,
+      "Private_Dirty_KiB": 57564
+    },
+    {
+      "name": "before-5",
+      "build": "before",
+      "grid": [
+        89,
+        42
+      ],
+      "phases": {
+        "idle": {
+          "seconds": 4.000825579999855,
+          "cpu_seconds": 0.29999999999999993,
+          "cpu_percent": 7.498452356926062,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        "small": {
+          "seconds": 10.000777614000071,
+          "cpu_seconds": 0.8300000000000001,
+          "cpu_percent": 8.299354630564771,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        },
+        "full": {
+          "seconds": 10.000616088999777,
+          "cpu_seconds": 0.9300000000000002,
+          "cpu_percent": 9.29942707252764,
+          "window_before": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          },
+          "window_after": {
+            "is_focused": true,
+            "layout": {
+              "pos_in_scrolling_layout": [
+                2,
+                1
+              ],
+              "tile_size": [
+                1000.0,
+                1080.0
+              ],
+              "window_size": [
+                1000,
+                1080
+              ],
+              "tile_pos_in_workspace_view": null,
+              "window_offset_in_tile": [
+                0.0,
+                0.0
+              ]
+            }
+          }
+        }
+      },
+      "Rss_KiB": 341820,
+      "Pss_KiB": 223238,
+      "Private_Dirty_KiB": 61864
+    }
+  ],
+  "wayland_trace": {
+    "duration_seconds": 3,
+    "before_cursor_rectangle_requests": 176,
+    "after_cursor_rectangle_requests": 1,
+    "before_ime_done_events": 177,
+    "after_ime_done_events": 2
+  },
+  "validation": {
+    "default_tests_passed": 287,
+    "default_tests_ignored": 18,
+    "explicit_gpu_tests_passed": 4,
+    "independent_review": "no blocking findings",
+    "backend_smoke": [
+      {
+        "case": "software",
+        "returncode": 0,
+        "stderr": "Cryptty: software renderer\n"
+      },
+      {
+        "case": "gpu-0",
+        "returncode": 0,
+        "stderr": "Cryptty: GPU 0: Mesa Intel(R) UHD Graphics 770 (ADL-S GT1) (Gl, AutoVsync)\n"
+      },
+      {
+        "case": "gpu-2",
+        "returncode": 0,
+        "stderr": "Cryptty: GPU 2: Intel(R) UHD Graphics 770 (ADL-S GT1) (Vulkan, Mailbox)\n"
+      }
+    ],
+    "adapter_indices_unchanged": true
+  },
+  "btop": {
+    "update_ms": 1000,
+    "warmup_seconds": 3,
+    "measurement_seconds": 12,
+    "runs": [
+      {
+        "build": "before",
+        "seconds": 12.000158461999945,
+        "cpu_seconds": 0.9999999999999999,
+        "cpu_percent": 8.333223291730933,
+        "window_before": {
+          "is_focused": true,
+          "layout": {
+            "pos_in_scrolling_layout": [
+              2,
+              1
+            ],
+            "tile_size": [
+              1000.0,
+              1080.0
+            ],
+            "window_size": [
+              1000,
+              1080
+            ],
+            "tile_pos_in_workspace_view": null,
+            "window_offset_in_tile": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "window_after": {
+          "is_focused": true,
+          "layout": {
+            "pos_in_scrolling_layout": [
+              2,
+              1
+            ],
+            "tile_size": [
+              1000.0,
+              1080.0
+            ],
+            "window_size": [
+              1000,
+              1080
+            ],
+            "tile_pos_in_workspace_view": null,
+            "window_offset_in_tile": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      },
+      {
+        "build": "after",
+        "seconds": 12.000268874000085,
+        "cpu_seconds": 0.04999999999999999,
+        "cpu_percent": 0.41665733097306296,
+        "window_before": {
+          "is_focused": true,
+          "layout": {
+            "pos_in_scrolling_layout": [
+              2,
+              1
+            ],
+            "tile_size": [
+              1000.0,
+              1080.0
+            ],
+            "window_size": [
+              1000,
+              1080
+            ],
+            "tile_pos_in_workspace_view": null,
+            "window_offset_in_tile": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "window_after": {
+          "is_focused": true,
+          "layout": {
+            "pos_in_scrolling_layout": [
+              2,
+              1
+            ],
+            "tile_size": [
+              1000.0,
+              1080.0
+            ],
+            "window_size": [
+              1000,
+              1080
+            ],
+            "tile_pos_in_workspace_view": null,
+            "window_offset_in_tile": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      },
+      {
+        "build": "after",
+        "seconds": 12.000234168999668,
+        "cpu_seconds": 0.04999999999999999,
+        "cpu_percent": 0.4166585359572859,
+        "window_before": {
+          "is_focused": true,
+          "layout": {
+            "pos_in_scrolling_layout": [
+              2,
+              1
+            ],
+            "tile_size": [
+              1000.0,
+              1080.0
+            ],
+            "window_size": [
+              1000,
+              1080
+            ],
+            "tile_pos_in_workspace_view": null,
+            "window_offset_in_tile": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "window_after": {
+          "is_focused": true,
+          "layout": {
+            "pos_in_scrolling_layout": [
+              2,
+              1
+            ],
+            "tile_size": [
+              1000.0,
+              1080.0
+            ],
+            "window_size": [
+              1000,
+              1080
+            ],
+            "tile_pos_in_workspace_view": null,
+            "window_offset_in_tile": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      },
+      {
+        "build": "before",
+        "seconds": 12.000078968999787,
+        "cpu_seconds": 1.0299999999999998,
+        "cpu_percent": 8.58327684893436,
+        "window_before": {
+          "is_focused": true,
+          "layout": {
+            "pos_in_scrolling_layout": [
+              2,
+              1
+            ],
+            "tile_size": [
+              1000.0,
+              1080.0
+            ],
+            "window_size": [
+              1000,
+              1080
+            ],
+            "tile_pos_in_workspace_view": null,
+            "window_offset_in_tile": [
+              0.0,
+              0.0
+            ]
+          }
+        },
+        "window_after": {
+          "is_focused": true,
+          "layout": {
+            "pos_in_scrolling_layout": [
+              2,
+              1
+            ],
+            "tile_size": [
+              1000.0,
+              1080.0
+            ],
+            "window_size": [
+              1000,
+              1080
+            ],
+            "tile_pos_in_workspace_view": null,
+            "window_offset_in_tile": [
+              0.0,
+              0.0
+            ]
+          }
+        }
+      }
+    ]
+  },
+  "optimized_source_diff_sha256": "c26d684851d3264106b9e4063655f92aa756ad0279d66eee86e451293d01f2fc"
+}
