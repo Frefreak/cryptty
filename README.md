@@ -361,11 +361,31 @@ See [deferred work and follow-up notes](docs/roadmap.md).
 
 Press `Ctrl+Shift+M` to freeze the visible viewport and show copy labels.
 Type a label to copy its target and leave the mode; `Esc` cancels and
-`Backspace` removes the last label character. Existing Vim/Leap shortcuts
-remain available through `Ctrl+Shift+J`.
+`Backspace` removes the last label character. With no label prefix entered,
+`s` starts Leap on the same frozen viewport, followed by the usual Vim
+navigation and selection. Clear a partial label with `Backspace` before
+using `s` to start Leap. Existing Vim/Leap shortcuts remain available
+through `Ctrl+Shift+J`.
+
+Labels never start with `s`; later letters may include it. Their ordering
+favors easy QWERTY keys and alternating hands (`f` before `a`, `fh` before
+`fr`). Labels have equal lengths so completing one copies immediately.
+While a label prefix is entered, matching targets retain their original
+colors and surrounding text fades gently. Clearing the prefix restores
+the original colors.
 
 Markers recognize URLs, paths, IP addresses, UUIDs, hexadecimal hashes,
-and colored or bold phrases. Paths omit a trailing `:line:column` when
+shell command lines, and colored or bold phrases. A standalone line with
+a lowercase executable name and an option such as `-S` or `--versions`
+receives a whole-command marker across syntax colors and soft wraps.
+A simple `$ ` prompt also qualifies; copying omits the prompt. Recognition
+uses text heuristics without executing commands or checking installed
+programs. Bare commands without options, such as `git status`, need a
+prompt to qualify; prose resembling a command can also match. Complete
+commands take priority over styled fragments, while embedded paths and
+URLs remain available within the overlap limit.
+
+Paths omit a trailing `:line:column` when
 copied. Recognition examines visible text on demand without filesystem
 lookups. Soft-wrapped text and tmux pane boundaries are preserved.
 
@@ -377,13 +397,16 @@ components inside recognized URLs or other machine tokens are suppressed.
 Badges use their own small font and pixel layout. A custom keyboard binding
 can use `action: MarkerMode` to replace the default shortcut.
 
-Marker background and indicator opacity can be adjusted independently:
+Marker label background color and opacity can be adjusted independently:
 
 ```yaml
 markers:
+  label_background: '#e8dca0'
   label_opacity: 0.7
   indicator_opacity: 0.85
 ```
 
-Both accept values from `0.0` (transparent) to `1.0` (opaque). Label text
-retains full opacity. Press `Ctrl+Shift+R` to reload, then reopen marker mode.
+The background accepts quoted `#RRGGBB` or `0xRRGGBB` colors; its default
+is `#fef991`. Both opacity values accept `0.0` (transparent) to `1.0`
+(opaque). Label text retains full opacity. Press `Ctrl+Shift+R` to reload,
+then reopen marker mode. Color changes require no rebuild.

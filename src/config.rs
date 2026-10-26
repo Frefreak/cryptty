@@ -422,9 +422,9 @@ impl Palette {
     }
 }
 
-#[derive(Clone, Copy, Debug, Deserialize)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
 #[serde(try_from = "String")]
-struct Color(u32);
+pub struct Color(pub(crate) u32);
 
 impl TryFrom<String> for Color {
     type Error = &'static str;

@@ -487,6 +487,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_yaml_ng",
+ "shell-words",
  "softbuffer",
  "swash",
  "tempfile",

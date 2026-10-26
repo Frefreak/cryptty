@@ -32,6 +32,8 @@ keyboard:
       modifiers: [Control, Shift]
       action: MarkerMode
 markers:
+  # Label badge background, in '#RRGGBB' or '0xRRGGBB' format.
+  label_background: '#fef991'
   # Opacity from 0 (transparent) to 1 (opaque); label text stays opaque.
   label_opacity: 0.7
   indicator_opacity: 0.85

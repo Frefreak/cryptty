@@ -27,6 +27,33 @@ pub(super) enum Kind {
 }
 
 impl Mode {
+    fn key(self, key: Key) -> (Self, Action) {
+        let mut mode = match self {
+            Self::Marker(session) if session.starts_leap(key) => {
+                return (
+                    Self::Active(Box::new(session.into_vim())),
+                    Action::Stay,
+                );
+            }
+            mode => mode,
+        };
+        let action = match &mut mode {
+            Self::Loading { keys, .. } => {
+                if key == Key::Escape {
+                    Action::Exit
+                } else {
+                    if keys.len() < 64 {
+                        keys.push(key);
+                    }
+                    Action::Stay
+                }
+            }
+            Self::Active(session) => session.key(key, Instant::now()),
+            Self::Marker(session) => session.key(key),
+        };
+        (mode, action)
+    }
+
     pub fn screen(&self) -> &Terminal {
         match self {
             Self::Loading { screen, .. } => screen,
@@ -251,21 +278,9 @@ impl View {
     }
 
     pub(super) fn vim_key(&mut self, key: Key) {
-        let action = match &mut self.vim {
-            Some(Mode::Loading { keys, .. }) => {
-                if key == Key::Escape {
-                    Action::Exit
-                } else {
-                    if keys.len() < 64 {
-                        keys.push(key);
-                    }
-                    Action::Stay
-                }
-            }
-            Some(Mode::Active(session)) => session.key(key, Instant::now()),
-            Some(Mode::Marker(session)) => session.key(key),
-            None => return,
-        };
+        let Some(mode) = self.vim.take() else { return };
+        let (mode, action) = mode.key(key);
+        self.vim = Some(mode);
         match action {
             Action::Exit => self.leave_vim(),
             Action::Copy(text) => {

@@ -22,6 +22,7 @@ struct Line {
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 enum Kind {
+    Command,
     Url,
     Path,
     Address,
@@ -89,6 +90,18 @@ fn recognize(
     options: &Options,
 ) -> Vec<Target> {
     let mut candidates = Vec::new();
+    if let Some(range) = command_range(&line.text)
+        && !line.glyphs.iter().any(|glyph| {
+            glyph.bytes.start < range.end
+                && glyph.bytes.end > range.start
+                && glyph.style.hidden
+        })
+    {
+        candidates.push(Candidate {
+            range,
+            kind: Kind::Command,
+        });
+    }
     for (kind, pattern) in patterns() {
         for hit in pattern.find_iter(&line.text) {
             let mut range = hit.range();
@@ -155,6 +168,41 @@ fn recognize(
         .into_iter()
         .filter_map(|candidate| target(line, candidate.range))
         .collect()
+}
+
+fn command_range(text: &str) -> Option<Range<usize>> {
+    let trimmed = text.trim();
+    let (command, prompted) = match trimmed.strip_prefix("$ ") {
+        Some(command) => (command.trim_start(), true),
+        None => (trimmed, false),
+    };
+    let words = shell_words::split(command).ok()?;
+    let executable = words.first()?;
+    let name = executable.rsplit('/').next()?;
+    let executable_like = name.starts_with(|ch: char| ch.is_ascii_lowercase())
+        && name.bytes().all(|b| {
+            b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.')
+        })
+        && (executable == name
+            || executable.starts_with('/')
+            || executable.starts_with("./")
+            || executable.starts_with("~/"));
+    if !executable_like {
+        return None;
+    }
+    let has_option = words.iter().skip(1).any(|word| {
+        word.strip_prefix("--")
+            .or_else(|| word.strip_prefix('-'))
+            .is_some_and(|option| {
+                option.starts_with(|ch: char| ch.is_ascii_alphanumeric())
+            })
+    });
+    if !prompted && !has_option {
+        return None;
+    }
+    let start =
+        text.len() - text.trim_start().len() + trimmed.len() - command.len();
+    Some(start..start + command.len())
 }
 
 fn address_boundaries(text: &str, range: &Range<usize>) -> bool {
@@ -233,10 +281,14 @@ fn resolve(mut candidates: Vec<Candidate>, max: usize) -> Vec<Candidate> {
     let mut chosen: Vec<Candidate> = Vec::new();
     for candidate in candidates {
         if chosen.iter().any(|other| {
+            let suppresses_nested = match other.kind {
+                Kind::Command => candidate.kind == Kind::Styled,
+                Kind::Url => true,
+                Kind::Styled => false,
+                _ => candidate.kind != Kind::Styled,
+            };
             other.range == candidate.range
-                || ((other.kind == Kind::Url
-                    || (other.kind != Kind::Styled
-                        && candidate.kind != Kind::Styled))
+                || (suppresses_nested
                     && other.range.start <= candidate.range.start
                     && other.range.end >= candidate.range.end)
         }) {

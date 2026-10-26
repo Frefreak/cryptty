@@ -34,6 +34,81 @@ fn recognizes_requested_targets_without_plain_prose() {
 }
 
 #[test]
+fn command_markers_join_colors_and_soft_wrapped_rows() {
+    for (input, expected) in [
+        (
+            "\x1b[32mbrew\x1b[0m list \x1b[33m--versions\x1b[0m pinentry pinentry-mac",
+            "brew list --versions pinentry pinentry-mac",
+        ),
+        (
+            "paru -S vulkan-swrast chatgpt-desktop",
+            "paru -S vulkan-swrast chatgpt-desktop",
+        ),
+        ("  $ git status  ", "git status"),
+        (
+            "curl -L 'https://example.com/a?q=1' | head -c 20 > out.txt",
+            "curl -L 'https://example.com/a?q=1' | head -c 20 > out.txt",
+        ),
+    ] {
+        for cols in [18, 100] {
+            let mut s = session(input, cols, 10, Options::default());
+            let target = s
+                .targets
+                .iter()
+                .find(|t| t.text == expected)
+                .expect("whole command target")
+                .clone();
+            if expected.len() > cols {
+                assert!(target.segments.len() > 1);
+            }
+            let mut action = Action::Stay;
+            for ch in target.label.chars() {
+                action = s.key(Key::Char(ch));
+            }
+            assert!(matches!(action, Action::Copy(text) if text == expected));
+        }
+    }
+}
+
+#[test]
+fn command_marker_suppresses_styled_fragments_but_keeps_paths() {
+    let s = session(
+        "\x1b[32mcat\x1b[0m \x1b[33m--number\x1b[0m src/main.rs",
+        80,
+        3,
+        Options::default(),
+    );
+    assert_eq!(texts(&s), vec!["cat --number src/main.rs", "src/main.rs"]);
+    let s = session(
+        "cat --number src/main.rs",
+        80,
+        3,
+        Options {
+            overlap_max: 1.try_into().unwrap(),
+            ..Options::default()
+        },
+    );
+    assert_eq!(texts(&s), vec!["cat --number src/main.rs"]);
+}
+
+#[test]
+fn command_detection_avoids_common_prose_and_incomplete_quotes() {
+    for text in [
+        "Run brew list --versions pinentry",
+        "Use --help for more information.",
+        "-S means sync packages",
+        "git status",
+        "# ordinary comment",
+        "paru -S 'unfinished",
+        "error: use --help",
+        "options --",
+    ] {
+        let s = session(text, 80, 3, Options::default());
+        assert!(texts(&s).is_empty(), "unexpected command: {text}");
+    }
+}
+
+#[test]
 fn styled_phrase_and_inner_path_get_distinct_immediate_labels() {
     let s = session(
         "\x1b[32mOpen src/main.rs to continue\x1b[0m",
@@ -281,4 +356,91 @@ fn marker_opacity_config_defaults_and_bounds() {
             );
         }
     }
+}
+
+#[test]
+fn marker_background_uses_existing_color_format() {
+    let defaults = crate::config::Config::parse("{}").unwrap().markers;
+    assert_eq!(defaults.label_background.0, 0xfef991);
+    for value in ["#e8dca0", "0xE8DCA0"] {
+        let config = crate::config::Config::parse(&format!(
+            "markers: {{label_background: '{value}'}}"
+        ))
+        .unwrap();
+        assert_eq!(config.markers.label_background.0, 0xe8dca0);
+    }
+    for value in ["#fff", "#gg0000", "#12345678", "red"] {
+        assert!(
+            crate::config::Config::parse(&format!(
+                "markers: {{label_background: '{value}'}}"
+            ))
+            .is_err()
+        );
+    }
+}
+
+#[test]
+fn leap_requires_empty_prefix_and_later_s_still_copies() {
+    let text = (0..650)
+        .map(|n| format!("src/file{n}.rs\r\n"))
+        .collect::<String>();
+    let mut s = session(&text, 24, 651, Options::default());
+    assert!(s.starts_leap(Key::Char('s')));
+    let target = s
+        .targets
+        .iter()
+        .find(|t| t.label.ends_with('s'))
+        .unwrap()
+        .clone();
+    let first = target.label.chars().next().unwrap();
+    assert!(matches!(s.key(Key::Char(first)), Action::Stay));
+    assert!(!s.starts_leap(Key::Char('s')));
+    assert!(
+        matches!(s.key(Key::Char('s')), Action::Copy(t) if t == target.text)
+    );
+    s.key(Key::Backspace);
+    assert!(s.starts_leap(Key::Char('s')));
+    let empty = session("ordinary prose", 24, 2, Options::default());
+    assert!(empty.starts_leap(Key::Char('s')));
+}
+
+#[test]
+fn prefix_dims_surroundings_and_backspace_restores_original_styles() {
+    let text = (0..30)
+        .map(|n| format!("src/中文{n}.rs\r\n"))
+        .collect::<String>();
+    let mut s = session(
+        &format!("\x1b[7;2mcontext\x1b[0m\r\n{text}"),
+        12,
+        70,
+        Options::default(),
+    );
+    let prefix = s.targets[0].label.chars().next().unwrap();
+    let original = s.screen.visible_snapshot();
+    s.key(Key::Char(prefix));
+    let context = Position { row: 0, col: 0 };
+    let (fg, bg) = original.colors(original.rows[0][0].style());
+    let (faded, same_bg) = s.screen.colors(s.screen.rows[0][0].style());
+    assert_ne!(fg, faded);
+    assert_eq!(bg, same_bg);
+    for target in &s.targets {
+        let matching = target.label.starts_with(prefix);
+        for segment in &target.segments {
+            let row = segment.start.row;
+            for col in segment.start.col..segment.start.col + segment.columns {
+                let before = original.rows[row][col].style();
+                let after = s.screen.rows[row][col].style();
+                assert_eq!(before == after, matching);
+            }
+        }
+    }
+    s.key(Key::Backspace);
+    for (before, after) in original.rows.iter().zip(&s.screen.rows) {
+        assert!(before.iter().eq(after.iter()));
+    }
+    let vim = s.into_vim();
+    assert_eq!(
+        vim.screen.rows[context.row][context.col].style(),
+        original.rows[context.row][context.col].style()
+    );
 }

@@ -29,6 +29,68 @@ fn press(view: &mut View, key: WindowKey, modifiers: ModifiersState) {
 }
 
 #[test]
+fn marker_to_leap_preserves_panes_and_supports_selection_and_copy() {
+    use cryptty::terminal::Position;
+    use cryptty::tmux::PaneText;
+
+    let mut display = Terminal::new(60, 4);
+    display.feed(b"left text\x1b[1;31Hbrew list");
+    let mut left = Terminal::new(20, 4);
+    left.feed(b"left text");
+    let mut right = Terminal::new(20, 4);
+    right.feed(b"brew list");
+    let marker = cryptty::marker::Session::new(
+        display,
+        vec![
+            PaneText {
+                origin: Position { row: 0, col: 0 },
+                terminal: left,
+            },
+            PaneText {
+                origin: Position { row: 0, col: 30 },
+                terminal: right,
+            },
+        ],
+        &Default::default(),
+    );
+    let (mut mode, action) = Mode::Marker(Box::new(marker)).key(Key::Char('s'));
+    assert!(matches!(action, Action::Stay));
+    assert!(matches!(mode, Mode::Active(_)));
+    assert!(mode.status().contains("first character"));
+    for key in ['b', 'r', 'v', 'e'] {
+        let (next, action) = mode.key(Key::Char(key));
+        assert!(matches!(action, Action::Stay));
+        mode = next;
+    }
+    let (_, action) = mode.key(Key::Char('y'));
+    assert!(matches!(action, Action::Copy(text) if text == "brew"));
+}
+
+#[test]
+fn marker_prefix_keeps_s_in_label_input() {
+    let mut display = Terminal::new(24, 651);
+    let text = (0..650)
+        .map(|n| format!("src/{n}.rs\r\n"))
+        .collect::<String>();
+    display.feed(text.as_bytes());
+    let marker =
+        cryptty::marker::Session::new(display, Vec::new(), &Default::default());
+    let target = marker
+        .visible_targets()
+        .into_iter()
+        .find(|t| t.label.ends_with('s'))
+        .unwrap();
+    let first = target.label.chars().next().unwrap();
+    let (mode, _) = Mode::Marker(Box::new(marker)).key(Key::Char(first));
+    let (mode, action) = mode.key(Key::Char('s'));
+    assert!(matches!(mode, Mode::Marker(_)));
+    assert!(matches!(action, Action::Copy(text) if text == target.text));
+    let (mode, _) = mode.key(Key::Backspace);
+    let (mode, _) = mode.key(Key::Char('s'));
+    assert!(matches!(mode, Mode::Active(_)));
+}
+
+#[test]
 #[ignore = "requires tmux and a native Wayland desktop"]
 fn frozen_tmux_vim_mode_copies_and_returns_to_live_output() {
     const CHILD: &str = "CRYPTTY_VIM_WINDOW_TEST";

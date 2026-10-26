@@ -34,11 +34,13 @@ impl Markers {
 }
 
 impl Renderer {
-    pub fn set_marker_opacity(&mut self, options: &crate::marker::Options) {
+    pub fn set_marker_options(&mut self, options: &crate::marker::Options) {
         if self.markers.options.label_opacity != options.label_opacity
             || self.markers.options.indicator_opacity
                 != options.indicator_opacity
+            || self.markers.options.label_background != options.label_background
         {
+            self.markers.options.label_background = options.label_background;
             self.markers.options.label_opacity = options.label_opacity;
             self.markers.options.indicator_opacity = options.indicator_opacity;
             self.invalidate();
@@ -159,7 +161,12 @@ impl Renderer {
                 color: ER_GRAY_60,
                 alpha: indicator_alpha,
             });
-            stepped(&mut badges, bounds, ER_YELLOW, label_alpha);
+            stepped(
+                &mut badges,
+                bounds,
+                self.markers.options.label_background.0,
+                label_alpha,
+            );
             for (index, ch) in target.label.chars().enumerate() {
                 if !self.markers.glyphs.contains_key(&ch)
                     && let Some(image) =
@@ -324,12 +331,23 @@ mod tests {
             indicator_opacity: 0.0.try_into().unwrap(),
             ..Default::default()
         };
-        renderer.set_marker_opacity(&options);
+        renderer.set_marker_options(&options);
         renderer.draw(&terminal, width, height, "");
         let adjusted = renderer.pixels.clone();
         assert_ne!(adjusted, marked);
         renderer.draw(&terminal, width, height, "");
         assert_eq!(renderer.pixels, adjusted);
+        let options = crate::config::Config::parse(
+            "markers: {label_background: '#e8dca0', indicator_opacity: 0}",
+        )
+        .unwrap()
+        .markers;
+        renderer.set_marker_options(&options);
+        renderer.draw(&terminal, width, height, "");
+        let recolored = renderer.pixels.clone();
+        assert_ne!(recolored, adjusted);
+        renderer.draw(&terminal, width, height, "");
+        assert_eq!(renderer.pixels, recolored);
         renderer.set_markers(Vec::new());
         renderer.draw(&terminal, width, height, "");
         assert_eq!(renderer.pixels, original);
