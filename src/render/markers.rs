@@ -5,7 +5,6 @@ use swash::scale::image::{Content, Image};
 
 use super::{Renderer, font};
 use crate::marker::Target;
-use crate::terminal::FontStyle;
 
 const ER_YELLOW: u32 = 0xfef991;
 const ER_INK: u32 = 0x232323;
@@ -35,6 +34,13 @@ impl Markers {
 
 impl Renderer {
     pub fn set_marker_options(&mut self, options: &crate::marker::Options) {
+        if self.markers.options.label_embolden.pixels()
+            != options.label_embolden.pixels()
+        {
+            self.markers.options.label_embolden = options.label_embolden;
+            self.markers.glyphs.clear();
+            self.invalidate();
+        }
         if self.markers.options.label_opacity != options.label_opacity
             || self.markers.options.indicator_opacity
                 != options.indicator_opacity
@@ -169,8 +175,10 @@ impl Renderer {
             );
             for (index, ch) in target.label.chars().enumerate() {
                 if !self.markers.glyphs.contains_key(&ch)
-                    && let Some(image) =
-                        font.rasterize(ch, FontStyle::default())
+                    && let Some(image) = font.rasterize_label(
+                        ch,
+                        self.markers.options.label_embolden,
+                    )
                 {
                     self.markers.glyphs.insert(ch, image);
                 }
@@ -253,6 +261,13 @@ fn stepped(rects: &mut Vec<Rect>, rect: [usize; 4], color: u32, alpha: u8) {
     }
 }
 
+fn glyph_alpha(image: &Image, index: usize) -> u8 {
+    match image.content {
+        Content::Mask => image.data[index],
+        _ => *image.data[index * 4..index * 4 + 3].iter().max().unwrap(),
+    }
+}
+
 fn glyph_rects(
     rects: &mut Vec<Rect>,
     image: &Image,
@@ -263,12 +278,7 @@ fn glyph_rects(
     for y in 0..p.height as usize {
         for x in 0..p.width as usize {
             let index = y * p.width as usize + x;
-            let alpha = match image.content {
-                Content::Mask => image.data[index],
-                _ => {
-                    *image.data[index * 4..index * 4 + 3].iter().max().unwrap()
-                }
-            } as u32;
+            let alpha = glyph_alpha(image, index) as u32;
             if alpha == 0 {
                 continue;
             }
@@ -290,6 +300,49 @@ fn glyph_rects(
 mod tests {
     use super::*;
     use crate::{marker, terminal::Terminal};
+
+    #[test]
+    fn marker_outline_thickness_increases_coverage_without_resizing_cells() {
+        let family = if cfg!(target_os = "macos") {
+            "Menlo"
+        } else {
+            "DejaVu Sans Mono"
+        };
+        let mut font = font::Rasterizer::new(
+            10.0,
+            false,
+            family,
+            &[],
+            &[],
+            Default::default(),
+        )
+        .unwrap();
+        let metrics = (font.cell_width, font.cell_height, font.baseline);
+        for ch in ['a', 'm', 'i', 'g'] {
+            let original =
+                font.rasterize_label(ch, Default::default()).unwrap();
+            let mut previous = 0;
+            for amount in [0.0, 0.2, 0.5, 1.0] {
+                let image = font
+                    .rasterize_label(ch, amount.try_into().unwrap())
+                    .unwrap();
+                assert_eq!(image.content, Content::Mask);
+                let coverage: u64 =
+                    image.data.iter().map(|&a| u64::from(a)).sum();
+                assert!(coverage > previous, "{ch}: {amount}");
+                previous = coverage;
+                assert_eq!(
+                    (font.cell_width, font.cell_height, font.baseline),
+                    metrics,
+                );
+            }
+            let restored =
+                font.rasterize_label(ch, Default::default()).unwrap();
+            assert_eq!(restored.data, original.data);
+            assert_eq!(restored.placement.left, original.placement.left);
+            assert_eq!(restored.placement.top, original.placement.top);
+        }
+    }
 
     #[test]
     fn overlapping_anchors_receive_separate_visible_badges() {
@@ -324,6 +377,16 @@ mod tests {
         renderer.draw(&terminal, width, height, "");
         let marked = renderer.pixels.clone();
         assert_ne!(marked, original);
+        renderer.draw(&terminal, width, height, "");
+        assert_eq!(renderer.pixels, marked);
+        let thicker_options =
+            crate::config::Config::parse("markers: {label_embolden: 0.2}")
+                .unwrap()
+                .markers;
+        renderer.set_marker_options(&thicker_options);
+        renderer.draw(&terminal, width, height, "");
+        assert_ne!(renderer.pixels, marked);
+        renderer.set_marker_options(&marker::Options::default());
         renderer.draw(&terminal, width, height, "");
         assert_eq!(renderer.pixels, marked);
         let options = crate::marker::Options {

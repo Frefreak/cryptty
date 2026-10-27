@@ -19,6 +19,15 @@ pub struct Rasterizer {
 }
 
 impl Rasterizer {
+    pub fn rasterize_label(
+        &mut self,
+        ch: char,
+        embolden: crate::config::FontEmbolden,
+    ) -> Option<Image> {
+        let family = self.family_for(ch, FontStyle::default());
+        self.families[family].faces[0].rasterize_label(ch, embolden)
+    }
+
     pub fn new(
         size: f32,
         _hinting: bool,

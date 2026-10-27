@@ -1,7 +1,7 @@
 use core_graphics::base::kCGImageAlphaPremultipliedLast;
 use core_graphics::color_space::CGColorSpace;
-use core_graphics::context::CGContext;
-use core_graphics::geometry::{CGPoint, CGRect, CGSize};
+use core_graphics::context::{CGContext, CGLineJoin, CGPathDrawingMode};
+use core_graphics::geometry::{CGAffineTransform, CGPoint, CGRect, CGSize};
 use core_text::font::CTFont;
 use core_text::font_descriptor::{
     kCTFontColorGlyphsTrait, kCTFontDefaultOrientation,
@@ -14,10 +14,28 @@ pub(super) fn rasterize(
     glyph: u16,
     smooth: bool,
 ) -> Option<Image> {
+    rasterize_inner(font, glyph, smooth, None)
+}
+
+pub(super) fn rasterize_outline(
+    font: &CTFont,
+    glyph: u16,
+    embolden: crate::config::FontEmbolden,
+) -> Option<Image> {
+    rasterize_inner(font, glyph, false, Some(f64::from(embolden.pixels())))
+}
+
+fn rasterize_inner(
+    font: &CTFont,
+    glyph: u16,
+    smooth: bool,
+    embolden: Option<f64>,
+) -> Option<Image> {
     let bounds =
         font.get_bounding_rects_for_glyphs(kCTFontDefaultOrientation, &[glyph]);
     let colored = font.symbolic_traits() & kCTFontColorGlyphsTrait != 0;
-    let padding = if smooth && !colored { 2.0 } else { 0.0 };
+    let padding = if smooth && !colored { 2.0 } else { 0.0 }
+        + embolden.unwrap_or(0.0).ceil();
     let left = bounds.origin.x.floor() - padding;
     let bottom = bounds.origin.y.floor() - padding;
     let top = (bounds.origin.y + bounds.size.height).ceil() + padding;
@@ -43,11 +61,33 @@ pub(super) fn rasterize(
     context.set_should_smooth_fonts(smooth && !colored);
     context.set_should_antialias(true);
     context.set_rgb_fill_color(1.0, 1.0, 1.0, 1.0);
-    font.draw_glyphs(
-        &[glyph],
-        &[CGPoint::new(-left, -bottom)],
-        context.clone(),
-    );
+    if let Some(amount) = embolden {
+        let transform = CGAffineTransform {
+            a: 1.0,
+            b: 0.0,
+            c: 0.0,
+            d: 1.0,
+            tx: -left,
+            ty: -bottom,
+        };
+        let path = font.create_path_for_glyph(glyph, &transform).ok()?;
+        context.add_path(&path);
+        context.set_rgb_stroke_color(1.0, 1.0, 1.0, 1.0);
+        // A centered stroke expands each side by half its width.
+        context.set_line_width(amount * 2.0);
+        context.set_line_join(CGLineJoin::CGLineJoinRound);
+        context.draw_path(if amount > 0.0 {
+            CGPathDrawingMode::CGPathFillStroke
+        } else {
+            CGPathDrawingMode::CGPathFill
+        });
+    } else {
+        font.draw_glyphs(
+            &[glyph],
+            &[CGPoint::new(-left, -bottom)],
+            context.clone(),
+        );
+    }
     let pixels = context.data();
     let (content, data) = if colored {
         let mut rgba = pixels.to_vec();

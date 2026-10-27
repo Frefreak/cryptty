@@ -330,11 +330,13 @@ fn styled_detection_uses_frozen_display_palette_for_plain_tmux_capture() {
 #[test]
 fn marker_opacity_config_defaults_and_bounds() {
     let defaults = crate::config::Config::parse("{}").unwrap().markers;
-    assert_eq!(defaults.label_opacity.get(), 0.7);
+    assert_eq!(defaults.label_opacity.get(), 0.8);
+    assert_eq!(defaults.label_embolden.pixels(), 0.3);
     assert_eq!(defaults.indicator_opacity.get(), 0.85);
     for value in ["0", "0.7", "0.8", "1"] {
         let config = crate::config::Config::parse(&format!(
-            "markers: {{label_opacity: {value}, indicator_opacity: {value}}}"
+            "markers: {{label_opacity: {value}, indicator_opacity: {value}, \
+             label_embolden: {value}}}"
         ))
         .unwrap();
         assert_eq!(
@@ -345,8 +347,12 @@ fn marker_opacity_config_defaults_and_bounds() {
             config.markers.indicator_opacity.get(),
             value.parse::<f32>().unwrap()
         );
+        assert_eq!(
+            config.markers.label_embolden.pixels(),
+            value.parse::<f32>().unwrap()
+        );
     }
-    for field in ["label_opacity", "indicator_opacity"] {
+    for field in ["label_opacity", "indicator_opacity", "label_embolden"] {
         for value in ["-0.1", "1.1", ".nan", ".inf"] {
             assert!(
                 crate::config::Config::parse(&format!(

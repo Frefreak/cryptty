@@ -397,16 +397,22 @@ components inside recognized URLs or other machine tokens are suppressed.
 Badges use their own small font and pixel layout. A custom keyboard binding
 can use `action: MarkerMode` to replace the default shortcut.
 
-Marker label background color and opacity can be adjusted independently:
+Marker label weight, background color, and opacity can be adjusted:
 
 ```yaml
 markers:
   label_background: '#e8dca0'
-  label_opacity: 0.7
+  label_embolden: 0.3
+  label_opacity: 0.8
   indicator_opacity: 0.85
 ```
 
 The background accepts quoted `#RRGGBB` or `0xRRGGBB` colors; its default
-is `#fef991`. Both opacity values accept `0.0` (transparent) to `1.0`
+is `#fef991`. `label_embolden` expands label strokes by `0.0` to `1.0`
+physical pixels on Linux and macOS (default `0.3`). Fractional values such
+as `0.2` give a subtle increase; larger values give thicker strokes.
+Thickening applies to glyph outlines before rasterization.
+Label background opacity defaults to `0.8`, and indicator opacity to `0.85`.
+Both opacity values accept `0.0` (transparent) to `1.0`
 (opaque). Label text retains full opacity. Press `Ctrl+Shift+R` to reload,
 then reopen marker mode. Color changes require no rebuild.

@@ -108,6 +108,18 @@ fn with_traits(font: &CTFont, traits: u32, mask: u32) -> Option<CTFont> {
 }
 
 impl Face {
+    pub fn rasterize_label(
+        &self,
+        ch: char,
+        embolden: crate::config::FontEmbolden,
+    ) -> Option<swash::scale::image::Image> {
+        super::native_fallback::rasterize_outline(
+            &self.font,
+            glyph(&self.font, ch)?,
+            embolden,
+        )
+    }
+
     pub fn supports(&self, ch: char) -> bool {
         glyph(&self.font, ch).is_some()
     }
