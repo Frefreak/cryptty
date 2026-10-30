@@ -8,6 +8,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result, ensure};
 use base64::{Engine, engine::general_purpose::STANDARD};
+use image::ImageEncoder;
+use image::codecs::png::{CompressionType, FilterType, PngEncoder};
 
 use super::{DIACRITICS, MAX_BYTES, Raster};
 
@@ -199,14 +201,33 @@ pub fn emit(
     rows: u32,
     tmux: bool,
 ) -> io::Result<()> {
-    let data = STANDARD.encode(&image.rgba);
+    let mut png = Vec::new();
+    PngEncoder::new_with_quality(
+        &mut png,
+        CompressionType::Fast,
+        FilterType::Adaptive,
+    )
+    .write_image(
+        &image.rgba,
+        image.width,
+        image.height,
+        image::ExtendedColorType::Rgba8,
+    )
+    .map_err(io::Error::other)?;
+    let (format, payload) = if png.len() < image.rgba.len() {
+        (100, png.as_slice())
+    } else {
+        (32, image.rgba.as_slice())
+    };
+    let data = STANDARD.encode(payload);
     let mut chunks = data.as_bytes().chunks(4096).peekable();
     let mut first = true;
     while let Some(chunk) = chunks.next() {
         let more = u8::from(chunks.peek().is_some());
         let header = if first {
             format!(
-                "a=T,U=1,q=2,f=32,s={},v={},i={id},c={cols},r={rows},m={more}",
+                "a=T,U=1,q=2,f={format},s={},v={},\
+                 i={id},c={cols},r={rows},m={more}",
                 image.width, image.height
             )
         } else {

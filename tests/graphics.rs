@@ -32,6 +32,7 @@ fn sender_survives_every_stream_boundary_and_keeps_image_cells() {
     };
     let mut bytes = Vec::new();
     sender::emit(&mut bytes, &raster, 42, 2, 1, false).unwrap();
+    assert!(bytes.starts_with(b"\x1b_Ga=T,U=1,q=2,f=32,"));
     for split in 0..=bytes.len() {
         let mut t = Terminal::new(10, 3);
         assert!(t.feed(&bytes[..split]).is_empty());
@@ -41,6 +42,42 @@ fn sender_survives_every_stream_boundary_and_keeps_image_cells() {
         assert_eq!((p.image, p.row, p.col), (42, 0, 1));
         assert_eq!(t.cursor, (0, 1));
     }
+}
+
+#[test]
+fn sender_compresses_png_losslessly_through_tmux() {
+    let raster = cryptty::graphics::decode_file(
+        include_bytes!("../assets/cryptty-512.png"),
+        image::ImageFormat::Png,
+    )
+    .unwrap();
+    let mut bytes = Vec::new();
+    sender::emit(&mut bytes, &raster, 42, 2, 1, true).unwrap();
+    assert!(bytes.starts_with(b"\x1bPtmux;\x1b\x1b_Ga=T,U=1,q=2,f=100,"));
+    assert!(bytes.len() < raster.rgba.len() / 2);
+    let wrapped = String::from_utf8(bytes.clone()).unwrap();
+    assert!(wrapped.contains("m=1;"));
+    let unwrapped = wrapped
+        .replace("\x1bPtmux;", "")
+        .replace("\x1b\x1b\\\x1b\\", "\x1b\\")
+        .replace("\x1b\x1b", "\x1b");
+    let mut terminal = Terminal::new(10, 3);
+    for chunk in unwrapped.as_bytes().chunks(17) {
+        assert!(terminal.feed(chunk).is_empty());
+    }
+    let decoded = &terminal.graphics.images[&42];
+    assert_eq!(
+        (decoded.width, decoded.height),
+        (raster.width, raster.height)
+    );
+    assert_eq!(decoded.rgba, raster.rgba);
+    let p = Placeholder::read(&terminal.rows[0][1], None).unwrap();
+    assert_eq!((p.image, p.row, p.col), (42, 0, 1));
+    eprintln!(
+        "512px asset: raw Base64 {} bytes, PNG tmux stream {} bytes",
+        raster.rgba.len().div_ceil(3) * 4,
+        bytes.len(),
+    );
 }
 
 #[test]
