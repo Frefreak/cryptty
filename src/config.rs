@@ -10,6 +10,7 @@ use crate::terminal::Theme;
 mod defaults;
 mod font_mapping;
 mod keyboard;
+mod local;
 
 pub use font_mapping::FontMapping;
 pub use keyboard::Keyboard;
@@ -61,6 +62,11 @@ impl Config {
     }
 
     pub fn read(path: &Path) -> Result<Self> {
+        let (config, text) = Self::read_base(path)?;
+        local::apply(path, &text, config)
+    }
+
+    fn read_base(path: &Path) -> Result<(Self, String)> {
         let text = match std::fs::read_to_string(path) {
             Ok(text) => text,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -88,7 +94,7 @@ impl Config {
         Self::read_existing(path, &text)
     }
 
-    fn read_existing(path: &Path, text: &str) -> Result<Self> {
+    fn read_existing(path: &Path, text: &str) -> Result<(Self, String)> {
         let config = Self::parse(text)
             .with_context(|| format!("Invalid config {}", path.display()))?;
         if defaults::updated(text)? != text {
@@ -101,10 +107,10 @@ impl Config {
                 ),
             }
         }
-        Ok(config)
+        Ok((config, text.to_owned()))
     }
 
-    fn update_defaults(path: &Path) -> Result<Self> {
+    fn update_defaults(path: &Path) -> Result<(Self, String)> {
         let path = match std::fs::canonicalize(path) {
             Ok(path) => path,
             Err(error)
@@ -147,7 +153,7 @@ impl Config {
             }
             temporary.persist(&path)?;
         }
-        Ok(config)
+        Ok((config, text))
     }
 }
 

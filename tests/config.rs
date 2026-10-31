@@ -596,3 +596,120 @@ fn font_embolden_defaults_to_zero_and_accepts_bounded_pixel_values() {
         );
     }
 }
+
+#[test]
+fn local_config_merges_nested_fields_and_replaces_lists() {
+    let directory = TestDirectory::new();
+    let path = directory.path().join("cryptty.yaml");
+    let local = directory.path().join("cryptty.local.yaml");
+    std::fs::write(
+        &path,
+        concat!(
+            "font: {size: 14, family: Shared, fallback: [A, B]}\n",
+            "window: {padding: {x: 3, y: 4}, opacity: 0.8}\n",
+            "keyboard: {bindings: [{key: F1, text: shared}]}\n",
+        ),
+    )
+    .unwrap();
+    Config::read(&path).unwrap();
+    let base = std::fs::read_to_string(&path).unwrap();
+    let overrides = concat!(
+        "font: {size: 17, fallback: [Local]}\n",
+        "window: {padding: {x: 7}}\n",
+        "keyboard: {bindings: []}\n",
+    );
+    std::fs::write(&local, overrides).unwrap();
+    let config = Config::read(&path).unwrap();
+    assert_eq!(
+        config.font.size.pixels(1.0),
+        Config::parse("font: {size: 17}")
+            .unwrap()
+            .font
+            .size
+            .pixels(1.0)
+    );
+    assert_eq!(config.font.family, "Shared");
+    assert_eq!(config.font.fallback, ["Local"]);
+    assert_eq!(config.window.padding.x, 7);
+    assert_eq!(config.window.padding.y, 4);
+    assert_eq!(config.window.opacity.get(), 0.8);
+    assert_eq!(
+        config.keyboard.text_for(
+            &winit::keyboard::Key::Named(winit::keyboard::NamedKey::F1),
+            winit::keyboard::ModifiersState::empty(),
+        ),
+        None
+    );
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), base);
+    assert_eq!(std::fs::read_to_string(&local).unwrap(), overrides);
+}
+
+#[test]
+fn optional_local_config_is_reread_and_can_be_removed() {
+    let directory = TestDirectory::new();
+    let path = directory.path().join("cryptty.yaml");
+    let local = directory.path().join("cryptty.local.yaml");
+    std::fs::write(&path, "font: {family: Shared}").unwrap();
+    assert_eq!(Config::read(&path).unwrap().font.family, "Shared");
+    assert!(!local.exists());
+    for text in ["", "# local settings\n", "{}", "null"] {
+        std::fs::write(&local, text).unwrap();
+        assert_eq!(Config::read(&path).unwrap().font.family, "Shared");
+        assert_eq!(std::fs::read_to_string(&local).unwrap(), text);
+    }
+    for family in ["First", "Second"] {
+        std::fs::write(&local, format!("font: {{family: {family}}}")).unwrap();
+        assert_eq!(Config::read(&path).unwrap().font.family, family);
+    }
+    std::fs::remove_file(local).unwrap();
+    assert_eq!(Config::read(&path).unwrap().font.family, "Shared");
+}
+
+#[test]
+fn local_config_applies_when_base_is_missing_or_empty() {
+    for base in [None, Some(""), Some("# shared defaults\n")] {
+        let directory = TestDirectory::new();
+        let path = directory.path().join("cryptty.yaml");
+        if let Some(base) = base {
+            std::fs::write(&path, base).unwrap();
+        }
+        let local = directory.path().join("cryptty.local.yaml");
+        std::fs::write(&local, "font: {family: Local}").unwrap();
+        assert_eq!(Config::read(&path).unwrap().font.family, "Local");
+        assert!(
+            std::fs::read_to_string(path)
+                .unwrap()
+                .lines()
+                .all(|line| line.starts_with('#'))
+        );
+    }
+}
+
+#[test]
+fn invalid_local_config_reports_its_path_and_preserves_files() {
+    let directory = TestDirectory::new();
+    let path = directory.path().join("cryptty.yaml");
+    let local = directory.path().join("cryptty.local.yaml");
+    Config::read(&path).unwrap();
+    let base = std::fs::read_to_string(&path).unwrap();
+    for text in [
+        "font: [",
+        "font: {size: 0}",
+        "font: {szie: 17}",
+        "font: null",
+        "[]",
+        "font: {size: 17, size: 18}",
+    ] {
+        std::fs::write(&local, text).unwrap();
+        let error = Config::read(&path).unwrap_err();
+        assert!(format!("{error:#}").contains("cryptty.local.yaml"));
+        assert_eq!(std::fs::read_to_string(&local).unwrap(), text);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), base);
+    }
+    std::fs::remove_file(&local).unwrap();
+    std::fs::create_dir(&local).unwrap();
+    assert!(
+        format!("{:#}", Config::read(&path).unwrap_err())
+            .contains("Cannot read local config")
+    );
+}

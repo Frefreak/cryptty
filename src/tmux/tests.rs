@@ -48,7 +48,7 @@ fn pane_links_and_highlights_stay_inside_their_rectangle() {
         display.feed(format!("\x1b[{};12H{line}", row + 2).as_bytes());
     }
     let snapshot = Snapshot {
-        complete: true,
+        incomplete: None,
         size: (22, 6),
         panes: vec![CapturedPane::Application(PaneText {
             origin: p(1, 11),
@@ -235,7 +235,7 @@ fn real_tmux_split_recovers_url_and_tracks_layout_changes() {
     run(&["copy-mode", "-t", "test:0.1"]);
     let copy_mode =
         Snapshot::capture(&mut connection, &tty, (81, 12), &|| true).unwrap();
-    assert!(copy_mode.complete);
+    assert!(copy_mode.incomplete.is_none());
     assert_eq!(copy_mode.panes.len(), 1);
     let deadline = Instant::now() + Duration::from_secs(2);
     while !terminal.rows.iter().any(|row| row.iter().any(|cell| {
@@ -258,14 +258,17 @@ fn real_tmux_split_recovers_url_and_tracks_layout_changes() {
 fn vim_snapshot_rejects_partial_pane_coverage() {
     let display = Terminal::new(10, 3);
     let snapshot = Snapshot {
-        complete: false,
+        incomplete: Some("partial capture".into()),
         size: (10, 3),
         panes: vec![CapturedPane::Application(PaneText {
             origin: p(0, 0),
             terminal: display.visible_snapshot(),
         })],
     };
-    assert!(matches!(snapshot.text(&display), TextSnapshot::Changed));
+    assert!(
+        matches!(snapshot.text(&display), TextSnapshot::Changed(reason)
+        if reason == "partial capture")
+    );
 }
 
 #[test]
@@ -373,4 +376,23 @@ fn captured_tabs_preserve_pane_text_and_reject_changes() {
         )
         .is_none()
     );
+}
+
+#[test]
+fn changed_snapshot_identifies_the_pane_without_logging_its_text() {
+    let display = Terminal::new(10, 3);
+    let mut terminal = Terminal::new(5, 2);
+    terminal.feed(b"secret");
+    let snapshot = Snapshot {
+        incomplete: None,
+        size: (10, 3),
+        panes: vec![CapturedPane::Application(PaneText {
+            origin: p(1, 5),
+            terminal,
+        })],
+    };
+    let TextSnapshot::Changed(reason) = snapshot.text(&display) else {
+        panic!("expected a changed snapshot");
+    };
+    assert_eq!(reason, "pane at col=5 row=1 size=5x2 differs from display");
 }

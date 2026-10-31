@@ -226,7 +226,23 @@ missing fields. A matching comment under the same keys prevents a
 repeat notice. Existing values and comments stay intact. No block markers
 or version metadata are required.
 
+For machine-specific settings, place an optional `cryptty.local.yaml` beside
+`cryptty.yaml`. For example:
+
+```yaml
+font:
+  size: 17
+```
+
+Nested mappings merge recursively, with local values taking precedence.
+Lists replace the entire shared list; `[]` clears a list. A missing, empty,
+or comment-only local file keeps the shared settings. Both files must contain
+valid configuration. Cryptty leaves the local file unchanged and appends
+default comments to the shared file only. To keep the local file out of
+chezmoi, add `.config/cryptty/cryptty.local.yaml` to `.chezmoiignore`.
+
 Press **Ctrl+Shift+R** to reload the configuration in the current window.
+Reload reads both the shared and local files, including local file removal.
 Font settings, padding, opacity, blur, colors, and bindings apply immediately;
 the shell and terminal contents stay in place. Reload reapplies the color
 palette and OSC color reset defaults. A failed reload retains the active

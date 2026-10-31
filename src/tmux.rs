@@ -98,8 +98,8 @@ impl From<Link> for ScreenLink {
 pub enum TextSnapshot {
     Pending,
     Unavailable,
-    Changed,
-    Failed,
+    Changed(String),
+    Failed(String),
     Ready(Vec<PaneText>),
 }
 
@@ -216,28 +216,39 @@ impl CapturedPane {
 }
 
 pub struct Snapshot {
-    complete: bool,
+    incomplete: Option<String>,
     size: (usize, usize),
     panes: Vec<CapturedPane>,
 }
 
 impl Snapshot {
     fn text(&self, display: &Terminal) -> TextSnapshot {
-        if !self.complete
-            || self.size != (display.cols(), display.rows.len())
-            || self.panes.is_empty()
-        {
-            return TextSnapshot::Changed;
+        if let Some(reason) = &self.incomplete {
+            return TextSnapshot::Changed(reason.clone());
         }
-        match self
-            .panes
-            .iter()
-            .map(|pane| pane.visible(display))
-            .collect()
-        {
-            Some(panes) => TextSnapshot::Ready(panes),
-            None => TextSnapshot::Changed,
+        let size = (display.cols(), display.rows.len());
+        if self.size != size || self.panes.is_empty() {
+            return TextSnapshot::Changed(format!(
+                "snapshot grid={:?}, display grid={size:?}, panes={}",
+                self.size,
+                self.panes.len(),
+            ));
         }
+        let mut panes = Vec::new();
+        for captured in &self.panes {
+            let Some(pane) = captured.visible(display) else {
+                let pane = captured.pane();
+                return TextSnapshot::Changed(format!(
+                    "pane at col={} row={} size={}x{} differs from display",
+                    pane.origin.col,
+                    pane.origin.row,
+                    pane.terminal.cols(),
+                    pane.terminal.rows.len(),
+                ));
+            };
+            panes.push(pane);
+        }
+        TextSnapshot::Ready(panes)
     }
 
     fn capture(
@@ -261,7 +272,7 @@ impl Snapshot {
         let metadata = connection
             .query(std::slice::from_ref(&pane_command))?
             .remove(0);
-        let mut complete = true;
+        let mut incomplete = None;
         let mut bounds = Vec::new();
         let mut commands = Vec::new();
         for line in metadata.lines() {
@@ -274,7 +285,10 @@ impl Snapshot {
                 "" => false,
                 "copy-mode" => true,
                 _ => {
-                    complete = false;
+                    incomplete = Some(format!(
+                        "pane {} has unsupported mode {:?}",
+                        fields[0], fields[5],
+                    ));
                     continue;
                 }
             };
@@ -345,13 +359,17 @@ impl Snapshot {
                     CapturedPane::Application(pane)
                 });
             } else {
-                complete = false;
+                incomplete = Some(format!(
+                    "pane at col={} row={} size={width}x{height}: \
+                     cannot reconstruct physical and joined captures",
+                    origin.col, origin.row,
+                ));
             }
         }
         Ok(Self {
             size,
             panes,
-            complete,
+            incomplete,
         })
     }
 

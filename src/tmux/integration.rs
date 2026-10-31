@@ -19,7 +19,7 @@ struct Request {
 struct Response {
     generation: u64,
     snapshot: Option<Snapshot>,
-    failed: bool,
+    failed: Option<String>,
     missing_binary: bool,
 }
 
@@ -53,7 +53,10 @@ impl Worker {
                         &current,
                     )
                 })();
-                let failed = result.is_err() && connection.is_some();
+                let failed =
+                    result.as_ref().err().filter(|_| connection.is_some()).map(
+                        |error| format!("tty={}: {error:#}", tty.display()),
+                    );
                 let missing_binary = result.as_ref().err().is_some_and(|e| {
                     e.downcast_ref::<std::io::Error>().is_some_and(|e| {
                         e.kind() == std::io::ErrorKind::NotFound
@@ -94,7 +97,7 @@ pub struct Integration {
     pending: bool,
     dirty: bool,
     snapshot: Option<Snapshot>,
-    failed: bool,
+    failed: Option<String>,
     missing_binary: bool,
     missing_binary_notified: bool,
     next_request: Instant,
@@ -116,7 +119,7 @@ impl Integration {
             pending: false,
             dirty: false,
             snapshot: None,
-            failed: false,
+            failed: None,
             missing_binary: false,
             missing_binary_notified: false,
             next_request: Instant::now(),
@@ -142,7 +145,7 @@ impl Integration {
             self.worker_generation
                 .store(self.generation, Ordering::Relaxed);
             self.snapshot = None;
-            self.failed = false;
+            self.failed = None;
             self.dirty = active;
             self.next_request = now;
             self.idle_until = (!active).then_some(now + IDLE_TIMEOUT);
@@ -209,8 +212,8 @@ impl Integration {
             super::TextSnapshot::Pending
         } else if let Some(snapshot) = &self.snapshot {
             snapshot.text(display)
-        } else if self.failed {
-            super::TextSnapshot::Failed
+        } else if let Some(reason) = &self.failed {
+            super::TextSnapshot::Failed(reason.clone())
         } else {
             super::TextSnapshot::Unavailable
         }
@@ -304,11 +307,11 @@ mod tests {
         let request = receive.try_recv().unwrap();
         integration.update(false, (80, 24), now);
         send.send(Response {
-            failed: false,
+            failed: None,
             missing_binary: false,
             generation: request.generation,
             snapshot: Some(Snapshot {
-                complete: true,
+                incomplete: None,
                 size: (80, 24),
                 panes: Vec::new(),
             }),

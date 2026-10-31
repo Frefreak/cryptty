@@ -229,6 +229,30 @@ mod tests {
                         );
                         view.draw().unwrap();
                     }
+                    let local = path.with_file_name("cryptty.local.yaml");
+                    std::fs::write(&local, "window: {padding: {x: 11}}")
+                        .unwrap();
+                    view.reload_config();
+                    assert!(!view.config_reload_failed);
+                    assert_eq!(view.padding.x, 11);
+                    std::fs::write(&local, "font: {size: 0}").unwrap();
+                    view.reload_config();
+                    assert!(view.config_reload_failed);
+                    assert_eq!(view.padding.x, 11);
+                    assert!(
+                        view.notice
+                            .as_ref()
+                            .unwrap()
+                            .0
+                            .contains("cryptty.local.yaml")
+                    );
+                    std::fs::remove_file(local).unwrap();
+                    view.reload_config();
+                    assert!(!view.config_reload_failed);
+                    assert_eq!(
+                        view.padding.x,
+                        Config::default().window.padding.x
+                    );
                 }
                 events.exit();
             }

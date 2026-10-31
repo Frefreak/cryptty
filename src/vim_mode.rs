@@ -228,23 +228,14 @@ impl View {
             return;
         }
         if mode.deadline().is_some_and(|t| t <= now) {
-            eprintln!("Cryptty: Vim mode capture timed out; try again");
-            self.leave_vim();
+            self.fail_mode_capture("capture timed out after 3 seconds");
             return;
         }
         let panes = match self.tmux.text(mode.screen()) {
             TextSnapshot::Pending => return,
             TextSnapshot::Unavailable => Vec::new(),
-            TextSnapshot::Failed => {
-                eprintln!("Cryptty: tmux viewport unavailable for Vim mode");
-                self.leave_vim();
-                return;
-            }
-            TextSnapshot::Changed => {
-                eprintln!(
-                    "Cryptty: pane text changed during Vim capture; try again"
-                );
-                self.leave_vim();
+            TextSnapshot::Failed(reason) | TextSnapshot::Changed(reason) => {
+                self.fail_mode_capture(&reason);
                 return;
             }
             TextSnapshot::Ready(panes) => panes,
@@ -275,6 +266,23 @@ impl View {
         self.update_title();
         self.renderer.invalidate();
         self.window.request_redraw();
+    }
+
+    fn fail_mode_capture(&mut self, reason: &str) {
+        let Some(Mode::Loading { kind, screen, .. }) = &self.vim else {
+            return;
+        };
+        let mode = match kind {
+            Kind::Vim => "Vim",
+            Kind::Marker => "Marker",
+        };
+        crate::diagnostics::mode_failure(
+            mode,
+            (screen.cols(), screen.rows.len()),
+            reason,
+        );
+        eprintln!("Cryptty: {mode} capture failed: {reason}");
+        self.leave_vim();
     }
 
     pub(super) fn vim_key(&mut self, key: Key) {
