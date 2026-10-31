@@ -77,6 +77,16 @@ fn drive_with_delay(
     pty: &mut Pty,
     terminal: &mut Terminal,
     delay: Duration,
+    step: impl FnMut(&mut Pty, &mut Terminal),
+) {
+    drive_with_replies(pty, terminal, delay, |replies| replies, step);
+}
+
+fn drive_with_replies(
+    pty: &mut Pty,
+    terminal: &mut Terminal,
+    delay: Duration,
+    mut map_reply: impl FnMut(Vec<u8>) -> Vec<u8>,
     mut step: impl FnMut(&mut Pty, &mut Terminal),
 ) {
     let deadline = Instant::now() + Duration::from_secs(15);
@@ -87,7 +97,7 @@ fn drive_with_delay(
             .expect("application must respond before the deadline")
         {
             Event::Output(bytes) => {
-                let replies = terminal.feed(&bytes);
+                let replies = map_reply(terminal.feed(&bytes));
                 if !replies.is_empty() {
                     std::thread::sleep(delay);
                 }
@@ -708,23 +718,49 @@ fn check_preview_upload(hidden_window: bool) {
 #[ignore = "requires tmux on PATH and native PTYs"]
 fn image_probe_finds_remote_and_nested_tmux_paths() {
     for depth in 0..=3 {
-        image_probe_case(depth, true, Duration::ZERO);
+        image_probe_case(depth, true, Duration::ZERO, ProbeReply::Normal);
     }
 }
 
 #[test]
 #[ignore = "requires tmux on PATH and a native PTY"]
 fn image_probe_reports_blocked_passthrough_and_restores_tty() {
-    image_probe_case(1, false, Duration::ZERO);
+    image_probe_case(1, false, Duration::ZERO, ProbeReply::Normal);
 }
 
 #[test]
 #[ignore = "requires a native PTY"]
 fn image_probe_accepts_slow_ssh_responses() {
-    image_probe_case(0, true, Duration::from_millis(900));
+    image_probe_case(0, true, Duration::from_millis(900), ProbeReply::Normal);
 }
 
-fn image_probe_case(depth: usize, passthrough: bool, delay: Duration) {
+#[derive(Clone, Copy)]
+enum ProbeReply {
+    Normal,
+    MissingIdentity,
+    MissingGraphics,
+    RejectedGraphics,
+}
+
+#[test]
+#[ignore = "requires native PTYs"]
+fn image_probe_diagnostics_distinguish_query_failures() {
+    for reply in [
+        ProbeReply::MissingIdentity,
+        ProbeReply::MissingGraphics,
+        ProbeReply::RejectedGraphics,
+    ] {
+        image_probe_case(0, true, Duration::ZERO, reply);
+    }
+}
+
+fn image_probe_case(
+    depth: usize,
+    passthrough: bool,
+    delay: Duration,
+    reply: ProbeReply,
+) {
+    let succeeds = passthrough && matches!(reply, ProbeReply::Normal);
     let fixture = Fixture::new("probe");
     let layers: Vec<_> = (0..depth).map(|_| Fixture::new("layer")).collect();
     let image = fixture.directory.join("image.png");
@@ -776,46 +812,103 @@ fn image_probe_case(depth: usize, passthrough: bool, delay: Duration) {
     let mut pty = Pty::spawn(&command, PtySize::default(), || {}).unwrap();
     let mut terminal = Terminal::new(80, 24);
     let mut checked = false;
-    drive_with_delay(&mut pty, &mut terminal, delay, |pty, terminal| {
-        let text = screen(terminal);
-        if !checked && text.contains("PROBE_EXIT_") {
-            assert!(
-                text.contains(if passthrough {
-                    "PROBE_EXIT_0"
-                } else {
-                    "PROBE_EXIT_1"
-                }),
-                "{text}"
-            );
-            assert_eq!(
-                terminal.graphics.images.len(),
-                usize::from(passthrough)
-            );
-            if !passthrough {
+    drive_with_replies(
+        &mut pty,
+        &mut terminal,
+        delay,
+        |bytes| match reply {
+            ProbeReply::MissingIdentity if bytes.starts_with(b"\x1b[>") => {
+                b"UNRELATED_INPUT".to_vec()
+            }
+            ProbeReply::MissingGraphics if bytes.starts_with(b"\x1b_G") => {
+                Vec::new()
+            }
+            ProbeReply::RejectedGraphics if bytes.starts_with(b"\x1b_G") => {
+                String::from_utf8(bytes)
+                    .unwrap()
+                    .replace(";OK", ";ENOTSUP: test rejection")
+                    .into_bytes()
+            }
+            _ => bytes,
+        },
+        |pty, terminal| {
+            let text = screen(terminal).replace('\n', "");
+            if !checked && text.contains("PROBE_EXIT_") {
                 assert!(
-                    text.contains("No graphics support response"),
+                    text.contains(if succeeds {
+                        "PROBE_EXIT_0"
+                    } else {
+                        "PROBE_EXIT_1"
+                    }),
                     "{text}"
                 );
-            }
-            for layer in &layers {
-                let title = Command::new("tmux")
-                    .args([
-                        "-L",
-                        &layer.socket,
-                        "display-message",
-                        "-p",
-                        "#{pane_title}",
-                    ])
-                    .output()
-                    .unwrap();
                 assert_eq!(
-                    String::from_utf8_lossy(&title.stdout).trim(),
-                    "PROBE_TITLE"
+                    terminal.graphics.images.len(),
+                    usize::from(succeeds)
                 );
+                if !passthrough {
+                    assert!(
+                        text.contains(
+                            "DA2 identity query failed at passthrough depth 1"
+                        ) && text
+                            .contains("No matching reply within 2 seconds")
+                            && text.contains("0 input bytes received"),
+                        "{text}"
+                    );
+                }
+                match reply {
+                    ProbeReply::Normal => {}
+                    ProbeReply::MissingIdentity => {
+                        assert!(
+                            text.contains(
+                                "DA2 identity query failed at passthrough depth 0"
+                            ),
+                            "{text}"
+                        );
+                        assert!(
+                            text.contains("15 input bytes received"),
+                            "{text}"
+                        );
+                        assert!(!text.contains("UNRELATED_INPUT"), "{text}");
+                    }
+                    ProbeReply::MissingGraphics
+                    | ProbeReply::RejectedGraphics => {
+                        assert!(
+                            text.contains(
+                                "Kitty graphics query failed at passthrough depth 0"
+                            ),
+                            "{text}"
+                        );
+                        assert!(text.contains("DA2 reply:"), "{text}");
+                        let expected = match reply {
+                            ProbeReply::MissingGraphics => {
+                                "0 input bytes received"
+                            }
+                            _ => "Terminal rejected graphics query: ENOTSUP",
+                        };
+                        assert!(text.contains(expected), "{text}");
+                    }
+                }
+                for layer in &layers {
+                    let title = Command::new("tmux")
+                        .args([
+                            "-L",
+                            &layer.socket,
+                            "display-message",
+                            "-p",
+                            "#{pane_title}",
+                        ])
+                        .output()
+                        .unwrap();
+                    assert_eq!(
+                        String::from_utf8_lossy(&title.stdout).trim(),
+                        "PROBE_TITLE"
+                    );
+                }
+                checked = true;
+                pty.write(b"\r".to_vec()).unwrap();
             }
-            checked = true;
-            pty.write(b"\r".to_vec()).unwrap();
-        }
-    });
+        },
+    );
     assert!(checked, "probe depth {depth} did not finish");
 }

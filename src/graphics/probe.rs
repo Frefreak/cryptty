@@ -29,27 +29,42 @@ pub(super) fn write_sequence(
 
 pub(super) fn detect(out: &mut impl Write) -> Result<usize> {
     let mut tty = ProbeTty::open().context("Prepare graphics support query")?;
-    let _focus = PaneFocus::acquire()?;
+    let _focus = PaneFocus::acquire().context("Focus graphics query pane")?;
     for depth in 0..=3 {
         // A bare graphics APC changes tmux's pane title. Ask its identity first.
-        write_sequence(out, b"\x1b[>c", depth)?;
-        out.flush()?;
-        let identity = reply(&mut tty.file, b"\x1b[>", b"c")?;
+        let identity = (|| -> Result<Vec<u8>> {
+            write_sequence(out, b"\x1b[>c", depth)?;
+            out.flush()?;
+            reply(&mut tty.file, b"\x1b[>", b"c")
+        })()
+        .with_context(|| {
+            format!("DA2 identity query failed at passthrough depth {depth}")
+        })?;
         if identity.starts_with(b"84;") {
             continue;
         }
         let seed = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
         let id = (seed as u32 & 0xffffff).max(1);
         let query = format!("\x1b_Ga=q,i={id},f=24,s=1,v=1;AAAA\x1b\\");
-        write_sequence(out, query.as_bytes(), depth)?;
-        out.flush()?;
-        let prefix = format!("\x1b_Gi={id};");
-        let response = reply(&mut tty.file, prefix.as_bytes(), b"\x1b\\")?;
-        ensure!(
-            response == b"OK",
-            "Graphics query rejected: {}",
-            String::from_utf8_lossy(&response)
-        );
+        (|| -> Result<()> {
+            write_sequence(out, query.as_bytes(), depth)?;
+            out.flush()?;
+            let prefix = format!("\x1b_Gi={id};");
+            let response = reply(&mut tty.file, prefix.as_bytes(), b"\x1b\\")?;
+            ensure!(
+                response == b"OK",
+                "Terminal rejected graphics query: {}",
+                response.escape_ascii()
+            );
+            Ok(())
+        })()
+        .with_context(|| {
+            format!(
+                "Kitty graphics query failed at passthrough depth {depth} \
+                 (DA2 reply: {})",
+                identity.escape_ascii()
+            )
+        })?;
         return Ok(depth);
     }
     bail!("More than three tmux layers; graphics upload cancelled")
@@ -75,7 +90,7 @@ fn reply(file: &mut File, prefix: &[u8], end: &[u8]) -> Result<Vec<u8>> {
         }
         let mut chunk = [0; 256];
         let count = file.read(&mut chunk)?;
-        ensure!(count > 0, "Terminal closed during graphics support query");
+        ensure!(count > 0, "Terminal closed while waiting for query reply");
         bytes.extend_from_slice(&chunk[..count]);
         if let Some(start) =
             bytes.windows(prefix.len()).position(|w| w == prefix)
@@ -87,13 +102,18 @@ fn reply(file: &mut File, prefix: &[u8], end: &[u8]) -> Result<Vec<u8>> {
                 return Ok(payload[..stop].to_vec());
             }
         }
-        ensure!(bytes.len() <= 4096, "Excessive input during graphics query");
+        ensure!(
+            bytes.len() <= 4096,
+            "Excessive input while waiting for query reply"
+        );
     }
     bail!(
-        "No graphics support response within 2 seconds. \
-         In each tmux pane carrying this session, enable \
-         'tmux set -p allow-passthrough on', then retry. \
-         Over SSH, keep the local tmux pane focused as well."
+        "No matching reply within 2 seconds ({} input bytes received). \
+         Check terminal DA2/Kitty query support and reply routing. \
+         For tmux, check 'tmux set -p allow-passthrough on' in each pane \
+         carrying this session. Over SSH, keep the local SSH pane focused. \
+         A timeout alone does not identify the cause.",
+        bytes.len()
     )
 }
 

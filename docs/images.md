@@ -31,6 +31,13 @@ Detection requires a secondary device attributes (DA2) response.
 Each query waits at most two seconds for a response. Missing responses or
 unsupported graphics produce an error before any image upload. Identity
 queries avoid changing tmux pane titles while discovering passthrough layers.
+Errors identify the failed query (DA2 identity or Kitty graphics) and its
+passthrough depth: zero addresses the immediate terminal; each additional
+level wraps the query through one detected tmux layer. Graphics errors also
+include the preceding DA2 reply. Timeouts report the received input byte
+count without printing unrelated terminal input. A timeout can result from
+missing query support, blocked passthrough, or reply routing; the message
+alone does not determine which cause applies.
 
 When a local tmux session is available, the sender enables
 `allow-passthrough on` for the current pane. The pane setting remains
