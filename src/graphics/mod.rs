@@ -7,6 +7,7 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 mod lifecycle;
 mod placeholders;
 mod placement;
+mod probe;
 pub use placement::{Geometry, Placement, Positioned, Screen};
 pub mod sender;
 pub mod stream;

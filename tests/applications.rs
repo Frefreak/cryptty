@@ -68,6 +68,15 @@ fn screen(terminal: &Terminal) -> String {
 fn drive(
     pty: &mut Pty,
     terminal: &mut Terminal,
+    step: impl FnMut(&mut Pty, &mut Terminal),
+) {
+    drive_with_delay(pty, terminal, Duration::ZERO, step);
+}
+
+fn drive_with_delay(
+    pty: &mut Pty,
+    terminal: &mut Terminal,
+    delay: Duration,
     mut step: impl FnMut(&mut Pty, &mut Terminal),
 ) {
     let deadline = Instant::now() + Duration::from_secs(15);
@@ -79,6 +88,9 @@ fn drive(
         {
             Event::Output(bytes) => {
                 let replies = terminal.feed(&bytes);
+                if !replies.is_empty() {
+                    std::thread::sleep(delay);
+                }
                 assert!(pty.write(replies).unwrap());
                 step(pty, terminal);
             }
@@ -378,6 +390,11 @@ fn tmux_image_sender_survives_pane_switch_resize_and_clear() {
                     assert!(output.status.success());
                     String::from_utf8(output.stdout).unwrap()
                 };
+                assert_eq!(
+                    option(&["display-message", "-p", "#{pane_index}"]).trim(),
+                    "1",
+                    "probing must restore the pane focused by split-window",
+                );
                 assert_eq!(
                     option(&[
                         "show-options",
@@ -685,4 +702,120 @@ fn check_preview_upload(hidden_window: bool) {
         }
     });
     assert!(checked, "inactive preview must finish uploading");
+}
+
+#[test]
+#[ignore = "requires tmux on PATH and native PTYs"]
+fn image_probe_finds_remote_and_nested_tmux_paths() {
+    for depth in 0..=3 {
+        image_probe_case(depth, true, Duration::ZERO);
+    }
+}
+
+#[test]
+#[ignore = "requires tmux on PATH and a native PTY"]
+fn image_probe_reports_blocked_passthrough_and_restores_tty() {
+    image_probe_case(1, false, Duration::ZERO);
+}
+
+#[test]
+#[ignore = "requires a native PTY"]
+fn image_probe_accepts_slow_ssh_responses() {
+    image_probe_case(0, true, Duration::from_millis(900));
+}
+
+fn image_probe_case(depth: usize, passthrough: bool, delay: Duration) {
+    let fixture = Fixture::new("probe");
+    let layers: Vec<_> = (0..depth).map(|_| Fixture::new("layer")).collect();
+    let image = fixture.directory.join("image.png");
+    image::RgbaImage::from_pixel(16, 16, image::Rgba([20, 40, 80, 255]))
+        .save(&image)
+        .unwrap();
+    let script = fixture.directory.join("sender.sh");
+    std::fs::write(
+        &script,
+        format!(
+            concat!(
+                "before=$(stty -g)\n",
+                "env -u TMUX -u TMUX_PANE '{}' image '{}'\n",
+                "result=$?\n",
+                "test \"$(stty -g)\" = \"$before\" || exit 73\n",
+                "printf 'PROBE_EXIT_%s\\n' \"$result\"\nread done\n"
+            ),
+            env!("CARGO_BIN_EXE_cryptty"),
+            image.display(),
+        ),
+    )
+    .unwrap();
+    let mut command: Vec<OsString> = vec!["/bin/sh".into(), script.into()];
+    for layer in &layers {
+        let config = layer.directory.join("tmux.conf");
+        std::fs::write(
+            &config,
+            format!(
+                "set -g status off\nset -g allow-passthrough {}\nset-hook -g after-new-session 'select-pane -T PROBE_TITLE'\n",
+                if passthrough { "on" } else { "off" },
+            ),
+        )
+        .unwrap();
+        let mut outer: Vec<OsString> = vec![
+            "env".into(),
+            "-u".into(),
+            "TMUX".into(),
+            "tmux".into(),
+            "-u".into(),
+            "-L".into(),
+            layer.socket.clone().into(),
+            "-f".into(),
+            config.into(),
+            "new-session".into(),
+        ];
+        outer.extend(command);
+        command = outer;
+    }
+    let mut pty = Pty::spawn(&command, PtySize::default(), || {}).unwrap();
+    let mut terminal = Terminal::new(80, 24);
+    let mut checked = false;
+    drive_with_delay(&mut pty, &mut terminal, delay, |pty, terminal| {
+        let text = screen(terminal);
+        if !checked && text.contains("PROBE_EXIT_") {
+            assert!(
+                text.contains(if passthrough {
+                    "PROBE_EXIT_0"
+                } else {
+                    "PROBE_EXIT_1"
+                }),
+                "{text}"
+            );
+            assert_eq!(
+                terminal.graphics.images.len(),
+                usize::from(passthrough)
+            );
+            if !passthrough {
+                assert!(
+                    text.contains("No graphics support response"),
+                    "{text}"
+                );
+            }
+            for layer in &layers {
+                let title = Command::new("tmux")
+                    .args([
+                        "-L",
+                        &layer.socket,
+                        "display-message",
+                        "-p",
+                        "#{pane_title}",
+                    ])
+                    .output()
+                    .unwrap();
+                assert_eq!(
+                    String::from_utf8_lossy(&title.stdout).trim(),
+                    "PROBE_TITLE"
+                );
+            }
+            checked = true;
+            pty.write(b"\r".to_vec()).unwrap();
+        }
+    });
+    assert!(checked, "probe depth {depth} did not finish");
 }

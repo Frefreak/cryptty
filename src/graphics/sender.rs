@@ -112,6 +112,10 @@ pub fn run(paths: &[OsString]) -> Result<()> {
     };
     let tmux = std::env::var_os("TMUX").is_some_and(|v| !v.is_empty());
     let mut out = stdout.lock();
+    if tmux {
+        enable_tmux_passthrough()?;
+    }
+    let depth = super::probe::detect(&mut out)?;
     for (index, path) in paths.iter().enumerate() {
         let mut bytes = Vec::new();
         File::open(path)
@@ -157,10 +161,7 @@ pub fn run(paths: &[OsString]) -> Result<()> {
         } else {
             image
         };
-        if tmux && index == 0 {
-            enable_tmux_passthrough()?;
-        }
-        emit(&mut out, &image, id, cols.max(1), rows.max(1), tmux)?;
+        emit_depth(&mut out, &image, id, cols.max(1), rows.max(1), depth)?;
     }
     out.flush()?;
     Ok(())
@@ -201,6 +202,17 @@ pub fn emit(
     rows: u32,
     tmux: bool,
 ) -> io::Result<()> {
+    emit_depth(out, image, id, cols, rows, usize::from(tmux))
+}
+
+fn emit_depth(
+    out: &mut impl Write,
+    image: &Raster,
+    id: u32,
+    cols: u32,
+    rows: u32,
+    depth: usize,
+) -> io::Result<()> {
     let mut png = Vec::new();
     PngEncoder::new_with_quality(
         &mut png,
@@ -233,18 +245,10 @@ pub fn emit(
         } else {
             format!("m={more}")
         };
-        if tmux {
-            out.write_all(b"\x1bPtmux;\x1b")?
-        }
-        write!(out, "\x1b_G{header};")?;
-        out.write_all(chunk)?;
-        if tmux {
-            out.write_all(b"\x1b")?
-        }
-        out.write_all(b"\x1b\\")?;
-        if tmux {
-            out.write_all(b"\x1b\\")?
-        }
+        let mut sequence = format!("\x1b_G{header};").into_bytes();
+        sequence.extend_from_slice(chunk);
+        sequence.extend_from_slice(b"\x1b\\");
+        super::probe::write_sequence(out, &sequence, depth)?;
         first = false;
     }
     write!(

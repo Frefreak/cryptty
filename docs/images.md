@@ -25,20 +25,34 @@ calling tool captures stdout, provided `TMUX` and `TMUX_PANE` identify the
 target session and pane. Paths are resolved before opening the preview.
 Opening a preview selects its source window before uploading the image.
 
-The sender detects tmux, enables `allow-passthrough on` for the current
-pane, and wraps image uploads automatically. The pane setting remains
+Before uploading, the sender queries terminal identity to count up to three
+nested tmux layers, then confirms graphics support through that path.
+Detection requires a secondary device attributes (DA2) response.
+Each query waits at most two seconds for a response. Missing responses or
+unsupported graphics produce an error before any image upload. Identity
+queries avoid changing tmux pane titles while discovering passthrough layers.
+
+When a local tmux session is available, the sender enables
+`allow-passthrough on` for the current pane. The pane setting remains
 enabled after the command exits; other panes and global settings are
 unchanged. Failure to enable passthrough reports an error before upload.
+The query briefly focuses its local sending pane when necessary, then
+restores the prior pane unless focus has changed meanwhile. Over SSH, keep
+the local SSH pane focused so tmux routes replies back to the sender.
 The temporary preview pane uses `allow-passthrough all` so uploads can pass
 through split redraws. This setting ends when the preview pane closes.
 Image positions use ordinary text cells, so tmux can redraw them after window
 switches and resize. After attaching from a new terminal, run the image
-command again to populate that terminal's image cache. Nested multiplexers
-remain unverified.
+command again to populate that terminal's image cache. Up to three nested
+tmux layers are covered by PTY tests. Each layer must allow passthrough.
 
 Over SSH, run a compatible sender on the remote machine. Image bytes travel
 through the terminal connection; Cryptty never reads remote file paths.
-An actual SSH session remains a separate acceptance check.
+An SSH sender also probes through tmux on the local machine, even when
+`TMUX` is unset remotely. Enable passthrough in the local SSH pane with
+`tmux set -p allow-passthrough on` before connecting. The remote sender
+cannot configure that local tmux server. Direct SSH commands need a PTY:
+`ssh -t HOST cryptty image picture.png`.
 
 ## Protocol scope
 
