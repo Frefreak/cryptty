@@ -164,6 +164,13 @@ fn recognize(
         }
         start = end;
     }
+    candidates.retain(|candidate| {
+        !line.glyphs.iter().any(|glyph| {
+            glyph.style.hidden
+                && glyph.bytes.start < candidate.range.end
+                && glyph.bytes.end > candidate.range.start
+        })
+    });
     resolve(candidates, options.overlap_max.get())
         .into_iter()
         .filter_map(|candidate| target(line, candidate.range))
@@ -389,6 +396,10 @@ fn location_suffix(text: &str) -> usize {
 }
 
 fn resolve(mut candidates: Vec<Candidate>, max: usize) -> Vec<Candidate> {
+    candidates.sort_by_key(|c| {
+        (c.range.start, std::cmp::Reverse(c.range.len()), c.kind)
+    });
+    candidates.dedup_by_key(|c| c.range.start);
     candidates.sort_by_key(|c| {
         (c.kind, c.range.start, std::cmp::Reverse(c.range.len()))
     });

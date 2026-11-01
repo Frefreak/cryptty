@@ -154,7 +154,7 @@ fn gpu_pixels_match_software_across_resize_and_font_changes() {
         terminal.feed(row.as_bytes());
         terminal.feed(b"\r\n");
     }
-    terminal.feed(b"\r\n\x1b[32m/tmp/app\x1b[0m --check\x1b[12;3H");
+    terminal.feed(b"\r\n\x1b[32mcat\x1b[0m /tmp/app --check\x1b[12;3H");
     let mut image_bytes = Vec::new();
     crate::graphics::sender::emit(
         &mut image_bytes,

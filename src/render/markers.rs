@@ -7,6 +7,7 @@ use super::{Renderer, font};
 use crate::marker::Target;
 
 const ER_INK: u32 = 0x232323;
+const ER_GRAY_60: u32 = 0x7b7b7b;
 const CLIP_CORNER: usize = 1;
 
 #[derive(Clone, Copy)]
@@ -78,7 +79,7 @@ impl Renderer {
         }
     }
 
-    pub(super) fn marker_rects(&mut self, size: (usize, usize)) -> Vec<Rect> {
+    pub(super) fn marker_rects(&mut self, _size: (usize, usize)) -> Vec<Rect> {
         if self.markers.targets.is_empty() {
             return Vec::new();
         }
@@ -89,7 +90,7 @@ impl Renderer {
                 "DejaVu Sans Mono"
             };
             self.markers.font = font::Rasterizer::new(
-                (self.cell_height as f32 * 0.56).max(9.0),
+                (self.cell_height as f32 * 0.48).max(8.0),
                 false,
                 family,
                 &[],
@@ -108,46 +109,33 @@ impl Renderer {
             .round() as u8;
         let padding = (font.cell_height / 5).max(2);
         let height = font.cell_height + padding * 2;
-        let size = (
-            size.0.saturating_sub(self.padding.0),
-            size.1.saturating_sub(self.padding.1),
-        );
         let mut rects = Vec::new();
         let mut badges = Vec::new();
-        let mut occupied = Vec::new();
         for target in &self.markers.targets {
             let lane = self.markers.lanes[&target.label];
             let color = lane_color(lane, &self.markers.options);
-            let stroke = 2.min(self.cell_height);
-            let offset = (lane * (stroke + 2))
-                .min(self.cell_height.saturating_sub(stroke));
             for segment in &target.segments {
                 let x = self.padding.0 + segment.start.col * self.cell_width;
                 let y = self.padding.1 + segment.start.row * self.cell_height;
                 let width = segment.columns * self.cell_width;
-                let bottom = y + self.cell_height - stroke - offset;
-                let tick = (bottom - y + stroke).min(6);
+                let bottom = y + self.cell_height - 1;
+                let tick = self.cell_height.min(4);
                 rects.push(Rect {
-                    bounds: [x, bottom, width, stroke],
+                    bounds: [x, bottom, width, 1],
+                    color,
+                    alpha: indicator_alpha,
+                });
+                rects.push(Rect {
+                    bounds: [x, bottom + 1 - tick, 1, tick.saturating_sub(1)],
                     color,
                     alpha: indicator_alpha,
                 });
                 rects.push(Rect {
                     bounds: [
-                        x,
-                        bottom + stroke - tick,
-                        stroke.min(width),
-                        tick,
-                    ],
-                    color,
-                    alpha: indicator_alpha,
-                });
-                rects.push(Rect {
-                    bounds: [
-                        x + width - stroke.min(width),
-                        bottom + stroke - tick,
-                        stroke.min(width),
-                        tick,
+                        x + width - 1,
+                        bottom + 1 - tick,
+                        1,
+                        tick.saturating_sub(1),
                     ],
                     color,
                     alpha: indicator_alpha,
@@ -161,35 +149,26 @@ impl Renderer {
                 self.padding.0 + segment.start.col * self.cell_width,
                 self.padding.1 + segment.start.row * self.cell_height,
             );
-            let bounds = place(anchor, (width, height), size, &occupied);
-            occupied.push(bounds);
-            // Route connectors beside the text to the matching underline.
+            let bounds = place(anchor, (width, height));
             let center = (bounds[0] + width / 2, bounds[1] + height / 2);
-            let stem = anchor.0.saturating_sub(3 + lane * 3);
-            let underline = anchor.1 + self.cell_height - stroke - offset;
             rects.push(Rect {
                 bounds: [
-                    stem.min(center.0),
-                    center.1,
-                    stem.abs_diff(center.0) + stroke,
-                    stroke,
+                    anchor.0.min(center.0),
+                    anchor.1,
+                    anchor.0.abs_diff(center.0) + 1,
+                    1,
                 ],
-                color,
+                color: ER_GRAY_60,
                 alpha: indicator_alpha,
             });
             rects.push(Rect {
                 bounds: [
-                    stem,
-                    underline.min(center.1),
-                    stroke,
-                    underline.abs_diff(center.1) + stroke,
+                    center.0,
+                    anchor.1.min(center.1) + usize::from(center.1 > anchor.1),
+                    1,
+                    anchor.1.abs_diff(center.1),
                 ],
-                color,
-                alpha: indicator_alpha,
-            });
-            rects.push(Rect {
-                bounds: [stem, underline, anchor.0 - stem + stroke, stroke],
-                color,
+                color: ER_GRAY_60,
                 alpha: indicator_alpha,
             });
             stepped(&mut badges, bounds, color, label_alpha);
@@ -271,49 +250,13 @@ fn targets_overlap(a: &Target, b: &Target) -> bool {
     })
 }
 
-fn place(
-    anchor: (usize, usize),
-    badge: (usize, usize),
-    size: (usize, usize),
-    occupied: &[[usize; 4]],
-) -> [usize; 4] {
-    let x = anchor.0.min(size.0.saturating_sub(badge.0));
-    let y = anchor
-        .1
-        .saturating_sub(badge.1 + 2)
-        .min(size.1.saturating_sub(badge.1));
-    let first = [x, y, badge.0, badge.1];
-    // Search nearest horizontal lanes, then adjacent rows.
-    let step_x = badge.0 + 3;
-    let step_y = badge.1 + 3;
-    for row in 0..=size.1 / step_y {
-        for direction in [1isize, -1] {
-            let top = y as isize + direction * (row * step_y) as isize;
-            if top < 0 || top as usize + badge.1 > size.1 {
-                continue;
-            }
-            for column in 0..=size.0 / step_x {
-                for side in [1isize, -1] {
-                    let left = x as isize + side * (column * step_x) as isize;
-                    if left < 0 || left as usize + badge.0 > size.0 {
-                        continue;
-                    }
-                    let rect = [left as usize, top as usize, badge.0, badge.1];
-                    if occupied.iter().all(|other| !intersects(rect, *other)) {
-                        return rect;
-                    }
-                }
-            }
-        }
-    }
-    first
-}
-
-fn intersects(a: [usize; 4], b: [usize; 4]) -> bool {
-    a[0] < b[0] + b[2] + 2
-        && b[0] < a[0] + a[2] + 2
-        && a[1] < b[1] + b[3] + 2
-        && b[1] < a[1] + a[3] + 2
+fn place(anchor: (usize, usize), badge: (usize, usize)) -> [usize; 4] {
+    [
+        anchor.0,
+        anchor.1.saturating_sub(badge.1 / 2),
+        badge.0,
+        badge.1,
+    ]
 }
 
 fn stepped(rects: &mut Vec<Rect>, rect: [usize; 4], color: u32, alpha: u8) {
@@ -417,15 +360,11 @@ mod tests {
     }
 
     #[test]
-    fn overlapping_anchors_receive_separate_visible_badges() {
-        let mut occupied = Vec::new();
-        for anchor in [(10, 10), (10, 10), (35, 10), (490, 290)] {
-            let rect = place(anchor, (32, 24), (500, 300), &occupied);
-            assert!(rect[0] + rect[2] <= 500);
-            assert!(rect[1] + rect[3] <= 300);
-            assert!(occupied.iter().all(|other| !intersects(rect, *other)));
-            occupied.push(rect);
-        }
+    fn badges_stay_at_their_start_even_when_overlapping_or_near_edges() {
+        assert_eq!(place((10, 40), (32, 24)), [10, 28, 32, 24]);
+        assert_eq!(place((15, 40), (32, 24)), [15, 28, 32, 24]);
+        assert_eq!(place((490, 290), (32, 24)), [490, 278, 32, 24]);
+        assert_eq!(place((0, 0), (32, 24)), [0, 0, 32, 24]);
     }
 
     #[test]
@@ -446,10 +385,10 @@ mod tests {
     }
 
     #[test]
-    fn nested_targets_have_matching_colors_and_separate_underlines() {
+    fn nested_targets_have_matching_colors_and_stable_rendering() {
         let mut renderer = Renderer::new(19.0).unwrap();
         let mut terminal = Terminal::new(80, 4);
-        terminal.feed(b"\r\nRan \x1b[32m/tmp/cryptty\x1b[0m --renderer gpu");
+        terminal.feed(b"\r\nRan \x1b[32mcat\x1b[0m /tmp/cryptty --number");
         let targets = marker::Session::new(
             terminal.visible_snapshot(),
             Vec::new(),
@@ -457,7 +396,7 @@ mod tests {
         )
         .visible_targets();
         assert_eq!(targets.len(), 2);
-        assert_eq!(targets[0].segments[0].start, targets[1].segments[0].start);
+        assert_ne!(targets[0].segments[0].start, targets[1].segments[0].start);
         renderer.set_markers(targets.clone());
         let size = (renderer.cell_width * 80, renderer.cell_height * 4);
         let rects = renderer.marker_rects(size);
@@ -469,14 +408,13 @@ mod tests {
             let segment = &target.segments[0];
             let y = renderer.padding.1
                 + (segment.start.row + 1) * renderer.cell_height
-                - 2
-                - index * 4;
+                - 1;
             let x =
                 renderer.padding.0 + segment.start.col * renderer.cell_width;
             assert!(rects.iter().any(|rect| {
                 rect.color == colors[index]
                     && rect.bounds
-                        == [x, y, segment.columns * renderer.cell_width, 2]
+                        == [x, y, segment.columns * renderer.cell_width, 1]
             }));
             assert!(rects.iter().any(|rect| {
                 rect.color == colors[index]

@@ -400,6 +400,11 @@ programs. Bare commands without options, such as `git status`, need a
 prompt to qualify; prose resembling a command can also match. Complete
 commands take priority over styled fragments, while embedded paths and
 URLs remain available within the overlap limit.
+Targets starting at the same position share one marker for the longest
+range. Targets with different starts can retain separate markers.
+Labels stay anchored at each target's start, even when badges overlap;
+nearby targets and label filtering do not move them. Badges at the right
+edge are clipped to the viewport rather than shifted away from the start.
 
 Paths omit a trailing `:line:column` when
 copied. Recognition examines visible text on demand without filesystem
@@ -427,7 +432,7 @@ markers:
 Colors accept quoted `#RRGGBB` or `0xRRGGBB` values. The base color defaults
 to `#fef991`; overlapping targets use `accent_colors` in order, cycling
 when needed. The defaults appear above. An empty accent list uses the base
-color for every target. Each badge, connector, and range indicator shares
+color for every target. Each badge and range indicator shares
 one color; label text switches between dark and white for contrast.
 `label_embolden` expands label strokes by `0.0` to `1.0`
 physical pixels on Linux and macOS (default `0.3`). Fractional values such

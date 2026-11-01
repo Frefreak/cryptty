@@ -71,6 +71,40 @@ fn command_markers_join_colors_and_soft_wrapped_rows() {
 }
 
 #[test]
+fn same_start_keeps_longest_target_and_other_starts_remain_available() {
+    for cols in [18, 100] {
+        let command = "/tmp/cryptty --renderer gpu -- /bin/sh";
+        let mut s = session(
+            "\x1b[32m/tmp/cryptty\x1b[0m --renderer gpu -- /bin/sh",
+            cols,
+            8,
+            Options::default(),
+        );
+        assert_eq!(texts(&s), vec![command, "/bin/sh"]);
+        let label = s.targets[0].label.clone();
+        let mut action = Action::Stay;
+        for ch in label.chars() {
+            action = s.key(Key::Char(ch));
+        }
+        assert!(matches!(action, Action::Copy(text) if text == command));
+    }
+    let s = session(
+        "\x1b[1m./file.rs some explanation\x1b[0m",
+        80,
+        3,
+        Options::default(),
+    );
+    assert_eq!(texts(&s), vec!["./file.rs some explanation"]);
+    let s = session(
+        "\x1b[1m./file.rs\x1b[0m\x1b[8m/secret\x1b[0m",
+        80,
+        3,
+        Options::default(),
+    );
+    assert_eq!(texts(&s), vec!["./file.rs"]);
+}
+
+#[test]
 fn command_marker_suppresses_styled_fragments_but_keeps_paths() {
     let s = session(
         "\x1b[32mcat\x1b[0m \x1b[33m--number\x1b[0m src/main.rs",
