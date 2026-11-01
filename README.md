@@ -418,13 +418,18 @@ Marker label weight, background color, and opacity can be adjusted:
 ```yaml
 markers:
   label_background: '#e8dca0'
+  accent_colors: ['#70c9ff', '#ff9fce', '#a6e89a']
   label_embolden: 0.3
   label_opacity: 0.8
   indicator_opacity: 0.85
 ```
 
-The background accepts quoted `#RRGGBB` or `0xRRGGBB` colors; its default
-is `#fef991`. `label_embolden` expands label strokes by `0.0` to `1.0`
+Colors accept quoted `#RRGGBB` or `0xRRGGBB` values. The base color defaults
+to `#fef991`; overlapping targets use `accent_colors` in order, cycling
+when needed. The defaults appear above. An empty accent list uses the base
+color for every target. Each badge, connector, and range indicator shares
+one color; label text switches between dark and white for contrast.
+`label_embolden` expands label strokes by `0.0` to `1.0`
 physical pixels on Linux and macOS (default `0.3`). Fractional values such
 as `0.2` give a subtle increase; larger values give thicker strokes.
 Thickening applies to glyph outlines before rasterization.

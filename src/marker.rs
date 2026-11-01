@@ -14,6 +14,7 @@ mod tests;
 #[serde(default, deny_unknown_fields)]
 pub struct Options {
     pub label_background: crate::config::Color,
+    pub accent_colors: Vec<crate::config::Color>,
     pub label_embolden: crate::config::FontEmbolden,
     pub label_opacity: crate::config::Opacity,
     pub indicator_opacity: crate::config::Opacity,
@@ -26,6 +27,9 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             label_background: crate::config::Color(0xfef991),
+            accent_colors: [0x70c9ff, 0xff9fce, 0xa6e89a]
+                .map(crate::config::Color)
+                .to_vec(),
             label_embolden: 0.3.try_into().unwrap(),
             label_opacity: 0.8.try_into().unwrap(),
             indicator_opacity: 0.85.try_into().unwrap(),

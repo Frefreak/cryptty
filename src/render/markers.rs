@@ -6,9 +6,7 @@ use swash::scale::image::{Content, Image};
 use super::{Renderer, font};
 use crate::marker::Target;
 
-const ER_YELLOW: u32 = 0xfef991;
 const ER_INK: u32 = 0x232323;
-const ER_GRAY_60: u32 = 0x7b7b7b;
 const CLIP_CORNER: usize = 1;
 
 #[derive(Clone, Copy)]
@@ -24,6 +22,7 @@ pub(super) struct Markers {
     options: crate::marker::Options,
     font: Option<font::Rasterizer>,
     glyphs: HashMap<char, Image>,
+    lanes: HashMap<String, usize>,
 }
 
 impl Markers {
@@ -45,8 +44,10 @@ impl Renderer {
             || self.markers.options.indicator_opacity
                 != options.indicator_opacity
             || self.markers.options.label_background != options.label_background
+            || self.markers.options.accent_colors != options.accent_colors
         {
             self.markers.options.label_background = options.label_background;
+            self.markers.options.accent_colors = options.accent_colors.clone();
             self.markers.options.label_opacity = options.label_opacity;
             self.markers.options.indicator_opacity = options.indicator_opacity;
             self.invalidate();
@@ -55,6 +56,23 @@ impl Renderer {
 
     pub fn set_markers(&mut self, targets: Vec<Target>) {
         if self.markers.targets != targets {
+            if targets.is_empty() {
+                self.markers.lanes.clear();
+            }
+            for (index, target) in targets.iter().enumerate() {
+                if self.markers.lanes.contains_key(&target.label) {
+                    continue;
+                }
+                let lane = (0..)
+                    .find(|lane| {
+                        targets[..index].iter().all(|other| {
+                            self.markers.lanes.get(&other.label) != Some(lane)
+                                || !targets_overlap(target, other)
+                        })
+                    })
+                    .unwrap();
+                self.markers.lanes.insert(target.label.clone(), lane);
+            }
             self.markers.targets = targets;
             self.invalidate();
         }
@@ -71,7 +89,7 @@ impl Renderer {
                 "DejaVu Sans Mono"
             };
             self.markers.font = font::Rasterizer::new(
-                (self.cell_height as f32 * 0.48).max(8.0),
+                (self.cell_height as f32 * 0.56).max(9.0),
                 false,
                 family,
                 &[],
@@ -98,38 +116,38 @@ impl Renderer {
         let mut badges = Vec::new();
         let mut occupied = Vec::new();
         for target in &self.markers.targets {
+            let lane = self.markers.lanes[&target.label];
+            let color = lane_color(lane, &self.markers.options);
+            let stroke = 2.min(self.cell_height);
+            let offset = (lane * (stroke + 2))
+                .min(self.cell_height.saturating_sub(stroke));
             for segment in &target.segments {
                 let x = self.padding.0 + segment.start.col * self.cell_width;
                 let y = self.padding.1 + segment.start.row * self.cell_height;
                 let width = segment.columns * self.cell_width;
-                let color = ER_YELLOW;
-                let tick = self.cell_height.min(4);
+                let bottom = y + self.cell_height - stroke - offset;
+                let tick = (bottom - y + stroke).min(6);
                 rects.push(Rect {
-                    bounds: [
-                        x,
-                        y + self.cell_height.saturating_sub(1),
-                        width,
-                        1,
-                    ],
+                    bounds: [x, bottom, width, stroke],
                     color,
                     alpha: indicator_alpha,
                 });
                 rects.push(Rect {
                     bounds: [
                         x,
-                        y + self.cell_height - tick,
-                        1,
-                        tick.saturating_sub(1),
+                        bottom + stroke - tick,
+                        stroke.min(width),
+                        tick,
                     ],
                     color,
                     alpha: indicator_alpha,
                 });
                 rects.push(Rect {
                     bounds: [
-                        x + width - 1,
-                        y + self.cell_height - tick,
-                        1,
-                        tick.saturating_sub(1),
+                        x + width - stroke.min(width),
+                        bottom + stroke - tick,
+                        stroke.min(width),
+                        tick,
                     ],
                     color,
                     alpha: indicator_alpha,
@@ -145,34 +163,36 @@ impl Renderer {
             );
             let bounds = place(anchor, (width, height), size, &occupied);
             occupied.push(bounds);
-            // Connector keeps displaced badges attached to their text range.
+            // Route connectors beside the text to the matching underline.
             let center = (bounds[0] + width / 2, bounds[1] + height / 2);
+            let stem = anchor.0.saturating_sub(3 + lane * 3);
+            let underline = anchor.1 + self.cell_height - stroke - offset;
             rects.push(Rect {
                 bounds: [
-                    anchor.0.min(center.0),
-                    anchor.1,
-                    anchor.0.abs_diff(center.0) + 1,
-                    1,
+                    stem.min(center.0),
+                    center.1,
+                    stem.abs_diff(center.0) + stroke,
+                    stroke,
                 ],
-                color: ER_GRAY_60,
+                color,
                 alpha: indicator_alpha,
             });
             rects.push(Rect {
                 bounds: [
-                    center.0,
-                    anchor.1.min(center.1) + usize::from(center.1 > anchor.1),
-                    1,
-                    anchor.1.abs_diff(center.1),
+                    stem,
+                    underline.min(center.1),
+                    stroke,
+                    underline.abs_diff(center.1) + stroke,
                 ],
-                color: ER_GRAY_60,
+                color,
                 alpha: indicator_alpha,
             });
-            stepped(
-                &mut badges,
-                bounds,
-                self.markers.options.label_background.0,
-                label_alpha,
-            );
+            rects.push(Rect {
+                bounds: [stem, underline, anchor.0 - stem + stroke, stroke],
+                color,
+                alpha: indicator_alpha,
+            });
+            stepped(&mut badges, bounds, color, label_alpha);
             for (index, ch) in target.label.chars().enumerate() {
                 if !self.markers.glyphs.contains_key(&ch)
                     && let Some(image) = font.rasterize_label(
@@ -191,6 +211,7 @@ impl Renderer {
                             bounds[1] + padding,
                         ),
                         font.baseline,
+                        label_ink(color),
                     );
                 }
             }
@@ -198,6 +219,56 @@ impl Renderer {
         rects.extend(badges);
         rects
     }
+}
+
+fn lane_color(lane: usize, options: &crate::marker::Options) -> u32 {
+    let base = options.label_background.0;
+    std::iter::once(base)
+        .chain(
+            options
+                .accent_colors
+                .iter()
+                .map(|color| color.0)
+                .filter(|&color| color != base),
+        )
+        .cycle()
+        .nth(lane)
+        .unwrap()
+}
+
+fn label_ink(background: u32) -> u32 {
+    let luminance = |color: u32| {
+        [(16, 0.2126), (8, 0.7152), (0, 0.0722)]
+            .into_iter()
+            .map(|(shift, weight)| {
+                let channel = ((color >> shift) & 255) as f32 / 255.0;
+                let linear = if channel <= 0.04045 {
+                    channel / 12.92
+                } else {
+                    ((channel + 0.055) / 1.055).powf(2.4)
+                };
+                linear * weight
+            })
+            .sum::<f32>()
+    };
+    let background = luminance(background) + 0.05;
+    let ink = luminance(ER_INK) + 0.05;
+    let dark_contrast = background.max(ink) / background.min(ink);
+    if 1.05 / background > dark_contrast {
+        0xffffff
+    } else {
+        ER_INK
+    }
+}
+
+fn targets_overlap(a: &Target, b: &Target) -> bool {
+    a.segments.iter().any(|a| {
+        b.segments.iter().any(|b| {
+            a.start.row == b.start.row
+                && a.start.col < b.start.col + b.columns
+                && b.start.col < a.start.col + a.columns
+        })
+    })
 }
 
 fn place(
@@ -209,7 +280,7 @@ fn place(
     let x = anchor.0.min(size.0.saturating_sub(badge.0));
     let y = anchor
         .1
-        .saturating_sub(badge.1 / 2)
+        .saturating_sub(badge.1 + 2)
         .min(size.1.saturating_sub(badge.1));
     let first = [x, y, badge.0, badge.1];
     // Search nearest horizontal lanes, then adjacent rows.
@@ -273,6 +344,7 @@ fn glyph_rects(
     image: &Image,
     origin: (usize, usize),
     baseline: i32,
+    color: u32,
 ) {
     let p = image.placement;
     for y in 0..p.height as usize {
@@ -288,7 +360,7 @@ fn glyph_rects(
             if left >= 0 && top >= 0 {
                 rects.push(Rect {
                     bounds: [left as usize, top as usize, 1, 1],
-                    color: ER_INK,
+                    color,
                     alpha: alpha as u8,
                 });
             }
@@ -354,6 +426,88 @@ mod tests {
             assert!(occupied.iter().all(|other| !intersects(rect, *other)));
             occupied.push(rect);
         }
+    }
+
+    #[test]
+    fn custom_background_does_not_duplicate_the_next_accent() {
+        let mut options = crate::marker::Options::default();
+        for base in options.accent_colors.clone() {
+            options.label_background = base;
+            assert_eq!(lane_color(0, &options), base.0);
+            assert_ne!(lane_color(1, &options), base.0);
+            assert_ne!(lane_color(2, &options), base.0);
+            assert_ne!(lane_color(1, &options), lane_color(2, &options));
+        }
+        options.accent_colors.clear();
+        assert_eq!(lane_color(12, &options), options.label_background.0);
+        assert_eq!(label_ink(0x101020), 0xffffff);
+        assert_eq!(label_ink(0xfef991), ER_INK);
+        assert_eq!(label_ink(0x00b000), ER_INK);
+    }
+
+    #[test]
+    fn nested_targets_have_matching_colors_and_separate_underlines() {
+        let mut renderer = Renderer::new(19.0).unwrap();
+        let mut terminal = Terminal::new(80, 4);
+        terminal.feed(b"\r\nRan \x1b[32m/tmp/cryptty\x1b[0m --renderer gpu");
+        let targets = marker::Session::new(
+            terminal.visible_snapshot(),
+            Vec::new(),
+            &Default::default(),
+        )
+        .visible_targets();
+        assert_eq!(targets.len(), 2);
+        assert_eq!(targets[0].segments[0].start, targets[1].segments[0].start);
+        renderer.set_markers(targets.clone());
+        let size = (renderer.cell_width * 80, renderer.cell_height * 4);
+        let rects = renderer.marker_rects(size);
+        let colors = [
+            renderer.markers.options.label_background.0,
+            renderer.markers.options.accent_colors[0].0,
+        ];
+        for (index, target) in targets.iter().enumerate() {
+            let segment = &target.segments[0];
+            let y = renderer.padding.1
+                + (segment.start.row + 1) * renderer.cell_height
+                - 2
+                - index * 4;
+            let x =
+                renderer.padding.0 + segment.start.col * renderer.cell_width;
+            assert!(rects.iter().any(|rect| {
+                rect.color == colors[index]
+                    && rect.bounds
+                        == [x, y, segment.columns * renderer.cell_width, 2]
+            }));
+            assert!(rects.iter().any(|rect| {
+                rect.color == colors[index]
+                    && rect.bounds[1] < y
+                    && rect.alpha
+                        == (renderer.markers.options.label_opacity.get()
+                            * 255.0)
+                            .round() as u8
+                    && rect.bounds[2] > 1
+            }));
+        }
+        let lanes = renderer.markers.lanes.clone();
+        renderer.set_markers(vec![targets[1].clone()]);
+        assert_eq!(renderer.markers.lanes, lanes);
+        renderer.set_markers(targets);
+        let restored = renderer.marker_rects(size);
+        assert_eq!(rects.len(), restored.len());
+        for (a, b) in rects.iter().zip(restored) {
+            assert_eq!(
+                (a.bounds, a.color, a.alpha),
+                (b.bounds, b.color, b.alpha)
+            );
+        }
+        let mut options = renderer.markers.options.clone();
+        options.accent_colors = vec![crate::config::Color(0x183050)];
+        renderer.set_marker_options(&options);
+        let recolored = renderer.marker_rects(size);
+        assert!(recolored.iter().any(|rect| rect.color == 0x183050));
+        assert!(!recolored.iter().any(|rect| rect.color == colors[1]));
+        renderer.set_markers(Vec::new());
+        assert!(renderer.markers.lanes.is_empty());
     }
 
     #[test]

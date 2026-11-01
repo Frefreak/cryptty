@@ -32,8 +32,10 @@ keyboard:
       modifiers: [Control, Shift]
       action: MarkerMode
 markers:
-  # Label badge background, in '#RRGGBB' or '0xRRGGBB' format.
+  # Base badge and indicator color, in '#RRGGBB' or '0xRRGGBB' format.
   label_background: '#fef991'
+  # Badge and indicator colors for overlapping targets; [] uses the base.
+  accent_colors: ['#70c9ff', '#ff9fce', '#a6e89a']
   # Expand label strokes by 0 to 1 physical pixels on Linux and macOS.
   label_embolden: 0.3
   # Opacity from 0 (transparent) to 1 (opaque); label text stays opaque.

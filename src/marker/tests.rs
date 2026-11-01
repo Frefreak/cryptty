@@ -92,6 +92,158 @@ fn command_marker_suppresses_styled_fragments_but_keeps_paths() {
 }
 
 #[test]
+fn command_markers_use_structure_without_command_names() {
+    for text in [
+        "sudo dnf upgrade 'kf6-*' 'qt6-*' 'plasma-*' 'kwin*' kdecoration sddm",
+        "widget collect '*.log'",
+        "widget collect *.log",
+        "widget collect|gadget consume",
+        "widget|gadget",
+        "widget>result",
+        "widget; gadget",
+        "widget&&gadget",
+        "widget collect > result",
+        "widget collect < input",
+        "widget collect && gadget consume",
+        "widget collect; gadget consume",
+    ] {
+        for cols in [18, 100] {
+            let mut s = session(text, cols, 10, Options::default());
+            let target = s
+                .targets
+                .iter()
+                .find(|t| t.text == text)
+                .unwrap_or_else(|| panic!("missing command: {text}"))
+                .clone();
+            let mut action = Action::Stay;
+            for ch in target.label.chars() {
+                action = s.key(Key::Char(ch));
+            }
+            assert!(matches!(action, Action::Copy(copy) if copy == text));
+        }
+    }
+}
+
+#[test]
+fn command_markers_use_leading_token_color() {
+    for (input, expected) in [
+        (
+            "\x1b[35mand \x1b[32msudo\x1b[0m systemctl restart sddm",
+            "and sudo systemctl restart sddm",
+        ),
+        (
+            "\x1b[32mwidget\x1b[0m collect records",
+            "widget collect records",
+        ),
+    ] {
+        for cols in [18, 100] {
+            let s = session(input, cols, 10, Options::default());
+            assert_eq!(texts(&s), vec![expected]);
+        }
+    }
+}
+
+#[test]
+fn command_structure_ignores_literal_operators_and_plain_phrases() {
+    for text in [
+        "widget 'a | b'",
+        "widget \"a > b\"",
+        "widget a\\|b",
+        "widget 'a && b'",
+        "widget 'a; b'",
+        "widget '*'",
+        "widget 'some * words'",
+        "please read the instructions",
+        "systemctl restart sddm",
+        "and sudo systemctl restart sddm",
+        "widget collect |",
+        "widget collect >",
+        "widget '*.log",
+    ] {
+        let s = session(text, 100, 3, Options::default());
+        assert!(texts(&s).is_empty(), "unexpected target: {text}");
+    }
+}
+
+#[test]
+fn commands_after_prefixes_copy_the_chain_without_styled_fragments() {
+    let command = concat!(
+        "\x1b[32mcat\x1b[0m Makefile; ",
+        "\x1b[32mcat\x1b[0m scripts/build-pgo; ",
+        "\x1b[32mmake\x1b[0m help; ",
+        "\x1b[32mmake\x1b[0m \x1b[33m-n\x1b[0m install-pgo ",
+        "PREFIX=\x1b[33m'/tmp/cryptty prefix'\x1b[0m; ",
+        "\x1b[32mcargo\x1b[0m fmt \x1b[33m--check\x1b[0m; ",
+        "\x1b[32mgit\x1b[0m diff \x1b[33m--check\x1b[0m",
+    );
+    let expected = "cat Makefile; cat scripts/build-pgo; make help; \
+        make -n install-pgo PREFIX='/tmp/cryptty prefix'; \
+        cargo fmt --check; git diff --check";
+    for prefix in ["Ran ", "Running ", "Preview: ", "└ ", "执行： "] {
+        for cols in [40, 240] {
+            let mut s = session(
+                &format!("\x1b[1m{prefix}\x1b[0m{command}"),
+                cols,
+                10,
+                Options::default(),
+            );
+            let target = s
+                .targets
+                .iter()
+                .find(|t| t.text == expected)
+                .expect("command without prefix")
+                .clone();
+            for fragment in ["cargo", "--check", "-n"] {
+                assert!(!texts(&s).contains(&fragment));
+            }
+            assert!(texts(&s).contains(&"scripts/build-pgo"));
+            let mut action = Action::Stay;
+            for ch in target.label.chars() {
+                action = s.key(Key::Char(ch));
+            }
+            assert!(matches!(action, Action::Copy(copy) if copy == expected));
+        }
+    }
+}
+
+#[test]
+fn prefixed_commands_require_a_highlighted_leading_token() {
+    for input in [
+        "Running \x1b[32mwidget\x1b[0m collect records",
+        "Preview: \x1b[32mwidget\x1b[0m collect records",
+    ] {
+        let s = session(input, 80, 3, Options::default());
+        assert!(texts(&s).contains(&"widget collect records"));
+    }
+    for input in [
+        "Run widget collect --all",
+        "Read \x1b[34mthe instructions\x1b[0m carefully",
+        "Note \x1b[33m--check\x1b[0m is an option",
+    ] {
+        let s = session(input, 80, 3, Options::default());
+        assert!(!s.targets.iter().any(|t| {
+            t.text.ends_with("--all")
+                || t.text.ends_with("carefully")
+                || t.text.ends_with("is an option")
+        }));
+    }
+}
+
+#[test]
+fn prefixed_commands_keep_compact_operators() {
+    for (input, expected) in [
+        ("Ran \x1b[32mwidget\x1b[0m|gadget", "widget|gadget"),
+        (
+            "Ran \x1b[32mcat\x1b[0m; \x1b[32mmake\x1b[0m help",
+            "cat; make help",
+        ),
+    ] {
+        let s = session(input, 80, 3, Options::default());
+        assert_eq!(texts(&s), vec![expected]);
+    }
+}
+
+#[test]
 fn command_detection_avoids_common_prose_and_incomplete_quotes() {
     for text in [
         "Run brew list --versions pinentry",
@@ -383,6 +535,30 @@ fn marker_background_uses_existing_color_format() {
             .is_err()
         );
     }
+}
+
+#[test]
+fn marker_accents_accept_custom_and_empty_palettes() {
+    let config = crate::config::Config::parse(
+        "markers: {accent_colors: ['#102030', '0xaabbcc']}",
+    )
+    .unwrap();
+    assert_eq!(
+        config
+            .markers
+            .accent_colors
+            .iter()
+            .map(|c| c.0)
+            .collect::<Vec<_>>(),
+        vec![0x102030, 0xaabbcc]
+    );
+    let config =
+        crate::config::Config::parse("markers: {accent_colors: []}").unwrap();
+    assert!(config.markers.accent_colors.is_empty());
+    assert!(
+        crate::config::Config::parse("markers: {accent_colors: ['invalid']}",)
+            .is_err()
+    );
 }
 
 #[test]

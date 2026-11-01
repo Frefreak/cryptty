@@ -90,7 +90,7 @@ fn recognize(
     options: &Options,
 ) -> Vec<Target> {
     let mut candidates = Vec::new();
-    if let Some(range) = command_range(&line.text)
+    if let Some(range) = command_range(line, display)
         && !line.glyphs.iter().any(|glyph| {
             glyph.bytes.start < range.end
                 && glyph.bytes.end > range.start
@@ -170,14 +170,50 @@ fn recognize(
         .collect()
 }
 
-fn command_range(text: &str) -> Option<Range<usize>> {
-    let trimmed = text.trim();
+fn command_range(line: &Line, display: &Terminal) -> Option<Range<usize>> {
+    if let Some(range) = command_from(line, display, 0, false) {
+        return Some(range);
+    }
+    let mut previous_color = None;
+    for glyph in &line.glyphs {
+        if line.text[glyph.bytes.clone()].trim().is_empty() {
+            continue;
+        }
+        let color = display.color(glyph.style.fg);
+        let begins_color = previous_color != Some(color);
+        previous_color = Some(color);
+        if !begins_color || color == display.color(Color::Foreground) {
+            continue;
+        }
+        let start = glyph.bytes.start;
+        let boundary = line.text[..start]
+            .chars()
+            .next_back()
+            .is_some_and(char::is_whitespace);
+        if boundary
+            && let Some(range) = command_from(line, display, start, true)
+        {
+            return Some(range);
+        }
+    }
+    None
+}
+
+fn command_from(
+    line: &Line,
+    display: &Terminal,
+    offset: usize,
+    require_highlight: bool,
+) -> Option<Range<usize>> {
+    let text = &line.text;
+    let suffix = &text[offset..];
+    let trimmed = suffix.trim();
     let (command, prompted) = match trimmed.strip_prefix("$ ") {
         Some(command) => (command.trim_start(), true),
         None => (trimmed, false),
     };
     let words = shell_words::split(command).ok()?;
-    let executable = words.first()?;
+    let executable = words.first()?.split(['|', '<', '>', ';', '&']).next()?;
     let name = executable.rsplit('/').next()?;
     let executable_like = name.starts_with(|ch: char| ch.is_ascii_lowercase())
         && name.bytes().all(|b| {
@@ -197,12 +233,90 @@ fn command_range(text: &str) -> Option<Range<usize>> {
                 option.starts_with(|ch: char| ch.is_ascii_alphanumeric())
             })
     });
-    if !prompted && !has_option {
+    let start = offset + suffix.len() - suffix.trim_start().len()
+        + trimmed.len()
+        - command.len();
+    let has_glob = words.iter().skip(1).any(|word| {
+        word.contains('*')
+            && word.chars().any(|ch| ch.is_ascii_alphanumeric())
+            && !word.chars().any(char::is_whitespace)
+    });
+    let leading_color = line
+        .glyphs
+        .iter()
+        .find(|glyph| glyph.bytes.start == start)
+        .map(|glyph| display.color(glyph.style.fg));
+    let token_end = start
+        + command
+            .find(|ch: char| {
+                ch.is_whitespace() || matches!(ch, '|' | '<' | '>' | ';' | '&')
+            })
+            .unwrap_or(command.len());
+    let highlighted = token_end < start + command.len()
+        && leading_color.is_some_and(|color| {
+            color != display.color(Color::Foreground)
+                && line
+                    .glyphs
+                    .iter()
+                    .filter(|glyph| {
+                        glyph.bytes.start >= start
+                            && glyph.bytes.start < token_end
+                    })
+                    .all(|glyph| display.color(glyph.style.fg) == color)
+                && line
+                    .glyphs
+                    .iter()
+                    .find(|glyph| {
+                        glyph.bytes.start >= token_end
+                            && !text[glyph.bytes.clone()].trim().is_empty()
+                    })
+                    .is_some_and(|glyph| display.color(glyph.style.fg) != color)
+        });
+    if require_highlight && !highlighted {
         return None;
     }
-    let start =
-        text.len() - text.trim_start().len() + trimmed.len() - command.len();
+    if !prompted
+        && !has_option
+        && !has_glob
+        && !has_shell_operator(command)
+        && !highlighted
+    {
+        return None;
+    }
     Some(start..start + command.len())
+}
+
+fn has_shell_operator(command: &str) -> bool {
+    let mut quote = None;
+    let mut escaped = false;
+    for (index, ch) in command.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        if ch == '\\' && quote != Some('\'') {
+            escaped = true;
+            continue;
+        }
+        if let Some(delimiter) = quote {
+            if ch == delimiter {
+                quote = None;
+            }
+        } else if matches!(ch, '\'' | '"') {
+            quote = Some(ch);
+        } else if matches!(ch, '|' | '<' | '>' | ';')
+            || (ch == '&' && command[index..].starts_with("&&"))
+        {
+            let left = command[..index].trim();
+            let right = command[index..]
+                .trim_start_matches(['|', '<', '>', ';', '&'])
+                .trim();
+            if !left.is_empty() && !right.is_empty() {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn address_boundaries(text: &str, range: &Range<usize>) -> bool {
