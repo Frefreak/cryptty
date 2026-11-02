@@ -110,6 +110,7 @@ impl Renderer {
         let padding = (font.cell_height / 5).max(2);
         let height = font.cell_height + padding * 2;
         let mut rects = Vec::new();
+        let mut highlights = Vec::new();
         let mut badges = Vec::new();
         for target in &self.markers.targets {
             let lane = self.markers.lanes[&target.label];
@@ -118,7 +119,15 @@ impl Renderer {
                 let x = self.padding.0 + segment.start.col * self.cell_width;
                 let y = self.padding.1 + segment.start.row * self.cell_height;
                 let width = segment.columns * self.cell_width;
-                let bottom = y + self.cell_height - 1;
+                if lane == 0 {
+                    highlights.push(Rect {
+                        bounds: [x, y, width, self.cell_height],
+                        color,
+                        alpha: indicator_alpha / 12,
+                    });
+                }
+                let offset = (lane * 4).min(self.cell_height.saturating_sub(4));
+                let bottom = y + self.cell_height - 1 - offset;
                 let tick = self.cell_height.min(4);
                 rects.push(Rect {
                     bounds: [x, bottom, width, 1],
@@ -196,7 +205,8 @@ impl Renderer {
             }
         }
         rects.extend(badges);
-        rects
+        highlights.extend(rects);
+        highlights
     }
 }
 
@@ -404,11 +414,25 @@ mod tests {
             renderer.markers.options.label_background.0,
             renderer.markers.options.accent_colors[0].0,
         ];
+        let command = &targets[0].segments[0];
+        let highlight = &rects[0];
+        assert_eq!(highlight.color, colors[0]);
+        assert_eq!(
+            highlight.bounds,
+            [
+                renderer.padding.0 + command.start.col * renderer.cell_width,
+                renderer.padding.1 + command.start.row * renderer.cell_height,
+                command.columns * renderer.cell_width,
+                renderer.cell_height,
+            ]
+        );
+        assert!(highlight.alpha > 0 && highlight.alpha < 64);
         for (index, target) in targets.iter().enumerate() {
             let segment = &target.segments[0];
             let y = renderer.padding.1
                 + (segment.start.row + 1) * renderer.cell_height
-                - 1;
+                - 1
+                - index * 4;
             let x =
                 renderer.padding.0 + segment.start.col * renderer.cell_width;
             assert!(rects.iter().any(|rect| {

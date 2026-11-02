@@ -37,6 +37,10 @@ fn recognizes_requested_targets_without_plain_prose() {
 fn command_markers_join_colors_and_soft_wrapped_rows() {
     for (input, expected) in [
         (
+            "\x1b[32mcp\x1b[0m /Users/Shared/glass-cli/state.json ~/glass-cli-state.json",
+            "cp /Users/Shared/glass-cli/state.json ~/glass-cli-state.json",
+        ),
+        (
             "\x1b[32mbrew\x1b[0m list \x1b[33m--versions\x1b[0m pinentry pinentry-mac",
             "brew list --versions pinentry pinentry-mac",
         ),
