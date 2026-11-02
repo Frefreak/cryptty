@@ -11,6 +11,92 @@ fn texts(session: &Session) -> Vec<&str> {
 }
 
 #[test]
+fn long_bare_command_names_need_additional_evidence() {
+    let unknown = "unfamiliar-long-command";
+    let history = HashSet::from(["learned-long-command".into()]);
+    let mut options = Options::default();
+    options
+        .known_commands
+        .insert("configured-long-command".into());
+    for (input, expected, accepted) in [
+        (
+            "\x1b[36mgfx.webrender.max-partial-present-rects\x1b[0m 恢复为 1",
+            "gfx.webrender.max-partial-present-rects 恢复为 1",
+            false,
+        ),
+        (
+            "\x1b[36munfamiliar-long-command\x1b[0m argument",
+            "unfamiliar-long-command argument",
+            false,
+        ),
+        (
+            "\x1b[36mgpg-connect-agent\x1b[0m argument",
+            "gpg-connect-agent argument",
+            true,
+        ),
+        (
+            "\x1b[36mconfigured-long-command\x1b[0m argument",
+            "configured-long-command argument",
+            true,
+        ),
+        (
+            "\x1b[36mlearned-long-command\x1b[0m argument",
+            "learned-long-command argument",
+            true,
+        ),
+        (
+            "learned-long-command ordinary prose",
+            "learned-long-command ordinary prose",
+            false,
+        ),
+        (
+            "❯ \x1b[36mlearned-long-command\x1b[0m argument",
+            "learned-long-command argument",
+            true,
+        ),
+        (
+            "❯ \x1b[36m./unfamiliar-long-command\x1b[0m argument",
+            "./unfamiliar-long-command argument",
+            true,
+        ),
+        (
+            "unfamiliar-long-command --option",
+            "unfamiliar-long-command --option",
+            true,
+        ),
+        (
+            "unfamiliar-long-command | next",
+            "unfamiliar-long-command | next",
+            true,
+        ),
+        (
+            "unfamiliar-long-command '*.log'",
+            "unfamiliar-long-command '*.log'",
+            true,
+        ),
+        (
+            "$ unfamiliar-long-command arg",
+            "unfamiliar-long-command arg",
+            true,
+        ),
+        (
+            "\x1b[36munknown-tool\x1b[0m argument",
+            "unknown-tool argument",
+            true,
+        ),
+    ] {
+        let mut terminal = Terminal::new(120, 4);
+        terminal.feed(input.as_bytes());
+        let s = Session::with_history(terminal, Vec::new(), &options, &history);
+        assert_eq!(texts(&s).contains(&expected), accepted, "{input:?}");
+    }
+    let input = format!("\x1b[36m{unknown}\x1b[0m argument");
+    options.command_name_max_length = unknown.len().try_into().unwrap();
+    let s = session(&input, 100, 4, options);
+    assert!(texts(&s).contains(&format!("{unknown} argument").as_str()));
+}
+
+#[test]
 fn colored_path_command_copies_whole_line_after_arbitrary_prefixes() {
     let expected =
         "~/random/jenkins.py ls 服务端/App后端/开发环境/g2-glass-server";

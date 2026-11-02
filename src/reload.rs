@@ -66,6 +66,8 @@ impl View {
         self.font = config.font;
         self.padding = config.window.padding;
         self.keyboard = config.keyboard;
+        self.command_history
+            .configure(&config.markers.command_history);
         self.markers = config.markers;
         self.clear_selection();
         self.refresh_pointer();

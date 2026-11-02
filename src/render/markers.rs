@@ -125,7 +125,6 @@ impl Renderer {
             let bounds = place(
                 anchor,
                 (font.cell_width * target.label.len() + padding * 2, height),
-                self.markers.lanes[&target.label],
                 self.cell_height,
                 size,
             );
@@ -287,20 +286,11 @@ fn targets_overlap(a: &Target, b: &Target) -> bool {
 fn place(
     anchor: (usize, usize),
     badge: (usize, usize),
-    lane: usize,
     cell_height: usize,
     viewport: (usize, usize),
 ) -> [usize; 4] {
-    let distance = (lane / 2 + 1) * badge.1;
-    let above = anchor.1.checked_sub(distance);
-    let below = anchor.1 + cell_height + distance - badge.1;
-    let below = (below + badge.1 <= viewport.1).then_some(below);
-    let y = if lane % 2 == 0 {
-        above.or(below)
-    } else {
-        below.or(above)
-    }
-    .unwrap_or_else(|| anchor.1.min(viewport.1.saturating_sub(badge.1)));
+    let y = (anchor.1 + cell_height.saturating_sub(badge.1) / 2)
+        .min(viewport.1.saturating_sub(badge.1));
     [
         anchor.0.min(viewport.0.saturating_sub(badge.0)),
         y,
@@ -322,25 +312,20 @@ fn avoid_collisions(
     }
     let [x, y, width, height] = preferred;
     let mut xs = vec![x];
-    let mut ys = vec![y];
     for &[left, top, w, h] in occupied {
-        xs.extend([left.saturating_sub(width), left + w]);
-        ys.extend([top.saturating_sub(height), top + h]);
+        if y < top + h && top < y + height {
+            xs.extend([left.saturating_sub(width), left + w]);
+        }
     }
-    xs.retain(|&left| left + width <= viewport.0 && left.abs_diff(x) <= width);
-    ys.retain(|&top| top + height <= viewport.1);
+    xs.retain(|&left| left + width <= viewport.0);
     xs.sort_unstable();
     xs.dedup();
-    ys.sort_unstable();
-    ys.dedup();
-    ys.into_iter()
-        .flat_map(|top| xs.iter().map(move |&left| [left, top, width, height]))
+    xs.into_iter()
+        .map(|left| [left, y, width, height])
         .filter(|bounds| {
             occupied.iter().all(|other| !rects_overlap(*bounds, *other))
         })
-        .min_by_key(|bounds| {
-            (bounds[1].abs_diff(y), bounds[0].abs_diff(x), bounds[0])
-        })
+        .min_by_key(|bounds| (bounds[0].abs_diff(x), bounds[0]))
         .unwrap_or(preferred)
 }
 
@@ -452,40 +437,36 @@ mod tests {
     }
 
     #[test]
-    fn badges_alternate_sides_and_expand_outward() {
-        for (lane, y) in [76, 140, 52, 164].into_iter().enumerate() {
-            assert_eq!(
-                place((10, 100), (32, 24), lane, 40, (500, 300)),
-                [10, y, 32, 24],
-            );
-        }
-    }
-
-    #[test]
-    fn badges_use_available_side_and_stay_inside_viewport() {
-        assert_eq!(place((0, 0), (32, 24), 0, 40, (500, 300)), [0, 40, 32, 24],);
+    fn badges_stay_centered_in_the_target_row() {
         assert_eq!(
-            place((490, 260), (32, 24), 1, 40, (500, 300)),
-            [468, 236, 32, 24],
+            place((10, 100), (32, 24), 40, (500, 300)),
+            [10, 108, 32, 24],
+        );
+        assert_eq!(place((0, 0), (32, 24), 40, (500, 300)), [0, 8, 32, 24]);
+        assert_eq!(
+            place((490, 260), (32, 24), 40, (500, 300)),
+            [468, 268, 32, 24],
         );
     }
 
     #[test]
-    fn badges_avoid_neighbors_and_edge_fallback_collisions() {
+    fn badges_avoid_neighbors_without_leaving_the_target_row() {
         for anchor in [(10, 0), (468, 260), (10, 100)] {
             let mut occupied = Vec::new();
-            for lane in 0..4 {
-                let preferred = place(anchor, (32, 24), lane, 40, (500, 300));
+            for _ in 0..4 {
+                let preferred = place(anchor, (32, 24), 40, (500, 300));
                 let bounds = avoid_collisions(preferred, (500, 300), &occupied);
                 assert!(occupied.iter().all(|b| !rects_overlap(bounds, *b)));
-                assert!(bounds[0].abs_diff(preferred[0]) <= 32);
+                assert_eq!(bounds[1], preferred[1]);
+                assert!(bounds[0] + bounds[2] <= 500);
                 occupied.push(bounds);
             }
         }
-        let first = place((10, 0), (32, 24), 0, 40, (500, 300));
-        let next = place((10, 80), (32, 24), 0, 40, (500, 300));
-        let next = avoid_collisions(next, (500, 300), &[first]);
-        assert!(!rects_overlap(first, next));
+        let preferred = place((0, 0), (32, 24), 40, (32, 80));
+        assert_eq!(
+            avoid_collisions(preferred, (32, 80), &[preferred]),
+            preferred,
+        );
     }
 
     #[test]
@@ -553,11 +534,12 @@ mod tests {
             }));
             assert!(rects.iter().any(|rect| {
                 rect.color == colors[index]
-                    && if index == 0 {
-                        rect.bounds[1] < y
-                    } else {
-                        rect.bounds[1] > y
-                    }
+                    && rect.bounds[1]
+                        >= renderer.padding.1
+                            + segment.start.row * renderer.cell_height
+                    && rect.bounds[1] + rect.bounds[3]
+                        <= renderer.padding.1
+                            + (segment.start.row + 1) * renderer.cell_height
                     && rect.alpha
                         == (renderer.markers.options.label_opacity.get()
                             * 255.0)

@@ -419,6 +419,13 @@ At the start of a trimmed logical line, any one of these qualifies:
   from its final glyph's color. Bold or underline alone does not qualify.
   This color boundary check operates on raw text without quote awareness.
 
+For color-only recognition, unknown bare executable names must fit within
+`command_name_max_length` (default `16`). Executable paths and names found
+in the predefined vocabulary, `known_commands`, or learned history are
+exempt from that length limit. Known names still require color evidence.
+Prompt, option, glob, and shell-operator recognition remain independent of
+the vocabulary, so unfamiliar commands can still qualify.
+
 If line-start recognition fails, the scan tries whitespace boundaries that
 begin a new non-default foreground color, comparing non-whitespace glyphs.
 These later starts require a highlighted executable; options or operators
@@ -431,6 +438,45 @@ preserving arguments, quotes, operators, and internal spaces across colors
 and soft wraps. Plain `git status` lacks the required evidence; `$ git
 status` and a distinctly colored `git` followed by `status` qualify. Prose
 with similar structure can also match.
+
+**Command history hints**
+
+```yaml
+markers:
+  command_name_max_length: 16
+  known_commands: [my-company-deploy-tool]
+  command_history:
+    enabled: true
+    shell: fish
+    path: null
+    refresh_interval_seconds: 600
+```
+
+History refresh runs in a background worker at window startup and every
+10 minutes by default. The interval accepts positive seconds. Unchanged
+files are skipped; marker recognition uses an in-memory snapshot and never
+reads history or launches a shell. Config reload restarts the worker when
+history settings change. Existing marker sessions keep their frozen targets.
+
+`shell` selects the history format; fish is currently supported. With a
+null `path`, the worker uses `$XDG_DATA_HOME/fish/fish_history`, falling back
+to `~/.local/share/fish/fish_history`. An exported `fish_history` session
+name selects `<session>_history`; an empty name disables discovery. Supply
+an explicit file path for another session or location. Paths are literal;
+use an absolute path rather than `~` or shell-variable expansion.
+
+The worker reads at most the last 4 MiB and retains at most 8,192 distinct
+names. It decodes fish's history escaping and extracts the first executable
+basename from each parseable entry. It does not learn commands nested behind
+wrappers such as `sudo`, later pipeline stages, or shell control flow.
+History supplies hints, including aliases and functions; successful command
+execution is not verified.
+
+The cache contains command names only, excluding arguments and timestamps.
+It resides under `$XDG_CACHE_HOME/cryptty` (normally `~/.cache/cryptty`),
+separated by history source path. Missing or unreadable history leaves the
+last available names usable. `enabled: false` disables history learning and
+cached history hints; predefined and configured names remain available.
 
 **Machine tokens and styled phrases**
 

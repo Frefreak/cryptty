@@ -102,7 +102,7 @@ fn find_block(
         }
         let (key, value) = mapping.into_iter().next().unwrap();
         let Some(key) = key.as_str() else { continue };
-        if value.is_null() {
+        if value.is_null() && !is_explicit_null(yaml) {
             parents.push((indent, key.to_string()));
             if parents.iter().map(|(_, key)| key).eq(target.iter()) {
                 let child_indent = text[offset..]
@@ -183,7 +183,7 @@ fn commented_fields(text: &str) -> BTreeMap<Vec<String>, Vec<Value>> {
                 fields.entry(path).or_default().push(value.clone());
             }
         }
-        if value.is_null() {
+        if value.is_null() && !is_explicit_null(yaml) {
             parents.push((indent, key.to_string()));
         } else if commented {
             let mut path: Vec<_> =
@@ -196,6 +196,15 @@ fn commented_fields(text: &str) -> BTreeMap<Vec<String>, Vec<Value>> {
         }
     }
     fields
+}
+
+fn is_explicit_null(yaml: &str) -> bool {
+    yaml.split_once(':').is_some_and(|(_, value)| {
+        matches!(
+            value.split('#').next().unwrap().trim(),
+            "null" | "Null" | "NULL" | "~"
+        )
+    })
 }
 
 fn missing(
@@ -233,6 +242,22 @@ fn missing(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn explicit_null_defaults_are_commented_once() {
+        let defaults = serde_yaml_ng::from_str(
+            "markers: {command_history: {path: null, enabled: true}}",
+        )
+        .unwrap();
+        let updated = insert_missing("", &defaults).unwrap();
+        assert_eq!(insert_missing(&updated, &defaults).unwrap(), updated);
+        for null in ["null", "Null", "NULL", "~"] {
+            let text = format!(
+                "# markers:\n#   command_history:\n#     path: {null} # auto\n#     enabled: true\n"
+            );
+            assert_eq!(insert_missing(&text, &defaults).unwrap(), text);
+        }
+    }
 
     #[test]
     fn only_missing_fields_are_appended_once() {

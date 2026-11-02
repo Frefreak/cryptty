@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::ops::Range;
 use std::sync::OnceLock;
 
@@ -55,6 +56,7 @@ pub(super) fn targets(
     pane: &PaneText,
     display: &Terminal,
     options: &Options,
+    history: &HashSet<String>,
 ) -> Vec<Target> {
     let mut result = Vec::new();
     let mut line = Line::default();
@@ -76,11 +78,11 @@ pub(super) fn targets(
             }
         }
         if cells.wrapped.is_none() {
-            result.extend(recognize(&line, display, options));
+            result.extend(recognize(&line, display, options, history));
             line = Line::default();
         }
     }
-    result.extend(recognize(&line, display, options));
+    result.extend(recognize(&line, display, options, history));
     result
 }
 
@@ -88,9 +90,10 @@ fn recognize(
     line: &Line,
     display: &Terminal,
     options: &Options,
+    history: &HashSet<String>,
 ) -> Vec<Target> {
     let mut candidates = Vec::new();
-    if let Some(range) = command_range(line, display) {
+    if let Some(range) = command_range(line, display, options, history) {
         candidates.push(Candidate {
             range,
             kind: Kind::Command,
@@ -193,10 +196,20 @@ enum CommandContext {
     AfterPrefix,
 }
 
-fn command_range(line: &Line, display: &Terminal) -> Option<Range<usize>> {
-    if let Some(range) =
-        command_from(line, display, 0, CommandContext::LineStart)
-    {
+fn command_range(
+    line: &Line,
+    display: &Terminal,
+    options: &Options,
+    history: &HashSet<String>,
+) -> Option<Range<usize>> {
+    if let Some(range) = command_from(
+        line,
+        display,
+        0,
+        CommandContext::LineStart,
+        options,
+        history,
+    ) {
         return Some(range);
     }
     let mut previous_color = None;
@@ -216,8 +229,14 @@ fn command_range(line: &Line, display: &Terminal) -> Option<Range<usize>> {
             .next_back()
             .is_some_and(char::is_whitespace);
         if boundary
-            && let Some(range) =
-                command_from(line, display, start, CommandContext::AfterPrefix)
+            && let Some(range) = command_from(
+                line,
+                display,
+                start,
+                CommandContext::AfterPrefix,
+                options,
+                history,
+            )
         {
             return Some(range);
         }
@@ -230,6 +249,8 @@ fn command_from(
     display: &Terminal,
     offset: usize,
     context: CommandContext,
+    options: &Options,
+    history: &HashSet<String>,
 ) -> Option<Range<usize>> {
     let text = &line.text;
     let suffix = &text[offset..];
@@ -246,7 +267,14 @@ fn command_from(
         + trimmed.len()
         - command.len();
     let range = start..start + command.len();
-    let highlighted = highlighted_executable(line, display, range.clone());
+    let executable = words[0].split(['|', '<', '>', ';', '&']).next()?;
+    let color_eligible = executable.contains('/')
+        || executable.len() <= options.command_name_max_length.get()
+        || super::commands::predefined_commands().contains(executable)
+        || options.known_commands.contains(executable)
+        || history.contains(executable);
+    let highlighted =
+        color_eligible && highlighted_executable(line, display, range.clone());
     let accepted = match context {
         CommandContext::LineStart => {
             prompted || highlighted || has_command_structure(command, &words)
@@ -256,7 +284,7 @@ fn command_from(
     accepted.then_some(range)
 }
 
-fn plausible_executable(word: &str) -> bool {
+pub(super) fn plausible_executable(word: &str) -> bool {
     let executable = word.split(['|', '<', '>', ';', '&']).next().unwrap();
     let name = executable.rsplit('/').next().unwrap();
     name.starts_with(|ch: char| ch.is_ascii_lowercase())

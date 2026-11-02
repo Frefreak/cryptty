@@ -47,6 +47,18 @@ markers:
   hash_min_length: 7
   # Maximum targets sharing a character; URL internals are suppressed.
   overlap_max: 2
+  # Maximum unknown bare command name length for color-only recognition.
+  command_name_max_length: 16
+  # Additional command names; these still require color evidence.
+  known_commands: []
+  command_history:
+    enabled: true
+    # Currently supported history format: fish.
+    shell: fish
+    # null uses fish's standard data directory and history session name.
+    path: null
+    # Background refresh interval; unchanged history files are skipped.
+    refresh_interval_seconds: 600
 selection:
   # Additional word characters beside Unicode letters and digits.
   word_characters: '/\._-~:@%+=,#?'

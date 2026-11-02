@@ -1,12 +1,15 @@
 //! On-demand copy targets from a frozen, pane-aware viewport.
 use serde::Deserialize;
+use std::collections::HashSet;
 
 use crate::terminal::{Color, Content, Position, Terminal};
 use crate::tmux::PaneText;
 use crate::vim::{Action, Key};
 
+mod commands;
 mod labels;
 mod recognize;
+pub use commands::{CommandHistory, HistoryOptions, HistoryShell};
 #[cfg(test)]
 mod tests;
 
@@ -21,6 +24,9 @@ pub struct Options {
     pub styled_min_length: std::num::NonZeroUsize,
     pub hash_min_length: std::num::NonZeroUsize,
     pub overlap_max: std::num::NonZeroUsize,
+    pub command_name_max_length: std::num::NonZeroUsize,
+    pub known_commands: HashSet<String>,
+    pub command_history: HistoryOptions,
 }
 
 impl Default for Options {
@@ -36,6 +42,9 @@ impl Default for Options {
             styled_min_length: 5.try_into().unwrap(),
             hash_min_length: 7.try_into().unwrap(),
             overlap_max: 2.try_into().unwrap(),
+            command_name_max_length: 16.try_into().unwrap(),
+            known_commands: HashSet::new(),
+            command_history: HistoryOptions::default(),
         }
     }
 }
@@ -67,6 +76,15 @@ impl Session {
         panes: Vec<PaneText>,
         options: &Options,
     ) -> Self {
+        Self::with_history(screen, panes, options, &HashSet::new())
+    }
+
+    pub fn with_history(
+        screen: Terminal,
+        panes: Vec<PaneText>,
+        options: &Options,
+        history: &HashSet<String>,
+    ) -> Self {
         let panes = if panes.is_empty() {
             vec![PaneText {
                 origin: Position { row: 0, col: 0 },
@@ -77,7 +95,7 @@ impl Session {
         };
         let mut targets = Vec::new();
         for pane in &panes {
-            targets.extend(recognize::targets(pane, &screen, options));
+            targets.extend(recognize::targets(pane, &screen, options, history));
         }
         let labels = labels::generate(targets.len());
         for (target, label) in targets.iter_mut().zip(labels) {

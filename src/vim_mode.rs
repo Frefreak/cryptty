@@ -248,9 +248,14 @@ impl View {
         };
         self.vim = Some(match kind {
             Kind::Vim => Mode::Active(Box::new(Session::new(*screen, panes))),
-            Kind::Marker => Mode::Marker(Box::new(
-                cryptty::marker::Session::new(*screen, panes, &self.markers),
-            )),
+            Kind::Marker => {
+                Mode::Marker(Box::new(cryptty::marker::Session::with_history(
+                    *screen,
+                    panes,
+                    &self.markers,
+                    &self.command_history.snapshot(),
+                )))
+            }
         });
         self.tmux.update(
             false,

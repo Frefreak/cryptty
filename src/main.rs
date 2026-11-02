@@ -48,6 +48,7 @@ struct View {
     keyboard_input: keyboard_input::State,
     keyboard: Keyboard,
     markers: cryptty::marker::Options,
+    command_history: cryptty::marker::CommandHistory,
     preedit: String,
     padding: Padding,
     font: Font,
@@ -142,6 +143,9 @@ impl App {
             keyboard_input: keyboard_input::State::default(),
             keyboard: self.config.keyboard.clone(),
             markers: self.config.markers.clone(),
+            command_history: cryptty::marker::CommandHistory::new(
+                &self.config.markers.command_history,
+            ),
             preedit: String::new(),
             padding: self.config.window.padding,
             font: self.config.font.clone(),
