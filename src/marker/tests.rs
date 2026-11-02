@@ -11,6 +11,77 @@ fn texts(session: &Session) -> Vec<&str> {
 }
 
 #[test]
+fn colored_path_command_copies_whole_line_after_arbitrary_prefixes() {
+    let expected =
+        "~/random/jenkins.py ls 服务端/App后端/开发环境/g2-glass-server";
+    for cols in [24, 120] {
+        for prefix in ["❯", "➜", "Running"] {
+            for basename_style in ["\x1b[4m", "\x1b[34;4m"] {
+                let input = format!(
+                    concat!(
+                        "\x1b[32m{} \x1b[36m~/random/{}jenkins.py",
+                        "\x1b[0m\x1b[35m ls 服务端/App后端/开发环境/",
+                        "g2-glass-server\x1b[0m",
+                    ),
+                    prefix, basename_style,
+                );
+                let mut s = session(&input, cols, 10, Options::default());
+                let target = s
+                    .targets
+                    .iter()
+                    .find(|t| t.text == expected)
+                    .expect("whole command without prompt")
+                    .clone();
+                let mut action = Action::Stay;
+                for ch in target.label.chars() {
+                    action = s.key(Key::Char(ch));
+                }
+                assert!(
+                    matches!(action, Action::Copy(copy) if copy == expected)
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn command_color_evidence_requires_token_and_prefix_boundaries() {
+    for (input, expected, accepted) in [
+        (
+            "\x1b[32m❯ \x1b[36mwidget\x1b[0m collect",
+            "widget collect",
+            true,
+        ),
+        ("\x1b[36m❯ widget\x1b[0m collect", "widget collect", false),
+        (
+            "❯ \x1b[36mwid\x1b[35mget\x1b[0m collect",
+            "widget collect",
+            true,
+        ),
+        ("❯ \x1b[36mwid\x1b[0mget collect", "widget collect", false),
+        ("❯ \x1b[36mwidget collect\x1b[0m", "widget collect", false),
+        (
+            "❯ \x1b[36mwid\x1b[35mget collect\x1b[0m",
+            "widget collect",
+            false,
+        ),
+        ("❯ widget collect", "widget collect", false),
+        ("❯ \x1b[1mwidget\x1b[0m collect", "widget collect", false),
+    ] {
+        let s = session(
+            input,
+            80,
+            4,
+            Options {
+                styled_min_length: usize::MAX.try_into().unwrap(),
+                ..Options::default()
+            },
+        );
+        assert_eq!(texts(&s).contains(&expected), accepted, "{input:?}");
+    }
+}
+
+#[test]
 fn recognizes_requested_targets_without_plain_prose() {
     let s = session(
         "https://example.com/a/b src/main.rs:42:3 192.168.1.2 ::1\r\n\

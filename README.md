@@ -390,31 +390,91 @@ While a label prefix is entered, matching targets retain their original
 colors and surrounding text fades gently. Clearing the prefix restores
 the original colors.
 
-Markers recognize URLs, paths, IP addresses, UUIDs, hexadecimal hashes,
-shell command lines, and colored or bold phrases. A standalone line with
-a lowercase executable name and an option such as `-S` or `--versions`
-receives a whole-command marker across syntax colors and soft wraps.
-A simple `$ ` prompt also qualifies; copying omits the prompt. Recognition
-uses text heuristics without executing commands or checking installed
-programs. Bare commands without options, such as `git status`, need a
-prompt to qualify; prose resembling a command can also match. Complete
-commands take priority over styled fragments, while embedded paths and
-URLs remain available within the overlap limit.
-Targets starting at the same position share one marker for the longest
-range. Targets with different starts can retain separate markers.
-Labels stay anchored at each target's start, even when badges overlap;
-nearby targets and label filtering do not move them. Badges at the right
-edge are clipped to the viewport rather than shifted away from the start.
+Recognition uses a frozen viewport and runs independently for each pane.
+Soft-wrapped rows form one logical line; hard newlines end it. Candidates
+come from commands, machine tokens, and styled phrases. Candidates touching
+hidden text are discarded before overlap resolution. Recognition performs
+no command execution, executable lookup, or filesystem access.
 
-Paths omit a trailing `:line:column` when
-copied. Recognition examines visible text on demand without filesystem
-lookups. Soft-wrapped text and tmux pane boundaries are preserved.
+**Whole commands**
+
+Every command must pass shell-word splitting, including balanced quotes.
+Its first word, up to a shell operator, must resemble an executable: the
+basename starts with an ASCII lowercase letter and contains only ASCII
+letters, digits, `_`, `-`, or `.`. Paths must start with `/`, `./`, or `~/`.
+This heuristic does not fully parse shell grammar.
+
+At the start of a trimmed logical line, any one of these qualifies:
+
+- A `$ ` prompt, which is omitted from the copied text.
+- An argument beginning with `-` or `--`, followed by an ASCII letter or
+  digit, such as `-S` or `--versions`.
+- An argument containing `*`, at least one ASCII letter or digit, and no
+  whitespace, such as `*.log`. Quoted patterns also qualify after splitting.
+- An unquoted, unescaped `|`, `<`, `>`, `;`, or `&&` with nonempty text on
+  both sides. This is a structural hint, not a shell-syntax validator.
+- A highlighted executable: every glyph up to the first whitespace or
+  shell-operator character has a non-default foreground color. Colors may
+  vary within that token; the next non-whitespace character must differ
+  from its final glyph's color. Bold or underline alone does not qualify.
+  This color boundary check operates on raw text without quote awareness.
+
+If line-start recognition fails, the scan tries whitespace boundaries that
+begin a new non-default foreground color, comparing non-whitespace glyphs.
+These later starts require a highlighted executable; options or operators
+alone do not qualify. Prefixes such as `Ran `, `❯ `, or `➜ ` have no special
+meaning. A prefix sharing the executable's color can prevent this match.
+Color comparisons use the frozen display palette.
+
+The first accepted command extends to the trimmed end of its logical line,
+preserving arguments, quotes, operators, and internal spaces across colors
+and soft wraps. Plain `git status` lacks the required evidence; `$ git
+status` and a distinctly colored `git` followed by `status` qualify. Prose
+with similar structure can also match.
+
+**Machine tokens and styled phrases**
+
+- URLs: case-insensitive `http`, `https`, `ftp`, `file`, and `ssh` schemes
+  followed by `://`; whitespace, quotes, and angle brackets end the match.
+- Paths: slash-containing tokens, including relative, Unix, and Windows
+  drive paths; whitespace, quotes, angle brackets, and `|` end the match.
+  Trailing `:line` or `:line:column` is omitted when copied.
+- IP addresses: valid IPv4 or IPv6 values, excluding fragments of longer
+  identifiers. An IPv4 port may follow but is excluded from the target.
+- UUIDs: hexadecimal groups in the `8-4-4-4-12` form.
+- Hashes: hexadecimal words of at least `hash_min_length` characters
+  (default `7`), including at least one hexadecimal letter.
+- Styled phrases: consecutive glyphs with identical full styles, using
+  bold or a non-default foreground color. Trimmed phrases need at least
+  `styled_min_length` Unicode characters (default `5`, counting spaces).
+
+URLs and paths discard trailing punctuation and unmatched closing brackets;
+balanced brackets remain part of the target.
+
+**Overlap resolution and badges**
+
+At an identical start, the longest candidate wins; equal lengths use the
+priority order: command, URL, path, IP address, UUID, hash, styled phrase.
+Remaining candidates are considered in that same priority order.
+Commands suppress contained styled fragments. URLs suppress all contained
+candidates. Other machine tokens suppress contained machine tokens but
+allow styled phrases. Styled phrases suppress no contained candidates.
+Each position permits at most `overlap_max` targets (default `2`). Selected
+targets receive labels in text order.
+
+Badge positions alternate above and below the target's start by overlap
+lane, with each additional pair farther out. Collision handling first tries
+a horizontal shift of at most one badge width, then a nearby vertical
+position. Layout uses the full target set, keeping positions stable during
+label filtering. Screen edges constrain placement; crowded layouts may
+still overlap when no position fits within the horizontal limit.
 
 The `markers` configuration accepts `styled_min_length` (default `5`,
 including internal spaces), `hash_min_length` (default `7`, with at least
 one hexadecimal letter), and `overlap_max` (default `2`). Each must be
 positive. A styled phrase and an embedded path may have separate labels;
-components inside recognized URLs or other machine tokens are suppressed.
+machine-token components inside recognized URLs or other tokens are
+suppressed according to the rules above.
 Badges use their own small font and pixel layout. A custom keyboard binding
 can use `action: MarkerMode` to replace the default shortcut.
 

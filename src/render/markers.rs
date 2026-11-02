@@ -20,6 +20,7 @@ pub(super) struct Rect {
 #[derive(Default)]
 pub(super) struct Markers {
     targets: Vec<Target>,
+    layout_targets: Vec<Target>,
     options: crate::marker::Options,
     font: Option<font::Rasterizer>,
     glyphs: HashMap<char, Image>,
@@ -59,6 +60,7 @@ impl Renderer {
         if self.markers.targets != targets {
             if targets.is_empty() {
                 self.markers.lanes.clear();
+                self.markers.layout_targets.clear();
             }
             for (index, target) in targets.iter().enumerate() {
                 if self.markers.lanes.contains_key(&target.label) {
@@ -73,13 +75,14 @@ impl Renderer {
                     })
                     .unwrap();
                 self.markers.lanes.insert(target.label.clone(), lane);
+                self.markers.layout_targets.push(target.clone());
             }
             self.markers.targets = targets;
             self.invalidate();
         }
     }
 
-    pub(super) fn marker_rects(&mut self, _size: (usize, usize)) -> Vec<Rect> {
+    pub(super) fn marker_rects(&mut self, size: (usize, usize)) -> Vec<Rect> {
         if self.markers.targets.is_empty() {
             return Vec::new();
         }
@@ -109,6 +112,27 @@ impl Renderer {
             .round() as u8;
         let padding = (font.cell_height / 5).max(2);
         let height = font.cell_height + padding * 2;
+        let mut positions = HashMap::new();
+        let mut occupied = Vec::new();
+        for target in &self.markers.layout_targets {
+            let Some(segment) = target.segments.first() else {
+                continue;
+            };
+            let anchor = (
+                self.padding.0 + segment.start.col * self.cell_width,
+                self.padding.1 + segment.start.row * self.cell_height,
+            );
+            let bounds = place(
+                anchor,
+                (font.cell_width * target.label.len() + padding * 2, height),
+                self.markers.lanes[&target.label],
+                self.cell_height,
+                size,
+            );
+            let bounds = avoid_collisions(bounds, size, &occupied);
+            occupied.push(bounds);
+            positions.insert(&target.label, bounds);
+        }
         let mut rects = Vec::new();
         let mut highlights = Vec::new();
         let mut badges = Vec::new();
@@ -158,7 +182,7 @@ impl Renderer {
                 self.padding.0 + segment.start.col * self.cell_width,
                 self.padding.1 + segment.start.row * self.cell_height,
             );
-            let bounds = place(anchor, (width, height));
+            let bounds = positions[&target.label];
             let center = (bounds[0] + width / 2, bounds[1] + height / 2);
             rects.push(Rect {
                 bounds: [
@@ -260,13 +284,71 @@ fn targets_overlap(a: &Target, b: &Target) -> bool {
     })
 }
 
-fn place(anchor: (usize, usize), badge: (usize, usize)) -> [usize; 4] {
+fn place(
+    anchor: (usize, usize),
+    badge: (usize, usize),
+    lane: usize,
+    cell_height: usize,
+    viewport: (usize, usize),
+) -> [usize; 4] {
+    let distance = (lane / 2 + 1) * badge.1;
+    let above = anchor.1.checked_sub(distance);
+    let below = anchor.1 + cell_height + distance - badge.1;
+    let below = (below + badge.1 <= viewport.1).then_some(below);
+    let y = if lane % 2 == 0 {
+        above.or(below)
+    } else {
+        below.or(above)
+    }
+    .unwrap_or_else(|| anchor.1.min(viewport.1.saturating_sub(badge.1)));
     [
-        anchor.0,
-        anchor.1.saturating_sub(badge.1 / 2),
+        anchor.0.min(viewport.0.saturating_sub(badge.0)),
+        y,
         badge.0,
         badge.1,
     ]
+}
+
+fn avoid_collisions(
+    preferred: [usize; 4],
+    viewport: (usize, usize),
+    occupied: &[[usize; 4]],
+) -> [usize; 4] {
+    if occupied
+        .iter()
+        .all(|other| !rects_overlap(preferred, *other))
+    {
+        return preferred;
+    }
+    let [x, y, width, height] = preferred;
+    let mut xs = vec![x];
+    let mut ys = vec![y];
+    for &[left, top, w, h] in occupied {
+        xs.extend([left.saturating_sub(width), left + w]);
+        ys.extend([top.saturating_sub(height), top + h]);
+    }
+    xs.retain(|&left| left + width <= viewport.0 && left.abs_diff(x) <= width);
+    ys.retain(|&top| top + height <= viewport.1);
+    xs.sort_unstable();
+    xs.dedup();
+    ys.sort_unstable();
+    ys.dedup();
+    ys.into_iter()
+        .flat_map(|top| xs.iter().map(move |&left| [left, top, width, height]))
+        .filter(|bounds| {
+            occupied.iter().all(|other| !rects_overlap(*bounds, *other))
+        })
+        .min_by_key(|bounds| {
+            (bounds[1].abs_diff(y), bounds[0].abs_diff(x), bounds[0])
+        })
+        .unwrap_or(preferred)
+}
+
+fn rects_overlap(a: [usize; 4], b: [usize; 4]) -> bool {
+    a[0] < b[0] + b[2]
+        && b[0] < a[0] + a[2]
+        && a[1] < b[1] + b[3]
+        && b[1] < a[1] + a[3]
 }
 
 fn stepped(rects: &mut Vec<Rect>, rect: [usize; 4], color: u32, alpha: u8) {
@@ -370,11 +452,40 @@ mod tests {
     }
 
     #[test]
-    fn badges_stay_at_their_start_even_when_overlapping_or_near_edges() {
-        assert_eq!(place((10, 40), (32, 24)), [10, 28, 32, 24]);
-        assert_eq!(place((15, 40), (32, 24)), [15, 28, 32, 24]);
-        assert_eq!(place((490, 290), (32, 24)), [490, 278, 32, 24]);
-        assert_eq!(place((0, 0), (32, 24)), [0, 0, 32, 24]);
+    fn badges_alternate_sides_and_expand_outward() {
+        for (lane, y) in [76, 140, 52, 164].into_iter().enumerate() {
+            assert_eq!(
+                place((10, 100), (32, 24), lane, 40, (500, 300)),
+                [10, y, 32, 24],
+            );
+        }
+    }
+
+    #[test]
+    fn badges_use_available_side_and_stay_inside_viewport() {
+        assert_eq!(place((0, 0), (32, 24), 0, 40, (500, 300)), [0, 40, 32, 24],);
+        assert_eq!(
+            place((490, 260), (32, 24), 1, 40, (500, 300)),
+            [468, 236, 32, 24],
+        );
+    }
+
+    #[test]
+    fn badges_avoid_neighbors_and_edge_fallback_collisions() {
+        for anchor in [(10, 0), (468, 260), (10, 100)] {
+            let mut occupied = Vec::new();
+            for lane in 0..4 {
+                let preferred = place(anchor, (32, 24), lane, 40, (500, 300));
+                let bounds = avoid_collisions(preferred, (500, 300), &occupied);
+                assert!(occupied.iter().all(|b| !rects_overlap(bounds, *b)));
+                assert!(bounds[0].abs_diff(preferred[0]) <= 32);
+                occupied.push(bounds);
+            }
+        }
+        let first = place((10, 0), (32, 24), 0, 40, (500, 300));
+        let next = place((10, 80), (32, 24), 0, 40, (500, 300));
+        let next = avoid_collisions(next, (500, 300), &[first]);
+        assert!(!rects_overlap(first, next));
     }
 
     #[test]
@@ -442,7 +553,11 @@ mod tests {
             }));
             assert!(rects.iter().any(|rect| {
                 rect.color == colors[index]
-                    && rect.bounds[1] < y
+                    && if index == 0 {
+                        rect.bounds[1] < y
+                    } else {
+                        rect.bounds[1] > y
+                    }
                     && rect.alpha
                         == (renderer.markers.options.label_opacity.get()
                             * 255.0)
@@ -451,8 +566,17 @@ mod tests {
             }));
         }
         let lanes = renderer.markers.lanes.clone();
+        let blue_badges = |rects: &[Rect]| {
+            rects
+                .iter()
+                .filter(|rect| rect.color == colors[1] && rect.alpha == 204)
+                .map(|rect| rect.bounds)
+                .collect::<Vec<_>>()
+        };
+        let before_filter = blue_badges(&rects);
         renderer.set_markers(vec![targets[1].clone()]);
         assert_eq!(renderer.markers.lanes, lanes);
+        assert_eq!(blue_badges(&renderer.marker_rects(size)), before_filter,);
         renderer.set_markers(targets);
         let restored = renderer.marker_rects(size);
         assert_eq!(rects.len(), restored.len());
