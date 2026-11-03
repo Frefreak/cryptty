@@ -11,6 +11,80 @@ fn texts(session: &Session) -> Vec<&str> {
 }
 
 #[test]
+fn backslash_commands_copy_all_lines_verbatim() {
+    let command = concat!(
+        "kubectl --context=nl-release -n claws create rolebinding codex-editor \\\n",
+        "    --clusterrole=edit \\\n",
+        "    --user=sre-readonly@example.com",
+    );
+    for cols in [24, 120] {
+        let input = format!(
+            "{}\r\nUnrelated text follows.",
+            command.replace('\n', "\r\n")
+        );
+        let mut s = session(&input, cols, 14, Options::default());
+        let target = s
+            .targets
+            .iter()
+            .find(|t| t.text == command)
+            .expect("complete multiline command")
+            .clone();
+        assert!(target.segments.len() >= 3);
+        let mut action = Action::Stay;
+        for ch in target.label.chars() {
+            action = s.key(Key::Char(ch));
+        }
+        assert!(matches!(action, Action::Copy(text) if text == command));
+    }
+}
+
+#[test]
+fn literal_backslashes_do_not_join_commands() {
+    for first in [
+        "echo --value \\\\",
+        "echo --value 'literal\\",
+        "echo --value # comment \\",
+        "echo --value \\\r\n# comment \\",
+    ] {
+        let s = session(
+            &format!("{first}\r\ngit --version"),
+            80,
+            5,
+            Options::default(),
+        );
+        assert!(texts(&s).contains(&"git --version"));
+        assert!(s.targets.iter().all(|t| !t.text.contains("\ngit")));
+    }
+}
+
+#[test]
+fn blank_line_ends_a_backslash_continuation() {
+    let s = session(
+        "echo --value \\\r\n\r\ngit --version",
+        80,
+        5,
+        Options::default(),
+    );
+    assert!(texts(&s).contains(&"git --version"));
+    assert!(s.targets.iter().all(|t| !t.text.contains("\ngit")));
+}
+
+#[test]
+fn quoted_and_embedded_hashes_allow_continuation() {
+    for first in [
+        "echo '# value'",
+        "echo foo#bar",
+        "echo foo\\ #bar",
+        "echo foo\\\n#bar",
+    ] {
+        let command = format!("{first} \\\n  --value");
+        let s =
+            session(&command.replace('\n', "\r\n"), 80, 5, Options::default());
+        assert!(texts(&s).contains(&command.as_str()), "{command}");
+    }
+}
+
+#[test]
 fn long_bare_command_names_need_additional_evidence() {
     let unknown = "unfamiliar-long-command";
     let history = HashSet::from(["learned-long-command".into()]);

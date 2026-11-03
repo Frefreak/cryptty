@@ -8,6 +8,7 @@ use crate::marker::Target;
 
 const ER_INK: u32 = 0x232323;
 const ER_GRAY_60: u32 = 0x7b7b7b;
+const MULTILINE_RED: u32 = 0xff6b6b;
 const CLIP_CORNER: usize = 1;
 
 #[derive(Clone, Copy)]
@@ -137,7 +138,21 @@ impl Renderer {
         let mut badges = Vec::new();
         for target in &self.markers.targets {
             let lane = self.markers.lanes[&target.label];
-            let color = lane_color(lane, &self.markers.options);
+            let multiline = target.text.contains("\\\n");
+            let color = if multiline {
+                MULTILINE_RED
+            } else {
+                lane_color(lane, &self.markers.options)
+            };
+            if multiline {
+                multiline_bracket(
+                    &mut rects,
+                    target,
+                    self.padding,
+                    (self.cell_width, self.cell_height),
+                    indicator_alpha,
+                );
+            }
             for segment in &target.segments {
                 let x = self.padding.0 + segment.start.col * self.cell_width;
                 let y = self.padding.1 + segment.start.row * self.cell_height;
@@ -230,6 +245,34 @@ impl Renderer {
         rects.extend(badges);
         highlights.extend(rects);
         highlights
+    }
+}
+
+fn multiline_bracket(
+    rects: &mut Vec<Rect>,
+    target: &Target,
+    padding: (usize, usize),
+    cell: (usize, usize),
+    alpha: u8,
+) {
+    let Some(first) = target.segments.first() else {
+        return;
+    };
+    let last = target.segments.last().unwrap();
+    let left = target.segments.iter().map(|s| s.start.col).min().unwrap();
+    let x = (padding.0 + left * cell.0).saturating_sub(3);
+    let top = padding.1 + first.start.row * cell.1;
+    let bottom = padding.1 + (last.start.row + 1) * cell.1 - 1;
+    for bounds in [
+        [x, top, 2, bottom - top + 1],
+        [x, top, 5, 2],
+        [x, bottom.saturating_sub(1), 5, 2],
+    ] {
+        rects.push(Rect {
+            bounds,
+            color: MULTILINE_RED,
+            alpha,
+        });
     }
 }
 
@@ -392,6 +435,30 @@ fn glyph_rects(
 mod tests {
     use super::*;
     use crate::{marker, terminal::Terminal};
+
+    #[test]
+    fn multiline_bracket_spans_rows_at_the_leftmost_column() {
+        let target = Target {
+            text: "git \\\n  --version".into(),
+            label: "a".into(),
+            segments: vec![
+                marker::Segment {
+                    start: crate::terminal::Position { row: 2, col: 4 },
+                    columns: 5,
+                },
+                marker::Segment {
+                    start: crate::terminal::Position { row: 3, col: 2 },
+                    columns: 11,
+                },
+            ],
+        };
+        let mut rects = Vec::new();
+        multiline_bracket(&mut rects, &target, (8, 8), (10, 20), 200);
+        assert_eq!(rects[0].bounds, [25, 48, 2, 40]);
+        assert_eq!(rects[1].bounds, [25, 48, 5, 2]);
+        assert_eq!(rects[2].bounds, [25, 86, 5, 2]);
+        assert!(rects.iter().all(|r| r.color == 0xff6b6b && r.alpha == 200));
+    }
 
     #[test]
     fn marker_outline_thickness_increases_coverage_without_resizing_cells() {

@@ -78,12 +78,49 @@ pub(super) fn targets(
             }
         }
         if cells.wrapped.is_none() {
+            let end = line.text.trim_end_matches([' ', '\t']).len();
+            if row + 1 < pane.terminal.rows.len()
+                && continues_command(&line.text[..end])
+            {
+                line.text.truncate(end);
+                line.glyphs.retain(|glyph| glyph.bytes.end <= end);
+                line.text.push('\n');
+                continue;
+            }
             result.extend(recognize(&line, display, options, history));
             line = Line::default();
         }
     }
     result.extend(recognize(&line, display, options, history));
     result
+}
+
+fn continues_command(text: &str) -> bool {
+    let mut quote = None;
+    let mut escaped = false;
+    let mut word_start = true;
+    for ch in text.chars() {
+        if escaped {
+            escaped = false;
+            if ch != '\n' {
+                word_start = false;
+            }
+            continue;
+        } else if ch == '#' && quote.is_none() && word_start {
+            return false;
+        } else if ch == '\\' && quote != Some('\'') {
+            escaped = true;
+            continue;
+        } else if Some(ch) == quote {
+            quote = None;
+        } else if quote.is_none() && matches!(ch, '\'' | '"') {
+            quote = Some(ch);
+        }
+        word_start = quote.is_none()
+            && (ch.is_whitespace()
+                || matches!(ch, ';' | '|' | '&' | '(' | ')'));
+    }
+    escaped
 }
 
 fn recognize(
