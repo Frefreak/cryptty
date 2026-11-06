@@ -137,7 +137,18 @@ fn recognize(
         });
     }
     candidates.extend(token_candidates(line, options));
-    candidates.extend(styled_candidates(line, display, options));
+    let mut styled = styled_candidates(line, display, options);
+    styled.retain(|candidate| {
+        let text = &line.text[candidate.range.clone()];
+        let end = candidate.range.end - trailing_punctuation(text);
+        !candidates.iter().any(|token| {
+            matches!(token.kind, Kind::Url | Kind::Path)
+                && token.range.start == candidate.range.start
+                && token.range.end == end
+                && token.range.end < candidate.range.end
+        })
+    });
+    candidates.extend(styled);
     candidates.retain(|candidate| {
         !line.glyphs.iter().any(|glyph| {
             glyph.style.hidden

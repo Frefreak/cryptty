@@ -658,6 +658,30 @@ fn parenthesized_paths_exclude_trailing_chinese_comma() {
 }
 
 #[test]
+fn styled_paths_exclude_enclosing_punctuation() {
+    for path in [
+        "/home/carson/.config/agentdeck/phone-connection.txt",
+        "./中文/a_(b).rs",
+        "https://example.com/path_(x)",
+    ] {
+        for ending in [")", "),", ")，"] {
+            for cols in [16, 100] {
+                let mut s = session(
+                    &format!("(\x1b[34m{path}{ending}\x1b[0m"),
+                    cols,
+                    8,
+                    Options::default(),
+                );
+                assert_eq!(texts(&s), vec![path]);
+                let label = s.targets[0].label.clone();
+                let action = s.key(Key::Char(label.chars().next().unwrap()));
+                assert!(matches!(action, Action::Copy(text) if text == path));
+            }
+        }
+    }
+}
+
+#[test]
 fn invalid_options_rejected_at_parse_time() {
     assert!(
         crate::config::Config::parse("markers:\n  overlap_max: 0").is_err()
