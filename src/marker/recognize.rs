@@ -140,11 +140,12 @@ fn recognize(
     let mut styled = styled_candidates(line, display, options);
     styled.retain(|candidate| {
         let text = &line.text[candidate.range.clone()];
-        let end = candidate.range.end - trailing_punctuation(text);
         !candidates.iter().any(|token| {
             matches!(token.kind, Kind::Url | Kind::Path)
                 && token.range.start == candidate.range.start
-                && token.range.end == end
+                && token.range.end
+                    == candidate.range.start
+                        + trim_token(text, token.kind).len()
                 && token.range.end < candidate.range.end
         })
     });
@@ -170,13 +171,9 @@ fn token_candidates(line: &Line, options: &Options) -> Vec<Candidate> {
             let text = hit.as_str();
             match kind {
                 Kind::Url | Kind::Path => {
-                    range.end -= trailing_punctuation(text);
-                    if *kind == Kind::Path {
-                        let trimmed = &line.text[range.clone()];
-                        range.end -= location_suffix(trimmed);
-                        if range.len() < 2 {
-                            continue;
-                        }
+                    range.end = range.start + trim_token(text, *kind).len();
+                    if *kind == Kind::Path && range.len() < 2 {
+                        continue;
                     }
                 }
                 Kind::Address => {
@@ -456,6 +453,15 @@ fn address_boundaries(text: &str, range: &Range<usize>) -> bool {
         after = rest;
     }
     !after.chars().next().is_some_and(continues)
+}
+
+fn trim_token(text: &str, kind: Kind) -> &str {
+    let text = &text[..text.len() - trailing_punctuation(text)];
+    if kind == Kind::Path {
+        &text[..text.len() - location_suffix(text)]
+    } else {
+        text
+    }
 }
 
 fn trailing_punctuation(text: &str) -> usize {

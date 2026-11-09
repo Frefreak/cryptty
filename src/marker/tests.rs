@@ -658,27 +658,46 @@ fn parenthesized_paths_exclude_trailing_chinese_comma() {
 }
 
 #[test]
-fn styled_paths_exclude_enclosing_punctuation() {
-    for path in [
+fn styled_paths_exclude_trailing_delimiters() {
+    for token in [
+        "/tmp/test.yaml",
         "/home/carson/.config/agentdeck/phone-connection.txt",
         "./中文/a_(b).rs",
+        "https://example.com/a_(b)",
         "https://example.com/path_(x)",
     ] {
-        for ending in [")", "),", ")，"] {
+        for suffix in [")，", "),", ")", ":12:4)，"] {
             for cols in [16, 100] {
                 let mut s = session(
-                    &format!("(\x1b[34m{path}{ending}\x1b[0m"),
+                    &format!("(\x1b[34m{token}{suffix}\x1b[0m"),
                     cols,
                     8,
                     Options::default(),
                 );
-                assert_eq!(texts(&s), vec![path]);
+                let expected =
+                    if token.starts_with("https:") && suffix.starts_with(':') {
+                        format!("{token}:12:4")
+                    } else {
+                        token.to_owned()
+                    };
+                assert_eq!(texts(&s), vec![expected.as_str()]);
                 let label = s.targets[0].label.clone();
-                let action = s.key(Key::Char(label.chars().next().unwrap()));
-                assert!(matches!(action, Action::Copy(text) if text == path));
+                let mut action = Action::Stay;
+                for ch in label.chars() {
+                    action = s.key(Key::Char(ch));
+                }
+                assert!(
+                    matches!(action, Action::Copy(text) if text == expected)
+                );
             }
         }
     }
+}
+
+#[test]
+fn styled_path_fragments_preserve_balanced_parentheses() {
+    let s = session("./a_(\x1b[34m/long)\x1b[0m/c", 80, 3, Options::default());
+    assert_eq!(texts(&s), vec!["./a_(/long)/c", "/long)"]);
 }
 
 #[test]
