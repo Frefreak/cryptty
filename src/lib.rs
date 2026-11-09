@@ -10,3 +10,5 @@ pub mod tmux;
 pub mod vim;
 
 pub mod marker;
+
+mod text_token;

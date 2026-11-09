@@ -189,7 +189,7 @@ mod tests {
     }
 
     #[test]
-    fn trimmed_punctuation_becoming_part_of_url_clears_hover() {
+    fn changed_text_after_url_boundary_clears_pending_hover() {
         let mut terminal = Terminal::new(60, 4);
         terminal.feed(b"https://example.com/path). ");
         let position = Position { row: 0, col: 5 };
@@ -202,7 +202,7 @@ mod tests {
         terminal.feed(b"\x1b[1;26Hx");
         assert_eq!(
             terminal.link_at(position).unwrap().uri,
-            "https://example.com/path)x"
+            "https://example.com/path"
         );
         assert!(hover.update(Lookup::Pending, position, &terminal).is_none());
     }
@@ -221,7 +221,7 @@ mod tests {
         terminal.feed(b"\x1b[2;2Hx");
         assert_eq!(
             terminal.link_at(position).unwrap().uri,
-            "https://example.com/path)x"
+            "https://example.com/path"
         );
         assert!(hover.update(Lookup::Pending, position, &terminal).is_none());
     }

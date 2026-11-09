@@ -11,6 +11,34 @@ fn texts(session: &Session) -> Vec<&str> {
 }
 
 #[test]
+fn path_in_prose_copies_only_the_path() {
+    let path = "kafka-account-migration/mr-draft.txt";
+    for (opening, suffix) in [
+        ("(", "),题为："),
+        ("(", ")，题为："),
+        ("（", "），题为："),
+        ("[", "]说明"),
+        ("{", "}说明"),
+    ] {
+        for style in ["", "\x1b[1m", "\x1b[36m"] {
+            for cols in [18, 120] {
+                let input = format!(
+                    "• MR 草稿已备妥 {opening}{style}{path}{suffix}\x1b[0m"
+                );
+                let mut s = session(&input, cols, 10, Options::default());
+                assert_eq!(texts(&s), vec![path], "{input:?}");
+                let target = s.targets[0].clone();
+                let mut action = Action::Stay;
+                for ch in target.label.chars() {
+                    action = s.key(Key::Char(ch));
+                }
+                assert!(matches!(action, Action::Copy(text) if text == path));
+            }
+        }
+    }
+}
+
+#[test]
 fn backslash_commands_copy_all_lines_verbatim() {
     let command = concat!(
         "kubectl --context=nl-release -n claws create rolebinding codex-editor \\\n",
@@ -971,12 +999,15 @@ fn prose_boundaries_preserve_balanced_and_encoded_token_content() {
     for token in [
         "https://example.com/a_(b_(c))?x=1,2",
         "http://[::1]:8080/中文/%29%EF%BC%8C",
+        "./报告，终稿.md",
+        "./dir_(draft)/file[1].rs:42:3",
     ] {
         for (open, close) in [("(", ")"), ("[", "]"), ("{", "}")] {
             for style in ["", "\x1b[34m"] {
                 let input = format!("{open}{style}{token}{close}，目标\x1b[0m");
                 let s = session(&input, 24, 8, Options::default());
-                assert_eq!(texts(&s), vec![token], "{input:?}");
+                let expected = token.strip_suffix(":42:3").unwrap_or(token);
+                assert_eq!(texts(&s), vec![expected], "{input:?}");
             }
         }
     }

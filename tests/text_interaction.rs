@@ -72,7 +72,7 @@ fn chinese_comma_after_parenthesized_url_is_excluded() {
     let start = unicode_width::UnicodeWidthStr::width(prefix);
     for cols in [32, 80, 160] {
         let mut terminal = Terminal::new(cols, 8);
-        terminal.feed(format!("{prefix}{uri})，").as_bytes());
+        terminal.feed(format!("{prefix}{uri})，题为：").as_bytes());
         for index in start..start + uri.len() {
             let link = terminal.link_at(p(index / cols, index % cols)).unwrap();
             assert_eq!(link.uri, uri);
@@ -81,6 +81,51 @@ fn chinese_comma_after_parenthesized_url_is_excluded() {
         let end = start + uri.len();
         assert!(terminal.link_at(p(end / cols, end % cols)).is_none());
     }
+}
+
+#[test]
+fn automatic_links_and_markers_agree_on_prose_boundaries() {
+    use cryptty::marker::{Options, Session};
+
+    for uri in [
+        "https://example.com/a_(b_(c))?x=1,2",
+        "http://[::1]:8080/a%29%EF%BC%8C",
+        "file:///tmp/report.txt",
+    ] {
+        for suffix in ["),more", "，题为：", "）后文", "。后文", "'label"]
+        {
+            for cols in [18, 120] {
+                let mut terminal = Terminal::new(cols, 12);
+                terminal
+                    .feed(format!("(\x1b[34m{uri}{suffix}\x1b[0m").as_bytes());
+                let session = Session::new(
+                    terminal.visible_snapshot(),
+                    Vec::new(),
+                    &Options::default(),
+                );
+                let targets = session.visible_targets();
+                assert_eq!(targets.len(), 1, "{uri}{suffix}");
+                assert_eq!(targets[0].text, uri);
+                for index in 1..=uri.len() {
+                    let link = terminal
+                        .link_at(p(index / cols, index % cols))
+                        .unwrap();
+                    assert_eq!(link.uri, uri);
+                    assert_eq!(terminal.selected_text(link.range), uri);
+                }
+                let end = uri.len() + 1;
+                assert!(terminal.link_at(p(end / cols, end % cols)).is_none());
+            }
+        }
+    }
+}
+
+#[test]
+fn explicit_links_preserve_punctuation_in_the_uri() {
+    let uri = "https://example.com/a)，题为：";
+    let mut terminal = Terminal::new(40, 3);
+    terminal.feed(format!("\x1b]8;;{uri}\x07label\x1b]8;;\x07").as_bytes());
+    assert_eq!(terminal.link_at(p(0, 2)).unwrap().uri, uri);
 }
 
 #[test]

@@ -145,7 +145,12 @@ fn recognize(
                 && token.range.start == candidate.range.start
                 && token.range.end
                     == candidate.range.start
-                        + trim_token(text, token.kind).len()
+                        + trim_token(
+                            text,
+                            token.kind,
+                            &line.text[..candidate.range.start],
+                        )
+                        .len()
                 && token.range.end < candidate.range.end
         })
     });
@@ -171,7 +176,9 @@ fn token_candidates(line: &Line, options: &Options) -> Vec<Candidate> {
             let text = hit.as_str();
             match kind {
                 Kind::Url | Kind::Path => {
-                    range.end = range.start + trim_token(text, *kind).len();
+                    range.end = range.start
+                        + trim_token(text, *kind, &line.text[..range.start])
+                            .len();
                     if *kind == Kind::Path && range.len() < 2 {
                         continue;
                     }
@@ -455,83 +462,12 @@ fn address_boundaries(text: &str, range: &Range<usize>) -> bool {
     !after.chars().next().is_some_and(continues)
 }
 
-fn trim_token(text: &str, kind: Kind) -> &str {
-    let text = if kind == Kind::Url {
-        &text[..url_boundary(text)]
-    } else {
-        text
-    };
-    let text = &text[..text.len() - trailing_punctuation(text)];
-    if kind == Kind::Path {
-        &text[..text.len() - location_suffix(text)]
-    } else {
-        text
+fn trim_token<'a>(text: &'a str, kind: Kind, before: &str) -> &'a str {
+    match kind {
+        Kind::Url => crate::text_token::trim_url(text),
+        Kind::Path => crate::text_token::trim_path(text, before),
+        _ => text,
     }
-}
-
-fn url_boundary(text: &str) -> usize {
-    let mut depth = [0usize; 3];
-    for (offset, ch) in text.char_indices() {
-        let (index, opening) = match ch {
-            '(' => (0, true),
-            '[' => (1, true),
-            '{' => (2, true),
-            ')' => (0, false),
-            ']' => (1, false),
-            '}' => (2, false),
-            '，' | '；' | '。' | '！' | '？' | '、' => return offset,
-            _ => continue,
-        };
-        if opening {
-            depth[index] += 1;
-        } else if depth[index] == 0 {
-            return offset;
-        } else {
-            depth[index] -= 1;
-        }
-    }
-    text.len()
-}
-
-fn trailing_punctuation(text: &str) -> usize {
-    let mut end = text.len();
-    while let Some(ch) = text[..end].chars().next_back() {
-        let unmatched = match ch {
-            ')' => {
-                text[..end].matches(')').count()
-                    > text[..end].matches('(').count()
-            }
-            ']' => {
-                text[..end].matches(']').count()
-                    > text[..end].matches('[').count()
-            }
-            '}' => {
-                text[..end].matches('}').count()
-                    > text[..end].matches('{').count()
-            }
-            _ => false,
-        };
-        if !unmatched && !matches!(ch, ',' | '，' | ';' | '.' | ':' | '!' | '?')
-        {
-            break;
-        }
-        end -= ch.len_utf8();
-    }
-    text.len() - end
-}
-
-fn location_suffix(text: &str) -> usize {
-    let mut end = text.len();
-    for _ in 0..2 {
-        let Some((prefix, suffix)) = text[..end].rsplit_once(':') else {
-            break;
-        };
-        if suffix.is_empty() || !suffix.bytes().all(|b| b.is_ascii_digit()) {
-            break;
-        }
-        end = prefix.len();
-    }
-    text.len() - end
 }
 
 fn resolve(mut candidates: Vec<Candidate>, max: usize) -> Vec<Candidate> {

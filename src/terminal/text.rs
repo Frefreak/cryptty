@@ -329,27 +329,6 @@ pub fn supported_uri(uri: &str) -> bool {
     })
 }
 
-fn trim_url(mut uri: &str) -> &str {
-    uri = uri.trim_end_matches("^C");
-    loop {
-        let Some(last) = uri.chars().last() else {
-            return uri;
-        };
-        let unmatched = match last {
-            ')' => Some('('),
-            ']' => Some('['),
-            '}' => Some('{'),
-            _ => None,
-        }
-        .is_some_and(|open| {
-            uri.matches(last).count() > uri.matches(open).count()
-        });
-        if matches!(last, '.' | ',' | '，' | ';' | ':' | '!' | '\'')
-            || unmatched
-        {
-            uri = &uri[..uri.len() - last.len_utf8()];
-        } else {
-            return uri;
-        }
-    }
+fn trim_url(uri: &str) -> &str {
+    crate::text_token::trim_url(uri.trim_end_matches("^C"))
 }
