@@ -4,7 +4,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 
-use crate::terminal::{Content, Link, Position, Terminal, TextRange};
+use crate::terminal::{Link, Position, Terminal, TextRange};
 
 mod client;
 mod integration;
@@ -414,40 +414,43 @@ fn pane_terminal(
     logical: &str,
 ) -> Option<Terminal> {
     let mut terminal = Terminal::new(width, height);
-    let logical = logical.strip_suffix('\n')?;
-    terminal.feed(logical.replace('\n', "\r\n").as_bytes());
+    let mut logical = logical.strip_suffix('\n')?.split('\n');
+    let mut remaining = logical.next()?;
     let lines: Vec<_> = physical.strip_suffix('\n')?.split('\n').collect();
     if lines.len() != height {
         return None;
     }
-    for (row, line) in terminal.rows.iter().zip(lines) {
-        let text: String = row
-            .iter()
-            .filter_map(|cell| match &cell.content {
-                Content::Text { text } => Some(text.chars()),
-                _ => None,
-            })
-            .flatten()
-            .collect();
-        let expanded;
-        let line = if line.contains('\t') {
-            let mut physical = Terminal::new(width, 1);
-            physical.feed(line.as_bytes());
-            expanded = physical.rows[0]
-                .iter()
-                .filter_map(|cell| match &cell.content {
-                    Content::Text { text } => Some(text.chars()),
-                    _ => None,
-                })
-                .flatten()
-                .collect::<String>();
-            expanded.as_str()
-        } else {
+    for (y, line) in lines.iter().enumerate() {
+        let trimmed = line.trim_end_matches(' ');
+        let ends_line = remaining.trim_end_matches(' ') == trimmed
+            && remaining.len() <= line.len();
+        let content = if ends_line {
+            trimmed
+        } else if remaining.starts_with(line) {
             line
+        } else {
+            trimmed
         };
-        if text.trim_end_matches(' ') != line.trim_end_matches(' ') {
+        let rest = remaining.strip_prefix(content)?;
+        // Copy mode can retain wraps from a narrower pane after a resize.
+        let mut row = Terminal::new(width + 2, 2);
+        row.feed(content.as_bytes());
+        let (columns, row_index) = row.cursor;
+        if row_index != 0 || columns > width {
             return None;
         }
+        terminal.feed(format!("\x1b[{};1H", y + 1).as_bytes());
+        terminal.feed(content.as_bytes());
+        terminal.rows[y].wrapped = (!ends_line).then_some(columns);
+        if ends_line {
+            match logical.next() {
+                Some(next) => remaining = next,
+                None if y + 1 == height => return Some(terminal),
+                None => return None,
+            }
+        } else {
+            remaining = rest;
+        }
     }
-    Some(terminal)
+    None
 }

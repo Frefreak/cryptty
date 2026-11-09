@@ -456,12 +456,41 @@ fn address_boundaries(text: &str, range: &Range<usize>) -> bool {
 }
 
 fn trim_token(text: &str, kind: Kind) -> &str {
+    let text = if kind == Kind::Url {
+        &text[..url_boundary(text)]
+    } else {
+        text
+    };
     let text = &text[..text.len() - trailing_punctuation(text)];
     if kind == Kind::Path {
         &text[..text.len() - location_suffix(text)]
     } else {
         text
     }
+}
+
+fn url_boundary(text: &str) -> usize {
+    let mut depth = [0usize; 3];
+    for (offset, ch) in text.char_indices() {
+        let (index, opening) = match ch {
+            '(' => (0, true),
+            '[' => (1, true),
+            '{' => (2, true),
+            ')' => (0, false),
+            ']' => (1, false),
+            '}' => (2, false),
+            '，' | '；' | '。' | '！' | '？' | '、' => return offset,
+            _ => continue,
+        };
+        if opening {
+            depth[index] += 1;
+        } else if depth[index] == 0 {
+            return offset;
+        } else {
+            depth[index] -= 1;
+        }
+    }
+    text.len()
 }
 
 fn trailing_punctuation(text: &str) -> usize {
@@ -523,6 +552,9 @@ fn resolve(mut candidates: Vec<Candidate>, max: usize) -> Vec<Candidate> {
                 _ => candidate.kind != Kind::Styled,
             };
             other.range == candidate.range
+                || (other.kind == Kind::Url
+                    && candidate.kind == Kind::Path
+                    && other.range.contains(&candidate.range.start))
                 || (suppresses_nested
                     && other.range.start <= candidate.range.start
                     && other.range.end >= candidate.range.end)

@@ -938,3 +938,52 @@ fn prefix_dims_surroundings_and_backspace_restores_original_styles() {
         original.rows[context.row][context.col].style()
     );
 }
+
+#[test]
+fn url_followed_by_unspaced_prose_stops_at_boundary() {
+    let url = "http://192.168.2.101/even/applications/backend/\
+               glass-server/-/merge_requests/656";
+    for cols in [24, 100] {
+        for suffix in [")，目标", "),target", "，目标"] {
+            let mut s = session(
+                &format!("(\x1b[4;38;2;189;147;249m{url}\x1b[0m{suffix}"),
+                cols,
+                8,
+                Options::default(),
+            );
+            assert_eq!(texts(&s), vec![url]);
+            let target = s.targets[0].clone();
+            assert_eq!(
+                target.segments.iter().map(|s| s.columns).sum::<usize>(),
+                url.len()
+            );
+            let mut action = Action::Stay;
+            for ch in target.label.chars() {
+                action = s.key(Key::Char(ch));
+            }
+            assert!(matches!(action, Action::Copy(text) if text == url));
+        }
+    }
+}
+
+#[test]
+fn prose_boundaries_preserve_balanced_and_encoded_token_content() {
+    for token in [
+        "https://example.com/a_(b_(c))?x=1,2",
+        "http://[::1]:8080/中文/%29%EF%BC%8C",
+    ] {
+        for (open, close) in [("(", ")"), ("[", "]"), ("{", "}")] {
+            for style in ["", "\x1b[34m"] {
+                let input = format!("{open}{style}{token}{close}，目标\x1b[0m");
+                let s = session(&input, 24, 8, Options::default());
+                assert_eq!(texts(&s), vec![token], "{input:?}");
+            }
+        }
+    }
+}
+
+#[test]
+fn prose_url_boundaries_do_not_split_file_names() {
+    let s = session("./报告，终稿.md ./foo)bar.rs", 80, 3, Options::default());
+    assert_eq!(texts(&s), vec!["./报告，终稿.md", "./foo)bar.rs"]);
+}

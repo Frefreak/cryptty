@@ -1,4 +1,5 @@
 use super::*;
+use crate::terminal::Content;
 
 fn p(row: usize, col: usize) -> Position {
     Position { row, col }
@@ -395,4 +396,33 @@ fn changed_snapshot_identifies_the_pane_without_logging_its_text() {
         panic!("expected a changed snapshot");
     };
     assert_eq!(reason, "pane at col=5 row=1 size=5x2 differs from display");
+}
+
+#[test]
+fn retained_short_wraps_keep_coordinates_and_text() {
+    let terminal =
+        pane_terminal(10, 3, "https://\na/中\nend\n", "https://a/中\nend\n")
+            .unwrap();
+    assert_eq!(terminal.rows[0].wrapped, Some(8));
+    assert_eq!(terminal.rows[1].wrapped, None);
+    assert_eq!(terminal.link_at(p(1, 0)).unwrap().uri, "https://a/中");
+}
+
+#[test]
+fn retained_wraps_preserve_spaces_and_reject_extra_text() {
+    let terminal = pane_terminal(10, 2, "abc  \ndef\n", "abc  def\n").unwrap();
+    assert_eq!(terminal.rows[0].wrapped, Some(5));
+    assert_eq!(
+        terminal.selected_text(TextRange::between(p(0, 0), p(1, 3))),
+        "abc  def"
+    );
+    assert!(pane_terminal(10, 1, "abc\n", "abc\nextra\n").is_none());
+    assert!(pane_terminal(3, 1, "abcd\n", "abcd\n").is_none());
+}
+
+#[test]
+fn whitespace_only_continuation_keeps_its_wrap() {
+    let terminal = pane_terminal(3, 2, "abc\n \n", "abc \n").unwrap();
+    assert_eq!(terminal.rows[0].wrapped, Some(3));
+    assert_eq!(terminal.rows[1].wrapped, None);
 }
