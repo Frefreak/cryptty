@@ -113,9 +113,16 @@ pub fn run(paths: &[OsString]) -> Result<()> {
     let tmux = std::env::var_os("TMUX").is_some_and(|v| !v.is_empty());
     let mut out = stdout.lock();
     if tmux {
-        enable_tmux_passthrough()?;
+        enable_tmux_passthrough("on")?;
     }
     let depth = super::probe::detect(&mut out)?;
+    if tmux
+        && std::env::var_os("CRYPTTY_IMAGE_PREVIEW").as_deref()
+            == Some(std::ffi::OsStr::new("1"))
+    {
+        // Preview output must pass through during tmux split redraws.
+        enable_tmux_passthrough("all")?;
+    }
     for (index, path) in paths.iter().enumerate() {
         let mut bytes = Vec::new();
         File::open(path)
@@ -167,18 +174,10 @@ pub fn run(paths: &[OsString]) -> Result<()> {
     Ok(())
 }
 
-fn enable_tmux_passthrough() -> Result<()> {
+fn enable_tmux_passthrough(mode: &str) -> Result<()> {
     let pane = std::env::var_os("TMUX_PANE")
         .filter(|pane| !pane.is_empty())
         .context("TMUX_PANE is required to enable image passthrough")?;
-    // Preview output must pass through during tmux split redraws.
-    let mode = if std::env::var_os("CRYPTTY_IMAGE_PREVIEW").as_deref()
-        == Some(std::ffi::OsStr::new("1"))
-    {
-        "all"
-    } else {
-        "on"
-    };
     let output = Command::new("tmux")
         .args(["set", "-p", "-t"])
         .arg(pane)
