@@ -34,6 +34,17 @@ impl Keyboard {
         )
     }
 
+    pub fn copies_command_output(
+        &self,
+        key: &Key,
+        modifiers: ModifiersState,
+    ) -> bool {
+        matches!(
+            self.output_for(key, modifiers),
+            Some(Output::Action(Action::CopyCommandOutput))
+        )
+    }
+
     fn output_for(
         &self,
         key: &Key,
@@ -44,25 +55,24 @@ impl Keyboard {
         }) {
             return Some(&binding.output);
         }
-        let custom_vim = self.bindings.iter().any(|binding| {
-            matches!(binding.output, Output::Action(Action::VimMode))
-        });
-        if !custom_vim
-            && *key == Key::Character("j".into())
-            && modifiers == (ModifiersState::CONTROL | ModifiersState::SHIFT)
-        {
-            return Some(&Output::Action(Action::VimMode));
+        if modifiers != (ModifiersState::CONTROL | ModifiersState::SHIFT) {
+            return None;
         }
-        let custom_marker = self.bindings.iter().any(|binding| {
-            matches!(binding.output, Output::Action(Action::MarkerMode))
-        });
-        if !custom_marker
-            && *key == Key::Character("m".into())
-            && modifiers == (ModifiersState::CONTROL | ModifiersState::SHIFT)
+        let Key::Character(ch) = key else { return None };
+        let default = match ch.as_str() {
+            "j" => &Output::Action(Action::VimMode),
+            "m" => &Output::Action(Action::MarkerMode),
+            "o" => &Output::Action(Action::CopyCommandOutput),
+            _ => return None,
+        };
+        if self
+            .bindings
+            .iter()
+            .any(|binding| &binding.output == default)
         {
-            return Some(&Output::Action(Action::MarkerMode));
+            return None;
         }
-        None
+        Some(default)
     }
 }
 
@@ -84,14 +94,15 @@ struct Definition {
     action: Option<Action>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 enum Output {
     Text(String),
     Action(Action),
 }
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq)]
 enum Action {
+    CopyCommandOutput,
     VimMode,
     MarkerMode,
 }

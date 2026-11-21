@@ -7,6 +7,8 @@ use anyhow::{Context, Result};
 use crate::terminal::{Link, Position, Terminal, TextRange};
 
 mod client;
+mod command_output;
+pub use command_output::last_command_output;
 mod integration;
 #[cfg(test)]
 mod tests;

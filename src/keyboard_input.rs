@@ -210,9 +210,15 @@ impl View {
             return Ok(());
         }
         if pressed {
-            if let Some(shortcut) =
+            let shortcut = if self.keyboard.copies_command_output(
+                &input_event.unmodified,
+                input_event.modifiers,
+            ) {
+                Some(input::Shortcut::CopyCommandOutput)
+            } else {
                 input::shortcut(&event.logical_key, self.modifiers)
-            {
+            };
+            if let Some(shortcut) = shortcut {
                 let consumed = match shortcut {
                     input::Shortcut::Paste => Consumed::Paste,
                     _ => Consumed::OneShot,
@@ -222,6 +228,10 @@ impl View {
                     .insert(event.physical_key, consumed);
                 match shortcut {
                     input::Shortcut::Paste => self.paste(),
+                    input::Shortcut::CopyCommandOutput if !event.repeat => {
+                        self.tmux.request_command_output(&self.terminal);
+                    }
+                    input::Shortcut::CopyCommandOutput => (),
                     input::Shortcut::NewWindow if !event.repeat => {
                         self.new_window()
                     }

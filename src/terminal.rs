@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 
 use unicode_width::UnicodeWidthChar;
 
+pub mod command_output;
 mod control;
 mod osc;
 mod parser;
@@ -462,6 +463,8 @@ pub struct Terminal {
     pub mouse_sgr: bool,
     pub alternate_scroll: bool,
     pub title: String,
+    pub output_limits: crate::config::OutputLimits,
+    command_output: command_output::Capture,
     pub working_directory: Option<std::path::PathBuf>,
     pub effects: Vec<Effect>,
     pub reverse_video: bool,
@@ -544,6 +547,8 @@ impl Terminal {
             mouse_sgr: false,
             alternate_scroll: true,
             title: "Cryptty".into(),
+            output_limits: Default::default(),
+            command_output: Default::default(),
             working_directory: None,
             effects: Vec::new(),
             reverse_video: false,
@@ -1207,6 +1212,7 @@ impl Terminal {
         std::mem::swap(&mut self.cursor, &mut self.inactive.cursor);
         std::mem::swap(&mut self.saved, &mut self.inactive.saved);
         std::mem::swap(&mut self.pending_wrap, &mut self.inactive.pending_wrap);
+        self.command_output.unsupported();
         self.alternate = alternate;
         if clear {
             self.graphics
@@ -1259,6 +1265,7 @@ impl Terminal {
     }
 
     fn reset(&mut self) {
+        let limits = self.output_limits;
         let word_characters = std::mem::take(&mut self.word_characters);
         let cell_pixels = self.cell_pixels;
         let parser = self.parser.take();
@@ -1267,6 +1274,7 @@ impl Terminal {
         let revision = self.color_revision.wrapping_add(1);
         *self =
             Self::with_theme(self.cols(), self.rows.len(), self.initial_theme);
+        self.output_limits = limits;
         self.parser = parser;
         self.word_characters = word_characters;
         self.cell_pixels = cell_pixels;

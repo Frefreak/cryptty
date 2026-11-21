@@ -23,6 +23,7 @@ pub struct Config {
     pub colors: Colors,
     pub keyboard: Keyboard,
     pub selection: Selection,
+    pub command_output: OutputLimits,
     pub markers: crate::marker::Options,
 }
 
@@ -30,6 +31,22 @@ pub struct Config {
 #[serde(default, deny_unknown_fields)]
 pub struct Selection {
     pub word_characters: String,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct OutputLimits {
+    pub max_lines: usize,
+    pub max_bytes: usize,
+}
+
+impl Default for OutputLimits {
+    fn default() -> Self {
+        Self {
+            max_lines: 100,
+            max_bytes: 16 * 1024,
+        }
+    }
 }
 
 impl Default for Selection {

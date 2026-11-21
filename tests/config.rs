@@ -713,3 +713,30 @@ fn invalid_local_config_reports_its_path_and_preserves_files() {
             .contains("Cannot read local config")
     );
 }
+
+#[test]
+fn command_output_limits_and_key_are_configurable() {
+    use winit::keyboard::{Key, ModifiersState as M};
+    let cfg = Config::parse("").unwrap();
+    assert_eq!(
+        (cfg.command_output.max_lines, cfg.command_output.max_bytes),
+        (100, 16384)
+    );
+    assert!(cfg.keyboard.copies_command_output(
+        &Key::Character("o".into()),
+        M::CONTROL | M::SHIFT
+    ));
+    let cfg = Config::parse("command_output: {max_lines: 2, max_bytes: 12}\nkeyboard:\n  bindings: [{key: F8, modifiers: [], action: CopyCommandOutput}]").unwrap();
+    assert_eq!(
+        (cfg.command_output.max_lines, cfg.command_output.max_bytes),
+        (2, 12)
+    );
+    assert!(cfg.keyboard.copies_command_output(
+        &Key::Named(winit::keyboard::NamedKey::F8),
+        M::empty()
+    ));
+    assert!(!cfg.keyboard.copies_command_output(
+        &Key::Character("o".into()),
+        M::CONTROL | M::SHIFT
+    ));
+}

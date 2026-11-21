@@ -312,3 +312,40 @@ fn osc7_local_path_and_remote_invalidation() {
         assert!(t.working_directory.is_none());
     }
 }
+
+#[test]
+fn command_output_is_complete_and_limits_are_inclusive() {
+    use cryptty::config::OutputLimits;
+    let mut t = Terminal::new(4, 2);
+    t.output_limits = OutputLimits {
+        max_lines: 2,
+        max_bytes: 9,
+    };
+    t.feed("\x1b]133;C\x07abcde\r\n中\x1b]133;D;0\x07".as_bytes());
+    assert_eq!(t.last_command_output().unwrap(), "abcde\n中");
+    t.output_limits.max_bytes = 8;
+    assert!(
+        t.last_command_output()
+            .unwrap_err()
+            .to_string()
+            .contains("8 bytes")
+    );
+    t.feed(b"\x1b]133;C\x07a\r\nb\r\nc\x1b]133;D\x07");
+    assert!(
+        t.last_command_output()
+            .unwrap_err()
+            .to_string()
+            .contains("2 lines")
+    );
+    t.feed(b"\x1b]133;C\x07abcdefghijk\x1b]133;D\x07");
+    assert!(
+        t.last_command_output()
+            .unwrap_err()
+            .to_string()
+            .contains("8 bytes")
+    );
+    t.feed(b"\x1b]133;C\x07\x1b[2 q\x1b[31mOK\x1b[m\x1b]133;D\x07");
+    assert_eq!(t.last_command_output().unwrap(), "OK");
+    t.feed(b"\x1b]133;C\x07one\r\ntwo\x1b[1A\x1b[2K\x1b]133;D\x07");
+    assert!(t.last_command_output().is_err());
+}

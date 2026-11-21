@@ -262,7 +262,11 @@ impl<'a> Buffered<'a> {
         if self.len == 0 {
             return;
         }
-        self.terminal.print_ascii(&self.ascii[..self.len]);
+        let bytes = &self.ascii[..self.len];
+        self.terminal
+            .command_output
+            .append_ascii(bytes, self.terminal.output_limits);
+        self.terminal.print_ascii(bytes);
         self.len = 0;
     }
 }
@@ -278,17 +282,32 @@ impl Perform for Buffered<'_> {
             }
         } else {
             self.flush();
+            self.terminal.command_output.append(
+                ch.encode_utf8(&mut [0; 4]),
+                self.terminal.output_limits,
+            );
             self.terminal.print(ch);
         }
     }
 
     fn execute(&mut self, byte: u8) {
         self.flush();
+        let capture = &mut self.terminal.command_output;
+        match byte {
+            b'\r' => capture.carriage_return = true,
+            b'\n' => capture.append("\n", self.terminal.output_limits),
+            b'\t' => capture.append("\t", self.terminal.output_limits),
+            7 => (),
+            _ => capture.unsupported(),
+        }
         self.terminal.execute(byte);
     }
 
     fn esc_dispatch(&mut self, intermediates: &[u8], ignore: bool, byte: u8) {
         self.flush();
+        if byte != b'\\' {
+            self.terminal.command_output.unsupported();
+        }
         self.terminal.esc_dispatch(intermediates, ignore, byte);
     }
 
@@ -300,6 +319,11 @@ impl Perform for Buffered<'_> {
         action: char,
     ) {
         self.flush();
+        if !matches!(action, 'm' | 'n' | 'c' | 'h' | 'l')
+            && (intermediates, action) != (b" ", 'q')
+        {
+            self.terminal.command_output.unsupported();
+        }
         self.terminal
             .csi_dispatch(params, intermediates, ignore, action);
     }

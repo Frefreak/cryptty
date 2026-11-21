@@ -48,6 +48,7 @@ pub fn encode_key(
 pub enum Shortcut {
     Paste,
     NewWindow,
+    CopyCommandOutput,
     ReloadConfig,
 }
 

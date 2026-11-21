@@ -142,6 +142,7 @@ affect cells that were written before the change.
 | 9 | Desktop notification text when the window lacks focus |
 | 10, 11, 12 | Set/query foreground, background, and cursor colors |
 | 110, 111, 112 | Restore configured default colors |
+| 133 | Command boundaries for Copy Last Command Output |
 | 52 | Base64 text writes to the system clipboard (`c` or empty target) |
 
 New Window uses the most recent local OSC 7 file URI. Empty authority,
@@ -185,8 +186,8 @@ at powers of two, tracks up to 32 command IDs, and rotates at 128 KiB.
 
 ## Boundaries
 
-This covers a practical subset of xterm behavior. Image protocols and shell-integration markers remain outside this
-milestone. Scrollback navigation remains the responsibility of tmux;
+This covers a practical subset of xterm behavior.
+Scrollback navigation remains the responsibility of tmux;
 the internal history buffer supports resize recovery. CSI 3 J clears it.
 
 The parser accepts up to 32 CSI parameters/subparameters. Excessive CSI

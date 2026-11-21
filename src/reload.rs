@@ -58,6 +58,7 @@ impl View {
         self.terminal.resize(cols, rows);
         self.tmux.invalidate();
         self.terminal.set_theme(config.colors.theme());
+        self.terminal.output_limits = config.command_output;
         self.terminal.word_characters = config.selection.word_characters;
         self.terminal.cell_pixels = (
             self.renderer.cell_width as u32,

@@ -115,6 +115,7 @@ impl App {
         let (cols, rows) = renderer.grid_size(size.width, size.height);
         let mut terminal =
             Terminal::with_theme(cols, rows, self.config.colors.theme());
+        terminal.output_limits = self.config.command_output;
         terminal.working_directory = pty::new_window_directory();
         terminal.word_characters =
             self.config.selection.word_characters.clone();
@@ -495,6 +496,23 @@ impl ApplicationHandler<()> for App {
             view.refresh_pointer();
         }
         view.refresh_vim();
+        if let Some(result) = view.tmux.take_command_output() {
+            let result = result.and_then(|text| {
+                cryptty::terminal::command_output::check_size(
+                    &text,
+                    view.terminal.output_limits,
+                )?;
+                view.interaction.clipboard()?.set_text(text)?;
+                Ok(())
+            });
+            let message = match result {
+                Ok(()) => "Copied last command output".to_owned(),
+                Err(error) => format!("Copy failed: {error}"),
+            };
+            view.renderer.set_notice(Some(&message));
+            view.notice = Some((message, now + Duration::from_secs(3)));
+            view.window.request_redraw();
+        }
         if view.notice.is_none() && view.tmux.take_missing_binary_notice() {
             let message = "tmux detected, but its executable was not found.\n\
                 Add tmux to Cryptty's PATH, then relaunch Cryptty.\n\

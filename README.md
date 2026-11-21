@@ -139,6 +139,24 @@ Beam cursors scale to 15% of one cell's width, with a one-pixel minimum.
 Drag to select and copy to the system clipboard. Paste with Ctrl-Shift-V,
 Shift-Insert, or middle-click on both platforms. During application mouse
 capture, use Shift-middle-click to paste from the system clipboard.
+Ctrl-Shift-O copies the last completed shell command's output. The default
+limits are 100 logical lines and 16,384 UTF-8 bytes. Exceeding either
+limit shows a copy error and preserves the clipboard. Configure them in
+`cryptty.yaml` and reload with Ctrl-Shift-R:
+
+```yaml
+command_output:
+  max_lines: 100
+  max_bytes: 16384
+```
+
+The keyboard binding action is `CopyCommandOutput`. Direct shells use
+OSC 133 command boundaries. Inside the local default tmux server, the
+shortcut reads the rendered output in the active fish pane on demand
+(tmux 3.8). Progress displays therefore reflect their final text. Soft wraps
+count as part of the same line. When Cryptty cannot verify the complete
+output, it shows an error.
+
 Double-click selects a word; triple-click selects a logical line, including
 soft-wrapped rows.
 Dragging after either click extends the selection by words or lines.

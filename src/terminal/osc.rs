@@ -128,6 +128,7 @@ impl Terminal {
                     self.effects.push(Effect::Clipboard(text));
                 }
             }
+            133 if params.len() >= 2 => self.command_marker(params[1]),
             104 => {
                 if params.len() == 1 || params[1..] == [b""] {
                     for index in 0..256 {

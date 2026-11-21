@@ -16,7 +16,7 @@ pub(super) struct Server {
 }
 
 impl Server {
-    fn command(&self) -> Command {
+    pub(super) fn command(&self) -> Command {
         let mut command = Command::new("tmux");
         if let Some(socket) = &self.socket {
             command.arg("-S").arg(socket);
@@ -62,19 +62,35 @@ impl Server {
     }
 }
 
-fn output(command: &mut Command) -> Result<String> {
+pub(super) fn output(command: &mut Command) -> Result<String> {
+    output_with_limit(command, MAX_REPLY)
+}
+
+pub(super) fn output_with_limit(
+    command: &mut Command,
+    limit: u64,
+) -> Result<String> {
     let mut child = command.spawn()?;
     let stdout = child.stdout.take().context("missing command stdout")?;
     let (send, receive) = mpsc::sync_channel(1);
     thread::spawn(move || {
         let mut text = String::new();
-        let result = stdout.take(MAX_REPLY).read_to_string(&mut text);
+        let result = stdout.take(limit + 1).read_to_string(&mut text);
         let _ = send.send(result.map(|_| text));
     });
     let result = receive.recv_timeout(TIMEOUT);
-    let _ = child.kill();
-    let _ = child.wait();
-    Ok(result??)
+    if !matches!(result, Ok(Ok(_))) {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    let text = result??;
+    if text.len() as u64 > limit {
+        let _ = child.kill();
+        let _ = child.wait();
+        bail!("tmux capture exceeds the read limit");
+    }
+    anyhow::ensure!(child.wait()?.success(), "tmux query failed");
+    Ok(text)
 }
 
 pub(super) fn tmux_running(tty: &Path) -> bool {
@@ -97,9 +113,10 @@ fn foreground_tmux(text: &str) -> bool {
         else {
             return false;
         };
-        state.contains('+')
-            && Path::new(command.trim()).file_name()
-                == Some(std::ffi::OsStr::new("tmux"))
+        let name = Path::new(command.trim())
+            .file_name()
+            .and_then(|s| s.to_str());
+        state.contains('+') && matches!(name, Some("tmux" | "tmux: client"))
     })
 }
 
@@ -203,6 +220,8 @@ mod tests {
     fn detects_only_foreground_tmux_clients() {
         assert!(foreground_tmux("Ss /bin/fish\nS+ tmux\n"));
         assert!(foreground_tmux(" S+ /opt/homebrew/bin/tmux\n"));
+        assert!(foreground_tmux("Ss fish\nS+ tmux: client\n"));
+        assert!(!foreground_tmux("S+ tmux: server\n"));
         assert!(!foreground_tmux("S tmux\nS+ /usr/bin/ssh\n"));
         assert!(!foreground_tmux("S+ tmux-helper\n"));
         assert!(!foreground_tmux("S+ /bin/fish\n"));

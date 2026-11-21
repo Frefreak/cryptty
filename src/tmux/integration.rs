@@ -91,6 +91,7 @@ pub struct Integration {
     tty: Option<PathBuf>,
     wake: Arc<dyn Fn() + Send + Sync>,
     worker: Option<Worker>,
+    command_output: Option<Receiver<anyhow::Result<String>>>,
     active: bool,
     generation: u64,
     worker_generation: Arc<AtomicU64>,
@@ -113,6 +114,7 @@ impl Integration {
             tty,
             wake: Arc::new(wake),
             worker: None,
+            command_output: None,
             active: false,
             generation: 0,
             worker_generation: Arc::new(AtomicU64::new(0)),
@@ -125,6 +127,37 @@ impl Integration {
             next_request: Instant::now(),
             idle_until: None,
         }
+    }
+
+    pub fn request_command_output(&mut self, terminal: &Terminal) {
+        if self.command_output.is_some() {
+            return;
+        }
+        let tty = self.tty.clone();
+        let limits = terminal.output_limits;
+        let direct = if terminal.alternate_screen() {
+            Err(anyhow::anyhow!("No shell command output on this screen"))
+        } else {
+            terminal.last_command_output().map(str::to_owned)
+        };
+        let wake = self.wake.clone();
+        let (send, receive) = mpsc::channel();
+        self.command_output = Some(receive);
+        thread::spawn(move || {
+            let result = match tty {
+                Some(tty) => super::last_command_output(&tty, limits)
+                    .and_then(|pane| pane.map_or(direct, Ok)),
+                None => direct,
+            };
+            let _ = send.send(result);
+            wake();
+        });
+    }
+
+    pub fn take_command_output(&mut self) -> Option<anyhow::Result<String>> {
+        let result = self.command_output.as_ref()?.try_recv().ok()?;
+        self.command_output = None;
+        Some(result)
     }
 
     pub fn invalidate(&mut self) {
