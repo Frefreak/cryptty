@@ -296,3 +296,19 @@ fn slow_and_rapid_blink_have_distinct_phases_and_reset() {
         [true, false, true, false]
     );
 }
+
+#[test]
+fn osc7_local_path_and_remote_invalidation() {
+    let mut t = Terminal::new(8, 2);
+    t.feed(b"\x1b]7;file://localhost/tmp/a%20b;c\x1b\\");
+    assert_eq!(
+        t.working_directory.as_deref(),
+        Some(std::path::Path::new("/tmp/a b;c"))
+    );
+    t.feed(b"\x1b]7;file://remote.invalid/tmp\x07");
+    assert!(t.working_directory.is_none());
+    for bad in ["file:///tmp/%00", "file:///tmp/%2", "file:relative"] {
+        t.feed(format!("\x1b]7;{bad}\x07").as_bytes());
+        assert!(t.working_directory.is_none());
+    }
+}

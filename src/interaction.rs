@@ -158,7 +158,12 @@ impl Interaction {
 impl View {
     pub(super) fn new_window(&self) {
         let result = (|| -> Result<()> {
-            let mut child = Command::new(std::env::current_exe()?)
+            let mut launcher = Command::new(std::env::current_exe()?);
+            launcher.env_remove(cryptty::pty::NEW_WINDOW_DIRECTORY);
+            if let Some(dir) = &self.terminal.working_directory {
+                launcher.env(cryptty::pty::NEW_WINDOW_DIRECTORY, dir);
+            }
+            let mut child = launcher
                 .args(std::env::args_os().skip(1).take_while(|arg| arg != "--"))
                 .stdin(Stdio::null())
                 .spawn()?;

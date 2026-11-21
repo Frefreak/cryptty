@@ -11,6 +11,14 @@ use portable_pty::{
     Child, CommandBuilder, MasterPty, PtySize, native_pty_system,
 };
 
+pub const NEW_WINDOW_DIRECTORY: &str = "CRYPTTY_NEW_WINDOW_DIRECTORY";
+
+pub fn new_window_directory() -> Option<std::path::PathBuf> {
+    std::env::var_os(NEW_WINDOW_DIRECTORY)
+        .map(std::path::PathBuf::from)
+        .filter(|dir| dir.is_absolute() && dir.is_dir())
+}
+
 pub enum Event {
     Output(Vec<u8>),
     Closed,
@@ -45,6 +53,10 @@ impl Pty {
                 .context("SHELL is unset; pass a shell after --")?;
             CommandBuilder::new(shell)
         };
+        if let Some(dir) = new_window_directory() {
+            cmd.cwd(dir);
+        }
+        cmd.env_remove(NEW_WINDOW_DIRECTORY);
         cmd.env("TERM", "xterm-256color");
         cmd.env("COLORTERM", "truecolor");
         cmd.env("TERM_PROGRAM", "cryptty");

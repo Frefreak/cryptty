@@ -225,3 +225,46 @@ fn output_notifies_again_after_an_idle_interval() {
         std::fs::write(&gate, []).unwrap();
     }
 }
+
+#[test]
+fn new_window_shell_starts_in_reported_directory() {
+    use cryptty::pty::NEW_WINDOW_DIRECTORY;
+    const TEST_CHILD: &str = "CRYPTTY_TEST_NEW_WINDOW_CHILD";
+    if std::env::var_os(TEST_CHILD).is_none() {
+        let directory = tempfile::tempdir().unwrap();
+        let result =
+            std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "new_window_shell_starts_in_reported_directory",
+                ])
+                .env(TEST_CHILD, "1")
+                .env(NEW_WINDOW_DIRECTORY, directory.path())
+                .status()
+                .unwrap();
+        assert!(result.success());
+        return;
+    }
+    let command = [
+        "/bin/sh".into(),
+        "-c".into(),
+        "pwd -P; test -z \"$CRYPTTY_NEW_WINDOW_DIRECTORY\" && echo CLEAN"
+            .into(),
+    ];
+    let pty = Pty::spawn(&command, PtySize::default(), || {}).unwrap();
+    let mut output = Vec::new();
+    loop {
+        match pty.output.recv_timeout(Duration::from_secs(5)).unwrap() {
+            Event::Closed => break,
+            Event::Output(bytes) => output.extend(bytes),
+            Event::Error(message) => panic!("{message}"),
+        }
+    }
+    let dir =
+        std::fs::canonicalize(std::env::var_os(NEW_WINDOW_DIRECTORY).unwrap())
+            .unwrap();
+    assert_eq!(
+        String::from_utf8(output).unwrap(),
+        format!("{}\r\nCLEAN\r\n", dir.display())
+    );
+}

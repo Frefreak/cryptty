@@ -115,6 +115,7 @@ impl App {
         let (cols, rows) = renderer.grid_size(size.width, size.height);
         let mut terminal =
             Terminal::with_theme(cols, rows, self.config.colors.theme());
+        terminal.working_directory = pty::new_window_directory();
         terminal.word_characters =
             self.config.selection.word_characters.clone();
         terminal.cell_pixels =

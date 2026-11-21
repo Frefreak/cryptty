@@ -3,6 +3,35 @@ use base64::engine::general_purpose::STANDARD;
 
 use super::{Arc, Effect, Terminal, indexed_color};
 
+fn local_directory(uri: &[u8]) -> Option<std::path::PathBuf> {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    let location = uri.strip_prefix(b"file://")?;
+    let slash = location.iter().position(|&b| b == b'/')?;
+    let (host, path) = location.split_at(slash);
+    if !host.is_empty()
+        && !host.eq_ignore_ascii_case(b"localhost")
+        && !host
+            .eq_ignore_ascii_case(gethostname::gethostname().as_encoded_bytes())
+    {
+        return None;
+    }
+    for (i, &byte) in path.iter().enumerate() {
+        if byte.is_ascii_control()
+            || matches!(byte, b'?' | b'#')
+            || (byte == b'%'
+                && !path
+                    .get(i + 1..i + 3)
+                    .is_some_and(|hex| hex.iter().all(u8::is_ascii_hexdigit)))
+        {
+            return None;
+        }
+    }
+    let path: Vec<u8> = percent_encoding::percent_decode(path).collect();
+    (!path.contains(&0)).then(|| OsString::from_vec(path).into())
+}
+
 impl Terminal {
     pub(super) fn osc(&mut self, params: &[&[u8]], bell: bool) {
         let Some(command) = params.first().and_then(|p| number(p)) else {
@@ -11,6 +40,10 @@ impl Terminal {
         };
         let terminator = if bell { "\x07" } else { "\x1b\\" };
         match command {
+            7 => {
+                self.working_directory =
+                    local_directory(&params[1..].join(&b';'));
+            }
             9 if params.len() >= 2 => {
                 if params.len() >= 3 && params[1] == b"4" {
                     self.unknown_osc(

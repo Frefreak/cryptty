@@ -178,8 +178,9 @@ A launch option overrides the configuration file:
 cryptty --opengl-color-format rgba16f
 ```
 
-Ctrl-Shift-N opens a fresh shell in
-a new window, using the original launch directory and renderer options.
+Ctrl-Shift-N opens a fresh shell in a new window with the same renderer
+options. The shell starts in the local directory reported via OSC 7,
+or in its usual home directory if that directory is unavailable.
 Ctrl-click opens HTTP, HTTPS, and `file://` links, including OSC 8 targets
 and plain URLs across terminal soft wraps. Hovering underlines the detected
 link. Holding Ctrl shows its target beside the pointer; releasing Ctrl

@@ -137,11 +137,17 @@ affect cells that were written before the change.
 | --- | --- |
 | 0, 2 | Window title |
 | 4, 104 | Set/query/reset palette entries |
+| 7 | Local shell directory for New Window |
 | 8 | Hyperlink metadata and modifier-click activation |
 | 9 | Desktop notification text when the window lacks focus |
 | 10, 11, 12 | Set/query foreground, background, and cursor colors |
 | 110, 111, 112 | Restore configured default colors |
 | 52 | Base64 text writes to the system clipboard (`c` or empty target) |
+
+New Window uses the most recent local OSC 7 file URI. Empty authority,
+localhost, and the machine hostname identify local paths. Remote and
+malformed reports clear the directory. The shell starts in its usual
+home directory when the reported directory is unavailable.
 
 OSC accepts BEL and ST termination. Colors accept `rgb:r/g/b` and
 hexadecimal forms, plus `black` and `white`. Ctrl-click opens HTTP, HTTPS,
